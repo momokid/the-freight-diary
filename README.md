@@ -82,3 +82,97 @@ All financial transactions must balance.
 ## Architecture Philosophy
 
 This application follows a layered architecture:
+
+### Design Principles
+
+- No business logic inside controllers
+- Service layer handles domain logic
+- Repository layer handles database operations
+- Authentication uses custom username-based login
+- All critical actions logged
+- Role-based access control (RBAC)
+
+---
+
+## Security
+
+- Username-based authentication
+- Bcrypt password hashing
+- Login success/failure tracking
+- Branch-based data filtering
+- Super Admin global override
+- CSRF protection
+- Session regeneration on login
+
+---
+
+## Dashboard Features
+
+- Mini collapsible sidebar
+- Light/Dark theme toggle
+- Role-aware navigation
+- Welcome screen (first login only)
+- KPI dashboard
+- Notification system (future)
+- AI assistant integration (future)
+
+---
+
+## AI Roadmap
+
+Planned AI modules:
+
+- OCR for BL document ingestion
+- Financial anomaly detection
+- Delay prediction engine
+- Automated reporting assistant
+- AI-powered operational search
+
+---
+
+## Technology Stack
+
+- Laravel 12
+- TailwindCSS
+- Alpine.js
+- MySQL
+- Vite
+- REST-ready architecture
+
+---
+
+## Testing Strategy
+
+- Feature-based development
+- Unit tests for services
+- Integration tests for accounting transactions
+- Authentication flow tests
+- Branch isolation tests
+
+Testing will be written after completion of each major feature.
+
+---
+
+## Git Workflow
+
+- Feature-based commits
+- Each feature pushed after:
+    - Functional validation
+    - Test coverage
+    - Refactoring pass
+
+Branch structure:
+
+- main
+- develop
+- feature/<feature-name>
+
+---
+
+## Version
+
+v2.0 – Prime Rebuild
+
+---
+
+© AnwarVerse Ltd

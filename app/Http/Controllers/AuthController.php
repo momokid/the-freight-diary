@@ -8,6 +8,18 @@ use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
+    //
+    private function logLoginAttempt(Request $request, string $status): void
+    {
+        DB::table('user_login_logs')->insert([
+            'username'   => $request->ID,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'status'     => $status,
+        ]);
+    }
+
+
     public function showLogin()
     {
         return view('auth.login');
@@ -15,10 +27,14 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        $request->validate([
+            'ID'       => ['required', 'string'],
+            'password' => ['required', 'string'],
+        ]);
+
         $credentials = [
             'ID' => $request->ID,
             'password' => $request->password,
-            'Stats' => 1 // only active users
         ];
 
 
@@ -26,23 +42,23 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials, $remember)) {
 
-            DB::table('user_login_logs')->insert([
-                'username' => $request->ID,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-                'status' => 'success'
-            ]);
+            if (Auth::user()->Stats !== 1) {
+                Auth::logout();
+
+                $this->logLoginAttempt($request, 'inactive');
+
+                return back()->withErrors([
+                    'ID' => 'Your account is inactive. Please contact support.',
+                ]);
+            }
+
+            $this->logLoginAttempt($request, 'success');
 
             $request->session()->regenerate();
             return redirect()->intended('/dashboard');
         }
 
-        DB::table('user_login_logs')->insert([
-            'username'   => $request->ID,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'status'     => 'failed'
-        ]);
+        $this->logLoginAttempt($request, 'failed');
 
         return back()->withErrors([
             'ID' => 'Invalid credentials.',

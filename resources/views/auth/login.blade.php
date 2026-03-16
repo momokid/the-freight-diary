@@ -7,7 +7,7 @@
     <!-- Logo -->
     <div class="flex flex-col items-center mb-6">
         <div class="w-16 h-16 bg-slate-900 rounded-xl flex items-center justify-center">
-            <span class="text-white text-2xl font-bold">PS</span>
+            <span class="text-white text-2xl font-bold"><i class="bi bi-truck"></i></span>
         </div>
         <h1 class="mt-4 text-xl font-semibold text-gray-800">
            The Freight Diary
