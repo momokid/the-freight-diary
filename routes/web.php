@@ -10,8 +10,8 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
-Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth');
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth')->name('logout');
 
 Route::get('/dashboard', function () {
-    return "Welcome to Prime Survivors Dashboard";
+    return view("dashboard");
 })->middleware('auth')->name('dashboard');
