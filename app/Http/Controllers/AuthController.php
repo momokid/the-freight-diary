@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
-    //
+    // Log login attempts with status (success, failed, inactive)
     private function logLoginAttempt(Request $request, string $status): void
     {
         DB::table('user_login_logs')->insert([
@@ -19,12 +19,17 @@ class AuthController extends Controller
         ]);
     }
 
-
+    // Show login form
     public function showLogin()
     {
+        if (Auth::check()) {
+            return redirect('/dashboard');
+        }
+
         return view('auth.login');
     }
 
+    //Login function with account status check and logging
     public function login(Request $request)
     {
         $request->validate([
@@ -43,11 +48,14 @@ class AuthController extends Controller
         if (Auth::attempt($credentials, $remember)) {
 
             if (Auth::user()->Stats !== 1) {
-                Auth::logout();
 
                 $this->logLoginAttempt($request, 'inactive');
 
-                return back()->withErrors([
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()->route('login')->withErrors([
                     'ID' => 'Your account is inactive. Please contact support.',
                 ]);
             }
@@ -60,11 +68,12 @@ class AuthController extends Controller
 
         $this->logLoginAttempt($request, 'failed');
 
-        return back()->withErrors([
+        return redirect()->route('login')->withErrors([
             'ID' => 'Invalid credentials.',
         ]);
     }
 
+    // Logout function
     public function logout(Request $request)
     {
         Auth::logout();
