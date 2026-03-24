@@ -1,0 +1,28 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('kaina', function (Blueprint $table) {
+            $table->tinyInteger('reset_requested')->default(0)->after('BranchID');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('kaina', function (Blueprint $table) {
+            $table->dropColumn('reset_requested');
+        });
+    }
+};

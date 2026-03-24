@@ -256,6 +256,11 @@
             color: var(--sidebar-text); /* CHANGED: was --text-primary */
         }
 
+        .submenu-link.active {
+            color: var(--nav-active-text);
+            background: var(--nav-active);
+        }
+
         /* ── Cards ── */
         .card {
             background: var(--card-bg);
@@ -382,26 +387,34 @@
         </div>
 
         {{-- Setup & Config --}}
-        <div class="nav-section-label">Setup & Config</div>
+{{-- Section label only shows if user has at least one setup permission --}}
+@hasAccess('BasicConfig')
+<div class="nav-section-label">Setup & Config</div>
 
-        <div class="nav-item-wrapper">
-            <button class="nav-link" onclick="toggleSubmenu('setup')">
-                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                <span class="nav-label flex-1 text-left">Basic Setup</span>
-                <svg class="nav-arrow w-3 h-3 transition-transform duration-200" id="arrow-setup"
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                </svg>
-            </button>
-            <div class="tooltip">Basic Setup</div>
-            <div id="submenu-setup" class="submenu closed">
-                <span class="submenu-link italic">Coming soon</span>
-            </div>
-        </div>
+<div class="nav-item-wrapper">
+    <button class="nav-link" onclick="toggleSubmenu('setup')">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span class="nav-label flex-1 text-left">Basic Setup</span>
+        <svg class="nav-arrow w-3 h-3 transition-transform duration-200" id="arrow-setup"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+    </button>
+    <div class="tooltip">Basic Setup</div>
+    <div id="submenu-setup" class="submenu closed">
+        @hasAccess('UserPrivilege')
+        <a href="{{ route('settings.user-privilege.index') }}" class="submenu-link
+            {{ request()->routeIs('settings.user-privilege.*') ? 'active' : '' }}">
+            User Privilege
+        </a>
+        @endhasAccess
+    </div>
+</div>
+@endhasAccess
 
         {{-- Consignment Utilities --}}
         <div class="nav-section-label">Consignment Utilities</div>

@@ -15,17 +15,26 @@ class User extends Authenticatable
     protected $keyType = 'string';     // ✅ ID is varchar
     public $timestamps = false;
 
+    protected $casts = [
+        'reset_requested'      => 'boolean',
+        'must_change_password' => 'boolean',
+    ];
+
     protected $fillable = [
         'ID',
         'FullName',
         'HashPassword',
         'Nature',
         'Stats',
-        'BranchID'
+        'BranchID',
+        'remember_token',
+        'reset_requested',      // ADDED: flags when user has requested a password reset
+        'must_change_password',
     ];
 
     protected $hidden = [
-        'HashPassword'
+        'HashPassword',
+        'remember_token',
     ];
 
     // Tell Laravel which column is the password
