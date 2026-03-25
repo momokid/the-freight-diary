@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Models\User;
 
 class AuthController extends Controller
 {
@@ -27,6 +28,26 @@ class AuthController extends Controller
         }
 
         return view('auth.login');
+    }
+
+    // Forgot password handler
+    public function forgotPassword(Request $request)
+    {
+        $request->validate([
+            'ID' => ['required', 'string'],
+        ]);
+
+        // Silently set reset_requested = 1 if user exists
+        // We don't tell the requester whether the ID was found or not
+        $user = User::where('ID', $request->ID)->first();
+
+        if ($user) {
+            $user->reset_requested = 1;
+            $user->save();
+        }
+
+        return redirect()->route('login')
+            ->with('reset_success', 'Your request has been submitted. Please contact your administrator.');
     }
 
     //Login function with account status check and logging

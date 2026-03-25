@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\ServiceProvider;
 use App\Models\UserAuth;
+use App\Models\User;
+use Illuminate\Support\Facades\View;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -16,23 +18,23 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // ADDED: @canAccess('PermissionName') blade directive
-        // Shows content only if the logged in user has that permission
-        // Usage: @canAccess('UserPrivilege') ... @endCanAccess
-        Blade::if('hasAccess', function (string $permission) {
-            $user = Auth::user();
+        //cache results so DB is only hit once per request, not once per view
+        View::composer('*', function ($view) {
+            if (Auth::check()) {
+                static $pendingResetCount = null;
+                static $userAuth = null;
 
-            if (! $user) {
-                return false;
+                if ($pendingResetCount === null) {
+                    $pendingResetCount = User::where('reset_requested', 1)->count();
+                }
+
+                if ($userAuth === null) {
+                    $userAuth = UserAuth::where('Username', Auth::user()->ID)->first();
+                }
+
+                $view->with('pendingResetCount', $pendingResetCount);
+                $view->with('userAuth', $userAuth);
             }
-
-            $userAuth = UserAuth::where('Username', $user->ID)->first();
-
-            if (! $userAuth) {
-                return false;
-            }
-
-            return $userAuth->hasPermission($permission);
         });
     }
 }

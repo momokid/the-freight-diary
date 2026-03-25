@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Settings\UserPrivilegeController;
 use Illuminate\Support\Facades\Route;
 
@@ -9,6 +10,8 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+    //forgot password request
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('password.request');
 });
 
 Route::get('/', function () {
@@ -22,9 +25,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     //Dashboard
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     //Settings
     Route::prefix('settings')->name('settings.')->group(function () {

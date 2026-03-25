@@ -388,7 +388,7 @@
 
         {{-- Setup & Config --}}
 {{-- Section label only shows if user has at least one setup permission --}}
-@hasAccess('BasicConfig')
+@if(isset($userAuth) && $userAuth->hasPermission('BasicConfig'))
 <div class="nav-section-label">Setup & Config</div>
 
 <div class="nav-item-wrapper">
@@ -406,15 +406,15 @@
     </button>
     <div class="tooltip">Basic Setup</div>
     <div id="submenu-setup" class="submenu closed">
-        @hasAccess('UserPrivilege')
+        @if(isset($userAuth) && $userAuth->hasPermission('UserPrivilege'))
         <a href="{{ route('settings.user-privilege.index') }}" class="submenu-link
             {{ request()->routeIs('settings.user-privilege.*') ? 'active' : '' }}">
             User Privilege
         </a>
-        @endhasAccess
+        @endif
     </div>
 </div>
-@endhasAccess
+@endif
 
         {{-- Consignment Utilities --}}
         <div class="nav-section-label">Consignment Utilities</div>
@@ -570,13 +570,23 @@
             </button>
 
             {{-- Notifications --}}
-<button class="w-9 h-9 flex items-center justify-center rounded-lg"
-    style="color: var(--topbar-text); background: var(--topbar-btn-bg); border: 1px solid var(--topbar-btn-border);">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                </svg>
-            </button>
+            {{-- CHANGED: notification bell now shows pending reset count badge --}}
+            <div class="relative">
+                <button class="w-9 h-9 flex items-center justify-center rounded-lg"
+                    style="color: var(--topbar-text); background: var(--topbar-btn-bg); border: 1px solid var(--topbar-btn-border);">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                </button>
+                {{-- Badge — only show if there are pending requests --}}
+                @if(is_callable($pendingResetCount) ? $pendingResetCount() : $pendingResetCount > 0)
+                    <span class="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-white"
+                        style="background: #ef4444; font-size: 0.6rem; font-weight: 700;">
+                        {{ is_callable($pendingResetCount) ? $pendingResetCount() : $pendingResetCount }}
+                    </span>
+                @endif
+            </div>
 
             {{-- User dropdown --}}
             {{-- CHANGED: wrapped in dedicated div with id for cleaner dropdown targeting --}}
