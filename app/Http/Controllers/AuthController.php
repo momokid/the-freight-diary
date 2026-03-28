@@ -50,6 +50,41 @@ class AuthController extends Controller
             ->with('reset_success', 'Your request has been submitted. Please contact your administrator.');
     }
 
+    // ADDED: shows the change password form
+    public function showChangePassword()
+    {
+        // If user doesn't need to change password, redirect to dashboard
+        if (! Auth::user()->must_change_password) {
+            return redirect()->route('dashboard');
+        }
+
+        return view('auth.change-password');
+    }
+
+    // ADDED: handles the change password form submission
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'password'              => ['required', 'string', 'min:6', 'confirmed'],
+            'password_confirmation' => ['required', 'string'],
+        ]);
+
+        $user = Auth::user();
+
+        // Update password and clear the must_change_password flag
+        $user->HashPassword = bcrypt($request->password);
+        $user->must_change_password = 0;
+        $user = User::where('ID', Auth::user()->ID)->firstOrFail();
+
+        // Update password and clear the must_change_password flag
+        $user->HashPassword         = bcrypt($request->password);
+        $user->must_change_password = 0;
+        $user->save();
+
+        return redirect()->route('dashboard')
+            ->with('success', 'Password changed successfully. Welcome back!');
+    }
+
     //Login function with account status check and logging
     public function login(Request $request)
     {
@@ -84,6 +119,11 @@ class AuthController extends Controller
             $this->logLoginAttempt($request, 'success');
 
             $request->session()->regenerate();
+
+            // if user must change password, redirect to change password screen
+            if (Auth::user()->must_change_password) {
+                return redirect()->route('password.change');
+            }
             return redirect()->intended('/dashboard');
         }
 

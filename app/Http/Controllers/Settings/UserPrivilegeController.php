@@ -82,9 +82,12 @@ class UserPrivilegeController extends Controller
             ->mapWithKeys(fn($permission) => [$permission => $userAuth->$permission])
             ->toArray();
 
+        $user = User::where('ID', $userId)->first();
+
         return response()->json([
             'initialised' => true,
             'permissions' => $permissions,
+            'reset_requested' => $user ? $user->reset_requested : false,
         ]);
     }
 
@@ -137,6 +140,32 @@ class UserPrivilegeController extends Controller
             'success'   => true,
             'permission' => $permission,
             'value'     => $userAuth->$permission,
+        ]);
+    }
+
+    //resets a user's password, generates a temporary one and forces change on next login
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'username' => ['required', 'string', 'exists:kaina,ID'],
+        ]);
+
+        $user = User::where('ID', $request->username)->firstOrFail();
+
+        // 
+        // Generate 8-character temporary password  and excludes 0, O, 1, I to avoid confusion when reading aloud
+        $tempPassword = strtoupper(substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 6));
+
+        // Hash and save the temporary password
+        $user->HashPassword        = bcrypt($tempPassword);
+        $user->must_change_password = 1;
+        $user->reset_requested     = 0; // CHANGED: clear the reset request flag
+        $user->save();
+
+        return response()->json([
+            'success'       => true,
+            'temp_password' => $tempPassword, // shown to admin once, never stored in plain text
+            'message'       => 'Password reset successfully.',
         ]);
     }
 }

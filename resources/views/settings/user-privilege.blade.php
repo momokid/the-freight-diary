@@ -48,14 +48,25 @@
                             style="background: #16a34a; color: white;">
                             {{ strtoupper(substr($user->FullName, 0, 1)) }}{{ strtoupper(substr($user->FullName, strrpos($user->FullName, ' ') + 1, 1)) }}
                         </div>
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium truncate" style="color: var(--text-primary);">
-                                {{ $user->FullName }}
+                       
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <div class="text-sm font-medium truncate" style="color: var(--text-primary);">
+                                    {{ $user->FullName }}
+                                </div>
+                                {{-- badge for pending reset request --}}
+                                @if($user->reset_requested)
+                                    <span class="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                        style="background: rgba(239,68,68,0.1); color: #ef4444; font-size: 0.6rem;">
+                                        RESET
+                                    </span>
+                                @endif
                             </div>
                             <div class="text-xs" style="color: var(--text-muted);">
-                                {{ $user->ID }} - {{ $user->Nature }}
+                                {{ $user->ID }} {{ $user->Nature }}
                             </div>
                         </div>
+
                     </div>
                 </button>
                 @endforeach
@@ -109,7 +120,8 @@
             {{-- Permissions panel --}}
             <div id="panel-permissions" class="hidden flex-1 flex flex-col" style="min-height: 0;">
 
-                {{-- Header — fixed --}}
+                {{-- Header --}}
+                {{-- CHANGED: header now includes reset password button --}}
                 <div class="flex items-center justify-between pb-4 flex-shrink-0"
                     style="border-bottom: 1px solid var(--border-color);">
                     <div>
@@ -121,8 +133,22 @@
                             Changes are saved instantly
                         </p>
                     </div>
+
+                    {{-- ADDED: reset password button — only visible when user has pending request --}}
+                    <button
+                        id="reset-password-btn"
+                        onclick="resetPassword()"
+                        class="hidden items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-white transition hover:opacity-90"
+                        style="background: #ef4444; padding: 8px 12px;">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                        </svg>
+                        Reset Password
+                    </button>
                 </div>
 
+                
                 {{-- Scrollable permissions list --}}
                 <div class="flex-1 overflow-y-auto pt-4 space-y-6" style="min-height: 0;padding: 10px;">
                     @foreach($permissionGroups as $groupName => $permissions)
@@ -179,6 +205,61 @@
 
 </div>
 
+{{-- ADDED: temporary password modal --}}
+<div id="reset-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center"
+    style="background: rgba(0,0,0,0.5);">
+    <div class="rounded-2xl p-6 w-full max-w-sm mx-4"
+        style="background: var(--card-bg); border: 1px solid var(--border-color); padding: 1.5rem;">
+
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                style="background: rgba(16,185,129,0.1);">
+                <svg class="w-5 h-5" fill="none" stroke="#10b981" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-sm font-semibold" style="color: var(--text-primary);">
+                    Password Reset Successful
+                </h3>
+                <p class="text-xs" style="color: var(--text-muted);">
+                    Share this temporary password with the user
+                </p>
+            </div>
+        </div>
+
+        {{-- Temporary password display --}}
+        <div class="rounded-xl p-4 mb-4 text-center"
+            style="background: var(--content-bg); border: 1px solid var(--border-color);">
+            <p class="text-xs mb-1" style="color: var(--text-muted);">Temporary Password</p>
+            <p id="temp-password-display"
+                class="text-2xl font-bold tracking-widest"
+                style="color: var(--text-primary); letter-spacing: 0.2em;">
+            </p>
+        </div>
+
+        <p class="text-xs text-center mb-4" style="color: var(--text-muted);">
+            This password will not be shown again. The user must change it on next login.
+        </p>
+
+        {{-- Copy button --}}
+        <button onclick="copyTempPassword()"
+            id="copy-btn"
+            class="w-full py-2.5 rounded-lg text-sm font-medium mb-2 transition"
+            style="background: #16a34a; color: white; padding: 0.625rem 1.25rem; margin-bottom: 1rem;">
+            Copy Password
+        </button>
+
+        <button onclick="closeResetModal()"
+            class="w-full py-2.5 rounded-lg text-sm font-medium transition"
+            style="background: var(--content-bg); color: var(--text-muted); border: 1px solid var(--border-color);padding: 0.625rem 1.25rem;">
+            Close
+        </button>
+
+    </div>
+</div>
+
 @endsection
 
 @push('scripts')
@@ -211,15 +292,25 @@
         })
         .then(res => res.json())
         .then(data => {
-            if (data.initialised === false) {
-                document.getElementById('initialise-username').textContent = fullName;
-                showPanel('initialise');
-            } else {
-                document.getElementById('permissions-username').textContent = fullName;
-                populateToggles(data.permissions);
-                showPanel('permissions');
-            }
-        })
+    if (data.initialised === false) {
+        document.getElementById('initialise-username').textContent = fullName;
+        showPanel('initialise');
+    } else {
+        document.getElementById('permissions-username').textContent = fullName;
+        populateToggles(data.permissions);
+        showPanel('permissions');
+
+        // ADDED: show/hide reset button based on reset_requested flag
+        const resetBtn = document.getElementById('reset-password-btn');
+        if (data.reset_requested) {
+            resetBtn.classList.remove('hidden');
+            resetBtn.classList.add('flex');
+        } else {
+            resetBtn.classList.add('hidden');
+            resetBtn.classList.remove('flex');
+        }
+    }
+})
         .catch(() => {
             alert('Failed to load permissions. Please try again.');
         });
@@ -309,5 +400,62 @@
         active.classList.remove('hidden');
         active.classList.add('flex-1', 'flex');
     }
+
+    // ADDED: reset password via AJAX
+function resetPassword() {
+    if (!selectedUser) return;
+
+    if (!confirm('Reset password for this user? A temporary password will be generated.')) return;
+
+    fetch('{{ route("settings.user-privilege.reset-password") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ username: selectedUser }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // Show modal with temporary password
+            document.getElementById('temp-password-display').textContent = data.temp_password;
+            document.getElementById('reset-modal').classList.remove('hidden');
+
+            // Hide the reset button since request is now cleared
+            document.getElementById('reset-password-btn').classList.add('hidden');
+            document.getElementById('reset-password-btn').classList.remove('flex');
+
+            // ADDED: update the user list badge — remove RESET badge for this user
+            const userItem = document.querySelector(`[data-userid="${selectedUser}"]`);
+            if (userItem) {
+                const badge = userItem.querySelector('span');
+                if (badge) badge.remove();
+            }
+        } else {
+            alert('Failed to reset password. Please try again.');
+        }
+    })
+    .catch(() => {
+        alert('Failed to reset password. Please try again.');
+    });
+}
+
+// ADDED: copy temporary password to clipboard
+function copyTempPassword() {
+    const password = document.getElementById('temp-password-display').textContent;
+    navigator.clipboard.writeText(password).then(() => {
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy Password'; }, 2000);
+    });
+}
+
+// ADDED: close the reset modal
+function closeResetModal() {
+    document.getElementById('reset-modal').classList.add('hidden');
+    document.getElementById('temp-password-display').textContent = '';
+}
 </script>
 @endpush
