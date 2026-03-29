@@ -62,7 +62,7 @@
 
         {{-- Password requirements --}}
         <p class="text-xs" style="color: rgba(255,255,255,0.3);">
-            Password must be at least 6 characters long
+           Password must be at least 8 characters, include uppercase and lowercase letters, and contain at least one number.
         </p>
 
         <button type="submit"

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
+use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
@@ -65,7 +66,13 @@ class AuthController extends Controller
     public function changePassword(Request $request)
     {
         $request->validate([
-            'password'              => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => [
+                'required',
+                'confirmed',
+                Password::min(8)        // minimum 8 characters
+                    ->mixedCase()       // at least one uppercase and one lowercase
+                    ->numbers(),        // at least one number
+            ],
             'password_confirmation' => ['required', 'string'],
         ]);
 
@@ -80,6 +87,10 @@ class AuthController extends Controller
         $user->HashPassword         = bcrypt($request->password);
         $user->must_change_password = 0;
         $user->save();
+
+        // Invalidates old session token 
+        $request->session()->regenerate();
+
 
         return redirect()->route('dashboard')
             ->with('success', 'Password changed successfully. Welcome back!');
