@@ -12,8 +12,8 @@ class LedgerControlController extends Controller
     // Show the ledger control page
     public function index()
     {
-        $activeControls   = LedgerControl::active()->orderBy('ControlID')->get();
-        $inactiveControls = LedgerControl::inactive()->orderBy('ControlID')->get();
+        $activeControls   = LedgerControl::active()->orderBy('ControlName')->get();
+        $inactiveControls = LedgerControl::inactive()->orderBy('ControlName')->get();
 
         return view('settings.ledger-control', compact('activeControls', 'inactiveControls'));
     }
