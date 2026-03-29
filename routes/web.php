@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Settings\UserPrivilegeController;
+use App\Http\Controllers\Settings\LedgerControlController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -41,6 +42,15 @@ Route::middleware('auth')->group(function () {
             Route::post('/user-privilege/initialise', [UserPrivilegeController::class, 'initialise'])->name('user-privilege.initialise');
             Route::post('/user-privilege/toggle', [UserPrivilegeController::class, 'toggle'])->name('user-privilege.toggle');
             Route::post('/user-privilege/reset-password', [UserPrivilegeController::class, 'resetPassword'])->name('user-privilege.reset-password');
+        });
+
+        // Ledger Control — requires BasicConfig permission
+        Route::middleware('permission:BasicConfig')->group(function () {
+            Route::get('/ledger-control', [LedgerControlController::class, 'index'])->name('ledger-control.index');
+            Route::post('/ledger-control', [LedgerControlController::class, 'store'])->name('ledger-control.store');
+            Route::put('/ledger-control/{id}', [LedgerControlController::class, 'update'])->name('ledger-control.update');
+            Route::patch('/ledger-control/{id}/deactivate', [LedgerControlController::class, 'deactivate'])->name('ledger-control.deactivate');
+            Route::patch('/ledger-control/{id}/restore', [LedgerControlController::class, 'restore'])->name('ledger-control.restore');
         });
     });
 });

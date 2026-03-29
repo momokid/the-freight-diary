@@ -34,31 +34,31 @@
         }
 
        /* CHANGED: light theme now has a visually distinct topbar */
-[data-theme="light"] {
-    --sidebar-bg:      #1f2937;    /* CHANGED: dark gray */
-    --topbar-bg:       #1f2937;         /* CHANGED: white topbar in light mode */
-    --content-bg:      #f3f4f6;
-    --card-bg:         #ffffff;
-    --border-color:    rgba(0,0,0,0.08);
-    --text-primary:    #111827;
-    --text-muted:      rgba(0,0,0,0.4);
-    --sidebar-text:    #f0fdf4;
-    --sidebar-muted:   rgba(255,255,255,0.45);
-    --accent:          #16a34a;
-    --accent-hover:    #15803d;
-    --nav-hover:       rgba(255,255,255,0.08);
-    --nav-active:      rgba(255,255,255,0.15);
-    --nav-active-text: #ffffff;
-    --tooltip-bg:      #0f2419;
-    --tooltip-text:    #f0fdf4;
-    --overlay:         rgba(0,0,0,0.4);
-    --topbar-text:     #ffffff;         /* CHANGED: dark text for white topbar */
-    --topbar-muted:    rgba(0,0,0,0.4); /* CHANGED: dark muted for white topbar */
-    --topbar-border:   rgba(0,0,0,0.08); /* CHANGED: dark border for white topbar */
-    --topbar-btn-bg:    rgba(0,0,0,0.05);        /* CHANGED: subtle dark on white */
-    --topbar-btn-border: rgba(0,0,0,0.1);
+        [data-theme="light"] {
+            --sidebar-bg:      #1f2937;    /* CHANGED: dark gray */
+            --topbar-bg:       #1f2937;         /* CHANGED: white topbar in light mode */
+            --content-bg:      #f3f4f6;
+            --card-bg:         #ffffff;
+            --border-color:    rgba(0,0,0,0.08);
+            --text-primary:    #111827;
+            --text-muted:      rgba(0,0,0,0.4);
+            --sidebar-text:    #f0fdf4;
+            --sidebar-muted:   rgba(255,255,255,0.45);
+            --accent:          #16a34a;
+            --accent-hover:    #15803d;
+            --nav-hover:       rgba(255,255,255,0.08);
+            --nav-active:      rgba(255,255,255,0.15);
+            --nav-active-text: #ffffff;
+            --tooltip-bg:      #0f2419;
+            --tooltip-text:    #f0fdf4;
+            --overlay:         rgba(0,0,0,0.4);
+            --topbar-text:     #ffffff;         /* CHANGED: dark text for white topbar */
+            --topbar-muted:    rgba(0,0,0,0.4); /* CHANGED: dark muted for white topbar */
+            --topbar-border:   rgba(0,0,0,0.08); /* CHANGED: dark border for white topbar */
+            --topbar-btn-bg:    rgba(0,0,0,0.05);        /* CHANGED: subtle dark on white */
+            --topbar-btn-border: rgba(0,0,0,0.1);
 
-}
+        }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -87,6 +87,240 @@
             width: 64px;
         }
 
+        /* ══════════════════════════════════════════
+        GLOBAL FORM STYLES
+        Used consistently across all forms in the app
+        ══════════════════════════════════════════ */
+
+        /* Form card container */
+        .form-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        /* Form section title */
+        .form-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        /* Form section subtitle */
+        .form-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 1.25rem;
+        }
+
+        /* Field wrapper — space between fields */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        /* Field label */
+        .form-label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        /* Text input, select, textarea */
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1.5px solid var(--border-color);
+            background: var(--content-bg);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .form-input:focus {
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Select specific fix — arrow and padding */
+        select.form-input {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 14px;
+            padding-right: 32px;
+        }
+
+        /* Error message below a field */
+        .form-error {
+            font-size: 0.75rem;
+            color: #ef4444;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .form-error.visible {
+            display: block;
+        }
+
+        /* Success message below a field or form */
+        .form-success {
+            font-size: 0.75rem;
+            color: #16a34a;
+            margin-top: 4px;
+            display: none;
+        }
+
+        .form-success.visible {
+            display: block;
+        }
+
+        /* Primary submit button */
+        .btn-primary {
+            width: 100%;
+            padding: 10px;
+            background: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Secondary/outline button */
+        .btn-secondary {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1.5px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--content-bg);
+        }
+
+        /* Danger button — deactivate, delete */
+        .btn-danger {
+            width: 100%;
+            padding: 10px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+
+        .btn-danger:hover {
+            opacity: 0.9;
+        }
+
+        /* Small icon action buttons in tables */
+        .btn-icon {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+
+        .btn-icon:hover {
+            opacity: 0.8;
+        }
+
+        .btn-icon-danger {
+            background: rgba(239,68,68,0.08);
+            color: #ef4444;
+        }
+
+        .btn-icon-success {
+            background: rgba(22,163,74,0.08);
+            color: #16a34a;
+        }
+
+        /* ══════════════════════════════════════════
+        GLOBAL TABLE STYLES
+        ══════════════════════════════════════════ */
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .data-table thead th {
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            border-bottom: 2px solid var(--border-color);
+            background: var(--card-bg);
+            position: sticky;
+            top: 0;
+        }
+
+        .data-table tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.15s;
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--content-bg);
+        }
+
+        .data-table tbody td {
+            padding: 12px 16px;
+            color: var(--text-primary);
+        }
+
+        .data-table .td-muted {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .data-table .td-mono {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
         /* Mobile — hidden off-screen by default */
         @media (max-width: 1023px) {
             #sidebar {
@@ -406,6 +640,13 @@
     </button>
     <div class="tooltip">Basic Setup</div>
     <div id="submenu-setup" class="submenu closed">
+        @if(isset($userAuth) && $userAuth->hasPermission('BasicConfig'))
+            <a href="{{ route('settings.ledger-control.index') }}" class="submenu-link
+                {{ request()->routeIs('settings.ledger-control.*') ? 'active' : '' }}">
+                Ledger Control
+            </a>
+        @endif
+
         @if(isset($userAuth) && $userAuth->hasPermission('UserPrivilege'))
         <a href="{{ route('settings.user-privilege.index') }}" class="submenu-link
             {{ request()->routeIs('settings.user-privilege.*') ? 'active' : '' }}">
