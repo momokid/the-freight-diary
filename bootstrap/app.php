@@ -17,6 +17,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         //force password change middleware runs on every authenticated request
         $middleware->appendToGroup('web', \App\Http\Middleware\ForcePasswordChange::class);
+
+        // security headers on every response
+        $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

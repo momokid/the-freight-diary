@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Route;
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+    Route::post('/login', [AuthController::class, 'login'])->middleware("throttle:login")->name('login.submit');
     //forgot password request
-    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('password.request');
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware("throttle:forgot-password")->name('password.request');
 });
 
 Route::get('/', function () {

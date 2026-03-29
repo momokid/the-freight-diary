@@ -22,7 +22,10 @@ class ForcePasswordChange
                 $user->must_change_password &&
                 ! $request->routeIs('password.change') &&
                 ! $request->routeIs('password.update') &&
-                ! $request->routeIs('logout')
+                ! $request->routeIs('logout') &&
+                ! $request->routeIs('login') &&        // ADDED: exclude login routes
+                ! $request->routeIs('login.submit') && // ADDED: exclude login submit
+                ! $request->is('logout')
             ) {
                 return redirect()->route('password.change');
             }

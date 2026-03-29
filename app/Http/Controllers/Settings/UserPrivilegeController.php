@@ -152,9 +152,14 @@ class UserPrivilegeController extends Controller
 
         $user = User::where('ID', $request->username)->firstOrFail();
 
-        // 
-        // Generate 8-character temporary password  and excludes 0, O, 1, I to avoid confusion when reading aloud
-        $tempPassword = strtoupper(substr(str_shuffle('ABCDEFGHJKLMNPQRSTUVWXYZ23456789'), 0, 6));
+        // CHANGED: using random_int instead of str_shuffle for cryptographically secure password generation
+        $characters  = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $length = 6;
+        $tempPassword = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            $tempPassword .= $characters[random_int(0, strlen($characters) - 1)];
+        }
 
         // Hash and save the temporary password
         $user->HashPassword        = bcrypt($tempPassword);
