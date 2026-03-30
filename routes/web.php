@@ -6,6 +6,8 @@ use App\Http\Controllers\Settings\UserPrivilegeController;
 use App\Http\Controllers\Settings\LedgerControlController;
 use App\Http\Controllers\Settings\LedgerCategoryController;
 use App\Http\Controllers\Settings\LedgerAccountController;
+use App\Http\Controllers\Settings\HandlingChargeController;
+
 use Illuminate\Support\Facades\Route;
 
 
@@ -71,6 +73,12 @@ Route::middleware('auth')->group(function () {
             Route::patch('/ledger-account/{id}/deactivate', [LedgerAccountController::class, 'deactivate'])->name('ledger-account.deactivate');
             Route::patch('/ledger-account/{id}/restore', [LedgerAccountController::class, 'restore'])->name('ledger-account.restore');
             Route::get('/ledger-account/categories-by-type', [LedgerAccountController::class, 'categoriesByType'])->name('ledger-account.categories-by-type');
+
+            // Handling Charge
+            Route::get('/handling-charge', [HandlingChargeController::class, 'index'])->name('handling-charge.index');
+            Route::post('/handling-charge', [HandlingChargeController::class, 'store'])->name('handling-charge.store');
+            Route::put('/handling-charge/{id}', [HandlingChargeController::class, 'update'])->name('handling-charge.update');
+            Route::delete('/handling-charge/{id}', [HandlingChargeController::class, 'destroy'])->name('handling-charge.destroy');
         });
     });
 });

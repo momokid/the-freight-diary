@@ -66,6 +66,9 @@
                     <a href="{{ route('settings.ledger-account.index') }}" class="submenu-link {{ request()->routeIs('settings.ledger-account.*') ? 'active' : '' }}">
                         Ledger Account
                     </a>
+                    <a href="{{ route('settings.handling-charge.index') }}" class="submenu-link {{ request()->routeIs('settings.handling-charge.*') ? 'active' : '' }}">
+                        Handling Charges
+                    </a>
                 @endif
                 @if(isset($userAuth) && $userAuth->hasPermission('UserPrivilege'))
                     <a href="{{ route('settings.user-privilege.index') }}" class="submenu-link {{ request()->routeIs('settings.user-privilege.*') ? 'active' : '' }}">

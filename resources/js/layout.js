@@ -74,6 +74,7 @@ function autoOpenActiveSubmenu() {
             "/settings/ledger-control",
             "/settings/ledger-category",
             "/settings/ledger-account",
+            "/settings/handling-charge",
             "/settings/user-privilege",
         ],
         consignment: ["/consignment"],
