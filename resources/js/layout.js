@@ -75,6 +75,7 @@ function autoOpenActiveSubmenu() {
             "/settings/ledger-category",
             "/settings/ledger-account",
             "/settings/handling-charge",
+            "/settings/disbursement-account",
             "/settings/user-privilege",
         ],
         consignment: ["/consignment"],

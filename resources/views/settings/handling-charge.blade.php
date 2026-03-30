@@ -8,7 +8,7 @@
 <div class="flex gap-6" style="height: calc(100vh - 90px);">
 
     {{-- ── Left Panel: Add Handling Charge ── --}}
-    <div class="flex-shrink-0" style="width: 320px;">
+    <div class="shrink-0" style="width: 320px;">
         <div class="card h-full flex flex-col">
 
             <p class="form-title">New Handling Charge</p>
@@ -72,7 +72,7 @@
         <div class="card h-full flex flex-col">
 
             {{-- Header --}}
-            <div class="flex items-center justify-between mb-4 flex-shrink-0">
+            <div class="flex items-center justify-between mb-4 shrink-0">
                 <div>
                     <p class="form-title">Existing Handling Charges</p>
                     <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">

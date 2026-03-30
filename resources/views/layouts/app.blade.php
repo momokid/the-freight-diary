@@ -69,6 +69,11 @@
                     <a href="{{ route('settings.handling-charge.index') }}" class="submenu-link {{ request()->routeIs('settings.handling-charge.*') ? 'active' : '' }}">
                         Handling Charges
                     </a>
+                    <a href="{{ route('settings.disbursement-account.index') }}" class="submenu-link {{ request()->routeIs('settings.disbursement-account.*') ? 'active' : '' }}">
+                        Disbursement Setup
+                    </a>
+
+                    
                 @endif
                 @if(isset($userAuth) && $userAuth->hasPermission('UserPrivilege'))
                     <a href="{{ route('settings.user-privilege.index') }}" class="submenu-link {{ request()->routeIs('settings.user-privilege.*') ? 'active' : '' }}">
