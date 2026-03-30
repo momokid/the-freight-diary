@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Settings\UserPrivilegeController;
 use App\Http\Controllers\Settings\LedgerControlController;
 use App\Http\Controllers\Settings\LedgerCategoryController;
+use App\Http\Controllers\Settings\LedgerAccountController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -47,19 +48,29 @@ Route::middleware('auth')->group(function () {
 
         // Ledger Control — requires BasicConfig permission
         Route::middleware('permission:BasicConfig')->group(function () {
+            //Ledger Control routes
             Route::get('/ledger-control', [LedgerControlController::class, 'index'])->name('ledger-control.index');
             Route::post('/ledger-control', [LedgerControlController::class, 'store'])->name('ledger-control.store');
             Route::put('/ledger-control/{id}', [LedgerControlController::class, 'update'])->name('ledger-control.update');
             Route::patch('/ledger-control/{id}/deactivate', [LedgerControlController::class, 'deactivate'])->name('ledger-control.deactivate');
             Route::patch('/ledger-control/{id}/restore', [LedgerControlController::class, 'restore'])->name('ledger-control.restore');
-        });
 
-        //Ledger Category
-        Route::get('/ledger-category', [LedgerCategoryController::class, 'index'])->name('ledger-category.index');
-        Route::post('/ledger-category/category', [LedgerCategoryController::class, 'storeCategory'])->name('ledger-category.store-category');
-        Route::post('/ledger-category', [LedgerCategoryController::class, 'storeSubCategory'])->name('ledger-category.store');
-        Route::put('/ledger-category/{id}', [LedgerCategoryController::class, 'update'])->name('ledger-category.update');
-        Route::patch('/ledger-category/{id}/deactivate', [LedgerCategoryController::class, 'deactivate'])->name('ledger-category.deactivate');
-        Route::patch('/ledger-category/{id}/restore', [LedgerCategoryController::class, 'restore'])->name('ledger-category.restore');
+            //Ledger Category routes
+            Route::get('/ledger-category', [LedgerCategoryController::class, 'index'])->name('ledger-category.index');
+            Route::post('/ledger-category/category', [LedgerCategoryController::class, 'storeCategory'])->name('ledger-category.store-category');
+            Route::post('/ledger-category', [LedgerCategoryController::class, 'storeSubCategory'])->name('ledger-category.store');
+            Route::put('/ledger-category/{id}', [LedgerCategoryController::class, 'update'])->name('ledger-category.update');
+            Route::patch('/ledger-category/{id}/deactivate', [LedgerCategoryController::class, 'deactivate'])->name('ledger-category.deactivate');
+            Route::patch('/ledger-category/{id}/restore', [LedgerCategoryController::class, 'restore'])->name('ledger-category.restore');
+
+            //Ledger account routes
+            Route::get('/ledger-account', [LedgerAccountController::class, 'index'])->name('ledger-account.index');
+            Route::post('/ledger-account', [LedgerAccountController::class, 'store'])->name('ledger-account.store');
+            Route::put('/ledger-account/{id}', [LedgerAccountController::class, 'update'])->name('ledger-account.update');
+            Route::patch('/ledger-account/{id}/toggle-visible', [LedgerAccountController::class, 'toggleVisible'])->name('ledger-account.toggle-visible');
+            Route::patch('/ledger-account/{id}/deactivate', [LedgerAccountController::class, 'deactivate'])->name('ledger-account.deactivate');
+            Route::patch('/ledger-account/{id}/restore', [LedgerAccountController::class, 'restore'])->name('ledger-account.restore');
+            Route::get('/ledger-account/categories-by-type', [LedgerAccountController::class, 'categoriesByType'])->name('ledger-account.categories-by-type');
+        });
     });
 });
