@@ -483,3 +483,34 @@ select.form-input {
 .data-table tbody td { padding: 12px 16px; color: var(--text-primary); }
 .data-table .td-muted { color: var(--text-muted); font-size: 0.8rem; }
 .data-table .td-mono  { font-family: monospace; font-size: 0.8rem; color: var(--text-muted); }
+
+
+/* ── Skeleton loader ── */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--border-color) 25%,
+        var(--content-bg) 50%,
+        var(--border-color) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+    height: 14px;
+    display: inline-block;
+}
+
+@keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* CHANGED: NProgress bar color matches app theme */
+#nprogress .bar {
+    background: #16a34a;
+    height: 3px;
+}
+
+#nprogress .peg {
+    box-shadow: 0 0 10px #16a34a, 0 0 5px #16a34a;
+}

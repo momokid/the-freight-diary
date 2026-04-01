@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('title', 'Dashboard') — Freight Diary</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    {{-- @vite('resources/css/app.css') --}}
+    <style>
+        body { visibility: hidden; }
+    </style>
+    {{-- NProgress loading bar --}}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
+    @vite(['resources/css/app.css', 'resources/js/layout.js'])
 </head>
 <body>
 
@@ -83,6 +89,29 @@
                         User Privilege
                     </a>
                 @endif
+            </div>
+        </div>
+        @endif
+
+        {{-- Master Data --}}
+        @if(isset($userAuth) && $userAuth->hasPermission('ConsignmentRegister'))
+        <div class="nav-section-label">Master Data</div>
+        <div class="nav-item-wrapper">
+            <button class="nav-link" onclick="toggleSubmenu('masterdata')">
+                <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582 4 8 4m0 0c4.418 0 8-1.79 8-4"/>
+                </svg>
+                <span class="nav-label" style="flex: 1; text-align: left;">Master Data</span>
+                <svg class="nav-arrow" id="arrow-masterdata" style="width: 12px; height: 12px; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </button>
+            <div class="tooltip">Master Data</div>
+            <div id="submenu-masterdata" class="submenu closed">
+                <a href="{{ route('master-data.consignees.index') }}" class="submenu-link {{ request()->routeIs('master-data.consignees.*') ? 'active' : '' }}">
+                    Consignees
+                </a>
             </div>
         </div>
         @endif
@@ -290,8 +319,6 @@
     </main>
 
 </div>
-
-@vite(['resources/css/app.css', 'resources/js/layout.js'])
 
 @stack('scripts')
 </body>

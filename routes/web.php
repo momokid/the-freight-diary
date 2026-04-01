@@ -10,6 +10,7 @@ use App\Http\Controllers\Settings\HandlingChargeController;
 use App\Http\Controllers\Settings\DisbursementAccountController;
 use App\Http\Controllers\Settings\ActiveAccountController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ConsigneeController;
 
 
 // Guest Routes — accessible only when NOT logged in
@@ -36,6 +37,19 @@ Route::middleware('auth')->group(function () {
 
     //Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+
+    //Consignee management
+    Route::prefix('master-data')->name('master-data.')->group(function () {
+        Route::get('/consignees', [ConsigneeController::class, 'index'])->name('consignees.index');
+        Route::post('/consignees', [ConsigneeController::class, 'store'])->name('consignees.store');
+        Route::put('/consignees/{id}', [ConsigneeController::class, 'update'])->name('consignees.update');
+        Route::patch('/consignees/{id}/deactivate', [ConsigneeController::class, 'deactivate'])->name('consignees.deactivate');
+        Route::patch('/consignees/{id}/restore', [ConsigneeController::class, 'restore'])->name('consignees.restore');
+        Route::get('/consignees/search', [ConsigneeController::class, 'search'])->name('consignees.search');
+        //AJAX table search
+        Route::get('/consignees/table', [ConsigneeController::class, 'table'])->name('consignees.table');
+    });
 
     //Settings
     Route::prefix('settings')->name('settings.')->group(function () {

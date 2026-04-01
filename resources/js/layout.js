@@ -4,6 +4,11 @@
  * Location: public/js/layout.js
  */
 
+// reveal page after CSS loads — prevents FOUC
+document.addEventListener("DOMContentLoaded", function () {});
+
+document.body.style.visibility = "visible";
+
 const sidebar = document.getElementById("sidebar");
 const mainWrapper = document.getElementById("main-wrapper");
 const overlay = document.getElementById("sidebar-overlay");
@@ -79,6 +84,7 @@ function autoOpenActiveSubmenu() {
             "/settings/user-privilege",
             "/settings/active-accounts",
         ],
+        masterdata: ["/master-data/consignees"],
         consignment: ["/consignment"],
         invoice: ["/invoice"],
         payment: ["/payment"],
@@ -147,3 +153,21 @@ window.toggleSidebar = toggleSidebar;
 window.closeSidebar = closeSidebar;
 window.toggleSubmenu = toggleSubmenu;
 window.toggleUserMenu = toggleUserMenu;
+
+// attach NProgress listeners after DOM is fully ready
+window.addEventListener("load", function () {
+    if (typeof NProgress !== "undefined") {
+        NProgress.configure({ showSpinner: false });
+        document.querySelectorAll("a[href]").forEach((link) => {
+            if (
+                link.href &&
+                link.href.startsWith(window.location.origin) &&
+                !link.href.includes("#") &&
+                !link.target
+            ) {
+                link.addEventListener("click", () => NProgress.start());
+            }
+        });
+        NProgress.done();
+    }
+});
