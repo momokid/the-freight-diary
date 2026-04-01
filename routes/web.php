@@ -8,7 +8,7 @@ use App\Http\Controllers\Settings\LedgerCategoryController;
 use App\Http\Controllers\Settings\LedgerAccountController;
 use App\Http\Controllers\Settings\HandlingChargeController;
 use App\Http\Controllers\Settings\DisbursementAccountController;
-
+use App\Http\Controllers\Settings\ActiveAccountController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -84,6 +84,9 @@ Route::middleware('auth')->group(function () {
             Route::get('/disbursement-account', [DisbursementAccountController::class, 'index'])->name('disbursement-account.index');
             Route::post('/disbursement-account', [DisbursementAccountController::class, 'store'])->name('disbursement-account.store');
             Route::delete('/disbursement-account/{id}', [DisbursementAccountController::class, 'destroy'])->name('disbursement-account.destroy');
+
+            Route::get('/active-accounts', [ActiveAccountController::class, 'index'])->name('active-accounts.index');
+            Route::put('/active-accounts/{key}', [ActiveAccountController::class, 'update'])->name('active-accounts.update');
         });
     });
 });

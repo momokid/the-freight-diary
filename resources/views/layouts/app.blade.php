@@ -66,6 +66,9 @@
                     <a href="{{ route('settings.ledger-account.index') }}" class="submenu-link {{ request()->routeIs('settings.ledger-account.*') ? 'active' : '' }}">
                         Ledger Account
                     </a>
+                    <a href="{{ route('settings.active-accounts.index') }}" class="submenu-link {{ request()->routeIs('settings.active-accounts.*') ? 'active' : '' }}">
+                        Configure Active Accounts
+                    </a>
                     <a href="{{ route('settings.handling-charge.index') }}" class="submenu-link {{ request()->routeIs('settings.handling-charge.*') ? 'active' : '' }}">
                         Handling Charges
                     </a>

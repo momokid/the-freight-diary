@@ -77,6 +77,7 @@ function autoOpenActiveSubmenu() {
             "/settings/handling-charge",
             "/settings/disbursement-account",
             "/settings/user-privilege",
+            "/settings/active-accounts",
         ],
         consignment: ["/consignment"],
         invoice: ["/invoice"],
