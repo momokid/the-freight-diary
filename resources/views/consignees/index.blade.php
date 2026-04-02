@@ -97,7 +97,6 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width: 60px;">ID</th>
                             <th>Full Name</th>
                             <th style="width: 130px;">Phone</th>
                             <th>Address</th>
@@ -109,7 +108,6 @@
                         {{-- Active consignees --}}
                         @forelse($consignees as $consignee)
                         <tr>
-                            <td class="td-mono">{{ $consignee->ConsigneeID }}</td>
                             <td style="font-weight: 500; color: var(--text-primary);">
                                 {{ $consignee->FullName }}
                             </td>
@@ -147,7 +145,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.875rem;">
+                            <td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.875rem;">
                                 No consignees found. Add one using the form on the left.
                             </td>
                         </tr>
@@ -156,7 +154,6 @@
                         {{-- Inactive consignees --}}
                         @foreach($inactiveConsignees as $consignee)
                         <tr class="inactive-row" style="display: none; opacity: 0.6;">
-                            <td class="td-mono">{{ $consignee->ConsigneeID }}</td>
                             <td>
                                 <span style="font-weight: 500; text-decoration: line-through; color: var(--text-muted);">
                                     {{ $consignee->FullName }}

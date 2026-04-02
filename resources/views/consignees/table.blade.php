@@ -1,7 +1,6 @@
 {{-- Active consignees --}}
 @forelse($consignees as $consignee)
 <tr>
-    <td class="td-mono">{{ $consignee->ConsigneeID }}</td>
     <td style="font-weight: 500; color: var(--text-primary);">
         {{ $consignee->FullName }}
     </td>

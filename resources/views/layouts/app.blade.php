@@ -110,7 +110,19 @@
             <div class="tooltip">Master Data</div>
             <div id="submenu-masterdata" class="submenu closed">
                 <a href="{{ route('master-data.consignees.index') }}" class="submenu-link {{ request()->routeIs('master-data.consignees.*') ? 'active' : '' }}">
-                    Consignees
+                    Consignee Management
+                </a>
+                <a href="{{ route('master-data.shippers.index') }}" class="submenu-link {{ request()->routeIs('master-data.shippers.*') ? 'active' : '' }}">
+                    Shippers
+                </a>
+                <a href="{{ route('master-data.carriers.index') }}" class="submenu-link {{ request()->routeIs('master-data.carriers.*') ? 'active' : '' }}">
+                    Carriers
+                </a>
+                <a href="{{ route('master-data.ports.index') }}" class="submenu-link {{ request()->routeIs('master-data.ports.*') ? 'active' : '' }}">
+                    Ports (POL / POD)
+                </a>
+                <a href="{{ route('master-data.commodities.index') }}" class="submenu-link {{ request()->routeIs('master-data.commodities.*') ? 'active' : '' }}">
+                    Commodity Types
                 </a>
             </div>
         </div>

@@ -11,6 +11,10 @@ use App\Http\Controllers\Settings\DisbursementAccountController;
 use App\Http\Controllers\Settings\ActiveAccountController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ConsigneeController;
+use App\Http\Controllers\MasterData\ShipperController;
+use App\Http\Controllers\MasterData\CarrierController;
+use App\Http\Controllers\MasterData\PortController;
+use App\Http\Controllers\MasterData\CommodityController;
 
 
 // Guest Routes — accessible only when NOT logged in
@@ -49,7 +53,38 @@ Route::middleware('auth')->group(function () {
         Route::get('/consignees/search', [ConsigneeController::class, 'search'])->name('consignees.search');
         //AJAX table search
         Route::get('/consignees/table', [ConsigneeController::class, 'table'])->name('consignees.table');
+
+        // Shippers
+        Route::get('/shippers', [ShipperController::class, 'index'])->name('shippers.index');
+        Route::post('/shippers', [ShipperController::class, 'store'])->name('shippers.store');
+        Route::put('/shippers/{id}', [ShipperController::class, 'update'])->name('shippers.update');
+        Route::patch('/shippers/{id}/deactivate', [ShipperController::class, 'deactivate'])->name('shippers.deactivate');
+        Route::patch('/shippers/{id}/restore', [ShipperController::class, 'restore'])->name('shippers.restore');
+
+        // Carriers
+        Route::get('/carriers', [CarrierController::class, 'index'])->name('carriers.index');
+        Route::post('/carriers', [CarrierController::class, 'store'])->name('carriers.store');
+        Route::put('/carriers/{id}', [CarrierController::class, 'update'])->name('carriers.update');
+        Route::patch('/carriers/{id}/deactivate', [CarrierController::class, 'deactivate'])->name('carriers.deactivate');
+        Route::patch('/carriers/{id}/restore', [CarrierController::class, 'restore'])->name('carriers.restore');
+
+        // Ports (POL + POD combined)
+        Route::get('/ports', [PortController::class, 'index'])->name('ports.index');
+        Route::post('/ports/pol', [PortController::class, 'storePol'])->name('ports.pol.store');
+        Route::put('/ports/pol/{id}', [PortController::class, 'updatePol'])->name('ports.pol.update');
+        Route::delete('/ports/pol/{id}', [PortController::class, 'destroyPol'])->name('ports.pol.destroy');
+        Route::post('/ports/pod', [PortController::class, 'storePod'])->name('ports.pod.store');
+        Route::put('/ports/pod/{id}', [PortController::class, 'updatePod'])->name('ports.pod.update');
+        Route::delete('/ports/pod/{id}', [PortController::class, 'destroyPod'])->name('ports.pod.destroy');
+
+        // Commodities
+        Route::get('/commodities', [CommodityController::class, 'index'])->name('commodities.index');
+        Route::post('/commodities/category', [CommodityController::class, 'storeCategory'])->name('commodities.category.store');
+        Route::post('/commodities/type', [CommodityController::class, 'storeType'])->name('commodities.type.store');
+        Route::delete('/commodities/type/{id}', [CommodityController::class, 'destroyType'])->name('commodities.type.destroy');
     });
+
+
 
     //Settings
     Route::prefix('settings')->name('settings.')->group(function () {
