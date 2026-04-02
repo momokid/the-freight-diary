@@ -198,13 +198,40 @@
                         <a href="{{ $consignees->previousPageUrl() }}" style="padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; color: var(--text-primary); border: 1px solid var(--border-color); background: var(--card-bg); text-decoration: none;">Previous</a>
                     @endif
 
-                    @foreach($consignees->getUrlRange(1, $consignees->lastPage()) as $page => $url)
-                        @if($page == $consignees->currentPage())
-                            <span style="padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: white; background: #16a34a;">{{ $page }}</span>
-                        @else
-                            <a href="{{ $url }}" style="padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; color: var(--text-primary); border: 1px solid var(--border-color); background: var(--card-bg); text-decoration: none;">{{ $page }}</a>
-                        @endif
-                    @endforeach
+                   @php
+    $current  = $consignees->currentPage();
+    $last     = $consignees->lastPage();
+    $pages    = [];
+
+    // Always show first 2, last 2, current and 2 around current
+    for ($p = 1; $p <= $last; $p++) {
+        if (
+            $p <= 7 ||
+            $p >= $last - 1 ||
+            abs($p - $current) <= 1
+        ) {
+            $pages[] = $p;
+        }
+    }
+    $pages = array_unique($pages);
+    sort($pages);
+@endphp
+
+        @php $prev = null; @endphp
+        @foreach($pages as $page)
+            @if($prev !== null && $page - $prev > 1)
+                <span style="padding: 6px 4px; font-size: 0.75rem; color: var(--text-muted);">...</span>
+            @endif
+
+            @if($page == $current)
+                <span style="padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: white; background: #16a34a;">{{ $page }}</span>
+            @else
+                <a href="{{ $consignees->url($page) }}" style="padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; color: var(--text-primary); border: 1px solid var(--border-color); background: var(--card-bg); text-decoration: none;">{{ $page }}</a>
+            @endif
+
+            @php $prev = $page; @endphp
+        @endforeach
+
 
                     @if($consignees->hasMorePages())
                         <a href="{{ $consignees->nextPageUrl() }}" style="padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; color: var(--text-primary); border: 1px solid var(--border-color); background: var(--card-bg); text-decoration: none;">Next</a>
