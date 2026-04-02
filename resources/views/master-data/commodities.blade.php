@@ -157,18 +157,36 @@
         })
         .then(res => res.json())
         .then(data => {
-            if (data.success) {
-                nameEl.value = '';
-                successEl.textContent = data.message;
-                successEl.classList.add('visible');
-                // Add new option to type category dropdown
-                const select = document.getElementById('type-category-input');
-                const option = document.createElement('option');
-                option.value       = data.ID;
-                option.textContent = data.CategoryName;
-                select.appendChild(option);
-                setTimeout(() => successEl.classList.remove('visible'), 3000);
-            } else {
+           if (data.success) {
+    nameEl.value = '';
+    successEl.textContent = data.message;
+    successEl.classList.add('visible');
+    setTimeout(() => successEl.classList.remove('visible'), 3000);
+
+    // ADDED: add new option to type category dropdown
+    const select = document.getElementById('type-category-input');
+    const option = document.createElement('option');
+    option.value       = data.ID;
+    option.textContent = data.CategoryName;
+    select.appendChild(option);
+
+    // ADDED: add empty row to table for new category
+    const tbody = document.querySelector('table tbody');
+    const emptyAll = tbody.querySelector('td[colspan="3"]');
+    if (emptyAll) emptyAll.closest('tr').remove();
+
+    const tr = document.createElement('tr');
+    tr.className = 'type-row';
+    tr.setAttribute('data-name', data.CategoryName.toLowerCase());
+    tr.innerHTML = `
+        <td>
+            <span style="font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; background: rgba(59,130,246,0.1); color: #3b82f6;">
+                ${data.CategoryName}
+            </span>
+        </td>
+        <td colspan="2" style="color: var(--text-muted); font-size: 0.8rem; font-style: italic;">No types yet</td>`;
+    tbody.appendChild(tr);
+} else {
                 errorEl.textContent = data.message ?? 'Failed to add category.';
                 errorEl.classList.add('visible');
             }
@@ -209,12 +227,62 @@
         })
         .then(res => res.json())
         .then(data => {
-            if (data.success) {
-                nameEl.value = '';
-                successEl.textContent = data.message;
-                successEl.classList.add('visible');
-                setTimeout(() => location.reload(), 800);
-            } else {
+           if (data.success) {
+    nameEl.value = '';
+    successEl.textContent = data.message;
+    successEl.classList.add('visible');
+    setTimeout(() => successEl.classList.remove('visible'), 3000);
+
+    // CHANGED: inject new row — no page reload
+    const tbody         = document.querySelector('table tbody');
+    const categoryId    = categoryEl.value;
+    const categoryName  = categoryEl.options[categoryEl.selectedIndex].text;
+
+    // Remove "No types yet" row for this category if present
+    Array.from(tbody.querySelectorAll('.type-row')).forEach(row => {
+        if (row.getAttribute('data-name').includes(categoryName.toLowerCase()) &&
+            row.querySelector('td[colspan]')) {
+            row.remove();
+        }
+    });
+
+    const tr = document.createElement('tr');
+    tr.className = 'type-row';
+    tr.setAttribute('data-name', `${data.TypeName.toLowerCase()} ${categoryName.toLowerCase()}`);
+    tr.innerHTML = `
+        <td>
+            <span style="font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; background: rgba(59,130,246,0.1); color: #3b82f6;">
+                ${categoryName}
+            </span>
+        </td>
+        <td style="font-weight: 500; color: var(--text-primary);">${data.TypeName}</td>
+        <td style="text-align: center;">
+            <button onclick="deleteType(${data.TypeID}, this)" class="btn-icon btn-icon-danger" title="Delete">
+                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+            </button>
+        </td>`;
+
+    // Insert after last row of same category
+    const categoryRows = Array.from(tbody.querySelectorAll('.type-row')).filter(row =>
+        row.getAttribute('data-name').includes(categoryName.toLowerCase())
+    );
+
+    if (categoryRows.length > 0) {
+        const lastRow = categoryRows[categoryRows.length - 1];
+        lastRow.insertAdjacentElement('afterend', tr);
+    } else {
+        tbody.appendChild(tr);
+    }
+
+    // Update count
+    const countEl = document.querySelector('.form-title + p');
+    if (countEl) {
+        const typeCount = tbody.querySelectorAll('.type-row:not([data-name*="no types"])').length;
+        countEl.textContent = `${typeCount} types across ${document.getElementById('type-category-input').options.length - 1} categories`;
+    }
+} else {
                 document.getElementById('type-name-error').textContent = data.message ?? 'Failed to add type.';
                 document.getElementById('type-name-error').classList.add('visible');
             }

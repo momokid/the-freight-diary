@@ -16,7 +16,7 @@
 
             <div class="form-group">
                 <label class="form-label">Shipper Name <span style="color: #ef4444;">*</span></label>
-                <input type="text" id="name-input" placeholder="e.g. Maersk Line" maxlength="150" class="form-input">
+                <input type="text" id="name-input" placeholder="Name of Shipper" maxlength="150" class="form-input">
                 <p id="name-error" class="form-error"></p>
             </div>
 
@@ -243,15 +243,65 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                nameEl.value = address1El.value = document.getElementById('address2-input').value =
-                document.getElementById('address3-input').value = document.getElementById('address4-input').value = '';
-                successEl.textContent = data.message;
-                successEl.classList.add('visible');
-                setTimeout(() => location.reload(), 800);
-            } else {
-                document.getElementById('name-error').textContent = data.message ?? 'Failed to add shipper.';
-                document.getElementById('name-error').classList.add('visible');
-            }
+    // Clear form
+    nameEl.value = address1El.value = document.getElementById('address2-input').value =
+    document.getElementById('address3-input').value = document.getElementById('address4-input').value = '';
+    successEl.textContent = data.message;
+    successEl.classList.add('visible');
+    setTimeout(() => successEl.classList.remove('visible'), 3000);
+
+    // CHANGED: inject new row — no page reload
+    const tbody = document.getElementById('shippers-tbody');
+    const emptyRow = tbody.querySelector('td[colspan]');
+    if (emptyRow) emptyRow.closest('tr').remove();
+
+    const address = [
+        data.AddressLine1,
+        data.AddressLine2,
+        data.AddressLine3,
+        data.AddressLine4
+    ].filter(a => a).join(', ');
+
+    const tr = document.createElement('tr');
+    tr.className = 'shipper-row active-row';
+    tr.setAttribute('data-name', data.ShipperName.toLowerCase());
+    tr.innerHTML = `
+        <td style="font-weight: 500; color: var(--text-primary);">${data.ShipperName}</td>
+        <td class="td-muted" style="font-size: 0.8rem;">${address}</td>
+        <td style="text-align: center;">
+            <div class="flex items-center justify-center gap-1">
+                <button onclick="openEditModal(${data.ShipperID}, '${data.ShipperName.replace(/'/g, "\\'")}', '${data.AddressLine1.replace(/'/g, "\\'")}', '', '', '')"
+                    class="btn-icon btn-icon-success" title="Edit">
+                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                </button>
+                <button onclick="deactivate(${data.ShipperID}, this)" class="btn-icon btn-icon-danger" title="Deactivate">
+                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                </button>
+            </div>
+        </td>`;
+
+    // Insert in alphabetical order
+    const newName   = data.ShipperName.toLowerCase();
+    const activeRows = Array.from(tbody.querySelectorAll('.active-row'));
+    const insertBefore = activeRows.find(row => row.getAttribute('data-name') > newName);
+    if (insertBefore) {
+        tbody.insertBefore(tr, insertBefore);
+    } else {
+        const firstInactive = tbody.querySelector('.inactive-row');
+        firstInactive ? tbody.insertBefore(tr, firstInactive) : tbody.appendChild(tr);
+    }
+
+    // Update count
+    const countEl = document.querySelector('.form-title + p');
+    if (countEl) {
+        const current = parseInt(countEl.textContent) || 0;
+        countEl.textContent = `${current + 1} active shippers`;
+    }
+}
         })
         .catch(() => {
             document.getElementById('name-error').textContent = 'Something went wrong.';

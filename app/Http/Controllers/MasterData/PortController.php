@@ -25,6 +25,15 @@ class PortController extends Controller
             'POL_Name' => ['required', 'string', 'max:60'],
         ]);
 
+        // check for duplicate POL
+        $exists = Pol::whereRaw('LOWER(POL_Name) = ?', [strtolower(trim($request->POL_Name))])->exists();
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A Port of Loading with this name already exists.',
+            ], 409);
+        }
+
         $pol = Pol::create([
             'POL_Name' => trim($request->POL_Name),
             'Username' => Auth::user()->ID,
@@ -40,7 +49,12 @@ class PortController extends Controller
             ]);
         }
 
-        return response()->json(['success' => true, 'message' => 'Port of Loading added successfully.']);
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Port of Loading added successfully.',
+            'POL_ID'   => $pol->POL_ID,
+            'POL_Name' => $pol->POL_Name,
+        ]);
     }
 
     public function updatePol(Request $request, int $id)
@@ -74,6 +88,15 @@ class PortController extends Controller
             'POD_Name' => ['required', 'string', 'max:60'],
         ]);
 
+        //check for duplicate POD
+        $exists = Pod::whereRaw('LOWER(POD_Name) = ?', [strtolower(trim($request->POD_Name))])->exists();
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A Port of Discharge with this name already exists.',
+            ], 409);
+        }
+
         $pod = Pod::create([
             'POD_Name' => trim($request->POD_Name),
             'Username' => Auth::user()->ID,
@@ -89,7 +112,12 @@ class PortController extends Controller
             ]);
         }
 
-        return response()->json(['success' => true, 'message' => 'Port of Discharge added successfully.']);
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Port of Discharge added successfully.',
+            'POD_ID'   => $pod->POD_ID,
+            'POD_Name' => $pod->POD_Name,
+        ]);
     }
 
     public function updatePod(Request $request, int $id)

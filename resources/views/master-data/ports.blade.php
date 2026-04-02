@@ -211,7 +211,49 @@
                 nameEl.value = '';
                 successEl.textContent = data.message;
                 successEl.classList.add('visible');
-                setTimeout(() => location.reload(), 800);
+                setTimeout(() => successEl.classList.remove('visible'), 3000);
+
+                // CHANGED: inject new row — no page reload
+                const tbody = document.getElementById('pol-tbody');
+                const emptyRow = tbody.querySelector('td[colspan]');
+                if (emptyRow) emptyRow.closest('tr').remove();
+
+                const tr = document.createElement('tr');
+                tr.className = 'pol-row';
+                tr.setAttribute('data-name', data.POL_Name.toLowerCase());
+                tr.innerHTML = `
+                    <td>
+                        <span class="pol-name-display"
+                            style="font-weight: 500; cursor: pointer; color: var(--text-primary);"
+                            onmouseover="this.style.color='#16a34a'" onmouseout="this.style.color='var(--text-primary)'"
+                            onclick="startInlineEdit(this, ${data.POL_ID}, 'pol')" title="Click to edit">
+                            ${data.POL_Name}
+                        </span>
+                        <input type="text" class="form-input pol-name-input"
+                            style="display: none; width: 150px; padding: 6px 10px;"
+                            value="${data.POL_Name}"
+                            data-original="${data.POL_Name}"
+                            data-id="${data.POL_ID}"
+                            onkeydown="handleInlineKey(event, this, 'pol')"
+                            onblur="saveInlineEdit(this, 'pol')">
+                    </td>
+                    <td style="text-align: center;">
+                        <button onclick="deletePol(${data.POL_ID}, this)" class="btn-icon btn-icon-danger" title="Delete">
+                            <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    </td>`;
+
+                // Insert in alphabetical order
+                const newName    = data.POL_Name.toLowerCase();
+                const activeRows = Array.from(tbody.querySelectorAll('.pol-row'));
+                const insertBefore = activeRows.find(row => row.getAttribute('data-name') > newName);
+                insertBefore ? tbody.insertBefore(tr, insertBefore) : tbody.appendChild(tr);
+
+                // Update count
+                const countEl = document.querySelector('.form-title + p');
+                if (countEl) countEl.textContent = `${tbody.querySelectorAll('.pol-row').length} ports`;
             } else {
                 errorEl.textContent = data.message ?? 'Failed to add POL.';
                 errorEl.classList.add('visible');
@@ -248,11 +290,53 @@
         .then(res => res.json())
         .then(data => {
             if (data.success) {
-                nameEl.value = '';
-                successEl.textContent = data.message;
-                successEl.classList.add('visible');
-                setTimeout(() => location.reload(), 800);
-            } else {
+    nameEl.value = '';
+    successEl.textContent = data.message;
+    successEl.classList.add('visible');
+    setTimeout(() => successEl.classList.remove('visible'), 3000);
+
+    // CHANGED: inject new row — no page reload
+    const tbody = document.getElementById('pod-tbody');
+    const emptyRow = tbody.querySelector('td[colspan]');
+    if (emptyRow) emptyRow.closest('tr').remove();
+
+    const tr = document.createElement('tr');
+    tr.className = 'pod-row';
+    tr.setAttribute('data-name', data.POD_Name.toLowerCase());
+    tr.innerHTML = `
+        <td>
+            <span class="pod-name-display"
+                style="font-weight: 500; cursor: pointer; color: var(--text-primary);"
+                onmouseover="this.style.color='#16a34a'" onmouseout="this.style.color='var(--text-primary)'"
+                onclick="startInlineEdit(this, ${data.POD_ID}, 'pod')" title="Click to edit">
+                ${data.POD_Name}
+            </span>
+            <input type="text" class="form-input pod-name-input"
+                style="display: none; width: 150px; padding: 6px 10px;"
+                value="${data.POD_Name}"
+                data-original="${data.POD_Name}"
+                data-id="${data.POD_ID}"
+                onkeydown="handleInlineKey(event, this, 'pod')"
+                onblur="saveInlineEdit(this, 'pod')">
+        </td>
+        <td style="text-align: center;">
+            <button onclick="deletePod(${data.POD_ID}, this)" class="btn-icon btn-icon-danger" title="Delete">
+                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+            </button>
+        </td>`;
+
+    // Insert in alphabetical order
+    const newName    = data.POD_Name.toLowerCase();
+    const activeRows = Array.from(tbody.querySelectorAll('.pod-row'));
+    const insertBefore = activeRows.find(row => row.getAttribute('data-name') > newName);
+    insertBefore ? tbody.insertBefore(tr, insertBefore) : tbody.appendChild(tr);
+
+    // Update count
+    const allCountEls = document.querySelectorAll('.form-title + p');
+    if (allCountEls[1]) allCountEls[1].textContent = `${tbody.querySelectorAll('.pod-row').length} ports`;
+} else {
                 errorEl.textContent = data.message ?? 'Failed to add POD.';
                 errorEl.classList.add('visible');
             }

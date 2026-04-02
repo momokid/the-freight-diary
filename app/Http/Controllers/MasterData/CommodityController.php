@@ -25,6 +25,15 @@ class CommodityController extends Controller
             'CategoryName' => ['required', 'string', 'max:50', 'unique:commodity_category,CategoryName'],
         ]);
 
+        //case-insensitive duplicate check
+        $exists = CommodityCategory::whereRaw('LOWER(CategoryName) = ?', [strtolower(trim($request->CategoryName))])->exists();
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A category with this name already exists.',
+            ], 409);
+        }
+
         $category = CommodityCategory::create([
             'CategoryName' => trim($request->CategoryName),
         ]);
@@ -45,6 +54,16 @@ class CommodityController extends Controller
             'TypeName'   => ['required', 'string', 'max:500'],
         ]);
 
+        // check for duplicate type name within same category
+        $exists = CommodityType::whereRaw('LOWER(TypeName) = ?', [strtolower(trim($request->TypeName))])
+            ->where('CategoryID', $request->CategoryID)
+            ->exists();
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This type already exists under the selected category.',
+            ], 409);
+        }
         $type = CommodityType::create([
             'CategoryID' => $request->CategoryID,
             'TypeName'   => trim($request->TypeName),

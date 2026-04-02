@@ -113,13 +113,13 @@
                     Consignee Management
                 </a>
                 <a href="{{ route('master-data.shippers.index') }}" class="submenu-link {{ request()->routeIs('master-data.shippers.*') ? 'active' : '' }}">
-                    Shippers
+                    Shippers Management
                 </a>
                 <a href="{{ route('master-data.carriers.index') }}" class="submenu-link {{ request()->routeIs('master-data.carriers.*') ? 'active' : '' }}">
-                    Carriers
+                    Carriers Management
                 </a>
                 <a href="{{ route('master-data.ports.index') }}" class="submenu-link {{ request()->routeIs('master-data.ports.*') ? 'active' : '' }}">
-                    Ports (POL / POD)
+                    POL / POD Management
                 </a>
                 <a href="{{ route('master-data.commodities.index') }}" class="submenu-link {{ request()->routeIs('master-data.commodities.*') ? 'active' : '' }}">
                     Commodity Types

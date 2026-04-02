@@ -27,6 +27,15 @@ class ShipperController extends Controller
             'AddressLine4' => ['nullable', 'string', 'max:500'],
         ]);
 
+        //check for duplicate including inactive shippers
+        $exists = Shipper::whereRaw('LOWER(ShipperName) = ?', [strtolower(trim($request->ShipperName))])->exists();
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A shipper with this name already exists.',
+            ], 409);
+        }
+
         $shipper = Shipper::create([
             'ShipperName'  => trim($request->ShipperName),
             'AddressLine1' => trim($request->AddressLine1),
@@ -48,7 +57,16 @@ class ShipperController extends Controller
             ]);
         }
 
-        return response()->json(['success' => true, 'message' => 'Shipper added successfully.']);
+        return response()->json([
+            'success'      => true,
+            'message'      => 'Shipper added successfully.',
+            'ShipperID'    => $shipper->ShipperID,
+            'ShipperName'  => $shipper->ShipperName,
+            'AddressLine1' => $shipper->AddressLine1,
+            'AddressLine2' => $shipper->AddressLine2,
+            'AddressLine3' => $shipper->AddressLine3,
+            'AddressLine4' => $shipper->AddressLine4,
+        ]);
     }
 
     public function update(Request $request, int $id)
@@ -61,7 +79,18 @@ class ShipperController extends Controller
             'AddressLine4' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $shipper               = Shipper::findOrFail($id);
+        //check for duplicate excluding current shipper
+        $exists = Shipper::whereRaw('LOWER(ShipperName) = ?', [strtolower(trim($request->ShipperName))])
+            ->where('ShipperID', '!=', $id)
+            ->exists();
+        if ($exists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'A shipper with this name already exists.',
+            ], 409);
+        }
+
+        $shipper = Shipper::findOrFail($id);
         $shipper->ShipperName  = trim($request->ShipperName);
         $shipper->AddressLine1 = trim($request->AddressLine1);
         $shipper->AddressLine2 = trim($request->AddressLine2 ?? '');
