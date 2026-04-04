@@ -141,9 +141,17 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                 </svg>
             </button>
+
+            {{-- Consignment Register --}}
             <div class="tooltip">Consignment Register</div>
             <div id="submenu-consignment" class="submenu closed">
-                <span class="submenu-link" style="font-style: italic;">Coming soon</span>
+                @if(isset($userAuth) && $userAuth->hasPermission('ConsignmentRegister'))
+                    <a href="{{ route('consignments.create') }}" class="submenu-link {{ request()->routeIs('consignments.create') ? 'active' : '' }}">
+                        New Consignment
+                    </a>
+                @endif
+                <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Cargo Manifest — soon</span>
+                <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Consignment Cmdts — soon</span>
             </div>
         </div>
 

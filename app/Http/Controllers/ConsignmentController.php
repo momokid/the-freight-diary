@@ -1,0 +1,427 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Carrier;
+use App\Models\ContainerTemp;
+use App\Models\LedgerAccount;
+use App\Models\Pod;
+use App\Models\Pol;
+use App\Models\Shipper;
+use App\Services\ReceiptService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class ConsignmentController extends Controller
+{
+    public function create()
+    {
+        $user = Auth::user();
+
+        // Check if user has pending containers in temp table
+        $pendingContainers = ContainerTemp::where('Username', $user->ID)->get();
+        $pendingBOL        = $pendingContainers->first()?->BOL;
+
+        // Load all dropdowns
+        $carriers    = Carrier::active()->orderBy('CarrierName')->get();
+        $shippers    = Shipper::active()->orderBy('ShipperName')->get();
+        $pols        = Pol::orderBy('POL_Name')->get();
+        $pods        = Pod::orderBy('POD_Name')->get();
+
+        // Default handling cost from active handling charge
+        $defaultHandlingCost = DB::table('handling_charge')->orderBy('POrder')->value('Amount') ?? 0;
+
+        return view('consignments.create', compact(
+            'carriers',
+            'shippers',
+            'pols',
+            'pods',
+            'pendingContainers',
+            'pendingBOL',
+            'defaultHandlingCost'
+        ));
+    }
+
+    // Add container to staging table
+    public function addContainer(Request $request)
+    {
+        $request->validate([
+            'BOL'           => ['required', 'string', 'max:50'],
+            'SealNo'        => ['required', 'string', 'max:50'],
+            'ContainerNo'   => ['required', 'string', 'max:50'],
+            'ContainerSize' => ['required', 'string', 'max:15'],
+            'Weight'        => ['required', 'numeric', 'min:0.01'],
+            'HandlingCost'  => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $user = Auth::user();
+
+        // Check if user already has containers under a different BOL
+        $existingBOL = ContainerTemp::where('Username', $user->ID)->value('BOL');
+        if ($existingBOL && $existingBOL !== $request->BOL) {
+            return response()->json([
+                'success' => false,
+                'message' => "You have pending containers under BL# {$existingBOL}. Submit or clear them first.",
+            ], 409);
+        }
+
+        // Check if BL already exists in container_main
+        $blExists = DB::table('container_main')->where('BL', $request->BOL)->exists();
+        if ($blExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This Bill of Lading has already been registered.',
+            ], 409);
+        }
+
+        // Check duplicate container no under same BOL
+        $containerExists = ContainerTemp::where('Username', $user->ID)
+            ->where('BOL', $request->BOL)
+            ->where('ContainerNo', $request->ContainerNo)
+            ->exists();
+        if ($containerExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This container number has already been added under this BL.',
+            ], 409);
+        }
+
+        ContainerTemp::create([
+            'BOL'           => strtoupper(trim($request->BOL)),
+            'SealNo'        => strtoupper(trim($request->SealNo)),
+            'ContainerNo'   => strtoupper(trim($request->ContainerNo)),
+            'ContainerSize' => trim($request->ContainerSize),
+            'Weight'        => $request->Weight,
+            'HandlingCost'  => $request->HandlingCost,
+            'Username'      => $user->ID,
+            'Date'          => now()->toDateString(),
+            'Time'          => now()->toDateTimeString(),
+        ]);
+
+        $containers = ContainerTemp::where('Username', $user->ID)->get();
+
+        return response()->json([
+            'success'    => true,
+            'message'    => 'Container added to staging.',
+            'containers' => $containers,
+            'total'      => $containers->count(),
+        ]);
+    }
+
+    // Remove container from staging table
+    public function removeContainer(Request $request)
+    {
+        $request->validate([
+            'BOL'         => ['required', 'string'],
+            'ContainerNo' => ['required', 'string'],
+        ]);
+
+        ContainerTemp::where('Username', Auth::user()->ID)
+            ->where('BOL', $request->BOL)
+            ->where('ContainerNo', $request->ContainerNo)
+            ->delete();
+
+        $containers = ContainerTemp::where('Username', Auth::user()->ID)->get();
+
+        return response()->json([
+            'success'    => true,
+            'containers' => $containers,
+            'total'      => $containers->count(),
+        ]);
+    }
+
+    // Clear all staged containers
+    public function clearContainers()
+    {
+        ContainerTemp::where('Username', Auth::user()->ID)->delete();
+
+        return response()->json(['success' => true, 'message' => 'Staging table cleared.']);
+    }
+
+    // Save the consignment
+    public function store(Request $request)
+    {
+        $request->validate([
+            'DOT'           => ['required', 'date'],
+            'ETA'           => ['required', 'date'],
+            'CarrierID'     => ['required', 'integer', 'exists:ship_carrier,CarrierID'],
+            'ShipperID'     => ['required', 'integer', 'exists:shipper_main,ShipperID'],
+            'VesselName'    => ['required', 'string', 'max:80'],
+            'VoyageNo'      => ['required', 'string', 'max:80'],
+            'BL'            => ['required', 'string', 'max:50', 'unique:container_main,BL'],
+            'POIS'          => ['required', 'string', 'max:80'],
+            'DOIS'          => ['required', 'date'],
+            'SOB'           => ['required', 'date'],
+            'POL_ID'        => ['required', 'integer', 'exists:pol,POL_ID'],
+            'POD_ID'        => ['required', 'integer', 'exists:pod,POD_ID'],
+            'Rotation'      => ['required', 'string', 'max:30'],
+            'AgentContact'  => ['nullable', 'string', 'max:20'],
+            'Destination'   => ['nullable', 'string'],
+            'Ownership'     => ['required', 'in:1,2'],
+            'ConsigneeID'   => ['nullable', 'integer'],
+            'CmdtTypeID'    => ['nullable', 'integer'],
+        ]);
+
+        $user = Auth::user();
+
+        // Check pre-requisites
+        $handlingAccount = DB::table('handling_charge')->orderBy('POrder')->first();
+        $ieAccount       = DB::table('active_ie')->first();
+        $vaultAccount    = DB::table('active_vault')->first();
+
+        if (!$handlingAccount) {
+            return response()->json(['success' => false, 'message' => 'Handling charges account not configured.'], 422);
+        }
+        if (!$ieAccount) {
+            return response()->json(['success' => false, 'message' => 'Active IE account not configured.'], 422);
+        }
+        if (!$vaultAccount) {
+            return response()->json(['success' => false, 'message' => 'Active Vault account not configured.'], 422);
+        }
+
+        // Get staged containers
+        $containers = ContainerTemp::where('Username', $user->ID)
+            ->where('BOL', $request->BL)
+            ->get();
+
+        if ($containers->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'No containers found for this BL. Please add containers first.'], 422);
+        }
+
+        // Generate receipt number
+        $receipt = ReceiptService::generate($request->DOT);
+
+        // Get next ConsignmentID
+        $consignmentID = (DB::table('container_main')->max('ConsignmentID') ?? 0) + 1;
+
+        // Get first container for container_main fields
+        $firstContainer = $containers->first();
+
+        DB::beginTransaction();
+
+        try {
+            // 1. Insert receipt_main
+            DB::table('receipt_main')->insert([
+                'ID'        => $receipt['id'],
+                'Date'      => $receipt['date'],
+                'ReceiptNo' => $receipt['receipt_no'],
+                'Username'  => $user->ID,
+                'Time'      => now(),
+            ]);
+
+            // 2. Insert container_main
+            DB::table('container_main')->insert([
+                'ConsignmentID' => $consignmentID,
+                'CarrierID'     => $request->CarrierID,
+                'Rotation'      => strtoupper(trim($request->Rotation)),
+                'ShipperID'     => $request->ShipperID,
+                'VesselName'    => trim($request->VesselName),
+                'VoyageNo'      => trim($request->VoyageNo),
+                'SealNo'        => $firstContainer->SealNo,
+                'ETA'           => $request->ETA,
+                'BL'            => strtoupper(trim($request->BL)),
+                'ContainerNo'   => $firstContainer->ContainerNo,
+                'ContainerSize' => $firstContainer->ContainerSize,
+                'ReceiptNo'     => $receipt['receipt_no'],
+                'POIS'          => trim($request->POIS),
+                'DOIS'          => $request->DOIS,
+                'SOB'           => $request->SOB,
+                'POL_ID'        => $request->POL_ID,
+                'POD_ID'        => $request->POD_ID,
+                'ContWeight'    => $containers->sum('Weight'),
+                'Charges'       => $containers->sum('HandlingCost'),
+                'AgentContact'  => trim($request->AgentContact ?? ''),
+                'Destination'   => trim($request->Destination),
+                'Username'      => $user->ID,
+                'BranchID'      => $user->BranchID,
+                'Date'          => $request->DOT,
+                'Time'          => now(),
+                'Status'        => 1,
+                'CmdtTypeID'    => $request->CmdtTypeID ?? 1,
+                'ConsigneeID'   => $request->ConsigneeID ?? 0,
+                'ReleaseType'   => 1, // Default — updated later in Cmdts
+                'Ownership'     => $request->Ownership,
+            ]);
+
+            // 3. For each container — insert details + journal + pnl
+            foreach ($containers as $container) {
+                // a. container_details
+                DB::table('container_details')->insert([
+                    'ConsignmentID' => $consignmentID,
+                    'BL'            => strtoupper(trim($request->BL)),
+                    'SealNo'        => $container->SealNo,
+                    'ContainerNo'   => $container->ContainerNo,
+                    'ContainerSize' => $container->ContainerSize,
+                    'Weight'        => $container->Weight,
+                    'ItemDetails'   => '',
+                    'HandlingCost'  => $container->HandlingCost,
+                    'GateOutDate'   => null,
+                    'ReturnDate'    => null,
+                    'Username'      => $user->ID,
+                    'BranchID'      => $user->BranchID,
+                    'Date'          => $request->DOT,
+                    'Time'          => now(),
+                    'Status'        => 1,
+                ]);
+
+                // b. Journal Dr — Vault account
+                DB::table('journal')->insert([
+                    'AccountID'    => $vaultAccount->AccountNo,
+                    'SubAccountID' => $vaultAccount->AccountNo,
+                    'Mode'         => 'Dr',
+                    'TType'        => 'Cash',
+                    'ReceiptNo'    => $receipt['receipt_no'],
+                    'Dr'           => $container->HandlingCost,
+                    'Cr'           => 0,
+                    'Description'  => "CONSIGNMENT PROCESSING CHARGES IFO ~ {$container->ContainerNo}~{$request->BL}",
+                    'Date'         => $request->DOT,
+                    'Time'         => now(),
+                    'Username'     => $user->ID,
+                    'Authorizer'   => 'N.Auth',
+                    'BranchID'     => $user->BranchID,
+                    'Status'       => 1,
+                ]);
+
+                // c. Journal Cr — IE account
+                DB::table('journal')->insert([
+                    'AccountID'    => $ieAccount->AccountID,
+                    'SubAccountID' => $handlingAccount->AccountNo,
+                    'Mode'         => 'Cr',
+                    'TType'        => 'Cash',
+                    'ReceiptNo'    => $receipt['receipt_no'],
+                    'Dr'           => 0,
+                    'Cr'           => $container->HandlingCost,
+                    'Description'  => "CONSIGNMENT PROCESSING CHARGES IFO ~ {$container->ContainerNo}~{$request->BL}",
+                    'Date'         => $request->DOT,
+                    'Time'         => now(),
+                    'Username'     => $user->ID,
+                    'Authorizer'   => 'N.Auth',
+                    'BranchID'     => $user->BranchID,
+                    'Status'       => 1,
+                ]);
+
+                // d. PnL transaction
+                DB::table('pnl_transaction')->insert([
+                    'AccountID'   => $handlingAccount->AccountNo,
+                    'Stamp'       => 'BL',
+                    'Mode'        => 'Cr',
+                    'MainBL'      => strtoupper(trim($request->BL)),
+                    'HouseBL'     => $container->ContainerNo,
+                    'ReceiptNo'   => $receipt['receipt_no'],
+                    'Description' => "CONSIGNMENT PROCESSING CHARGES IFO ~ {$container->ContainerNo}~{$request->BL}",
+                    'Dr'          => 0,
+                    'Cr'          => $container->HandlingCost,
+                    'Date'        => $request->DOT,
+                    'Time'        => now(),
+                    'BranchID'    => $user->BranchID,
+                    'Username'    => $user->ID,
+                    'Status'      => 1,
+                ]);
+            }
+
+            // 4. Clear temp table
+            ContainerTemp::where('Username', $user->ID)->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success'       => true,
+                'message'       => 'Consignment registered successfully.',
+                'ConsignmentID' => $consignmentID,
+                'ReceiptNo'     => $receipt['receipt_no'],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save consignment. Please try again.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    //extract from BL for container_main fields
+    public function extractFromBL(Request $request)
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+        ]);
+
+        $file     = $request->file('file');
+        $mimeType = $file->getMimeType();
+        $base64   = base64_encode(file_get_contents($file->getRealPath()));
+
+        // Build the content part based on file type
+        if ($mimeType === 'application/pdf') {
+            $part = [
+                'inline_data' => [
+                    'mime_type' => 'application/pdf',
+                    'data'      => $base64,
+                ]
+            ];
+        } else {
+            $part = [
+                'inline_data' => [
+                    'mime_type' => $mimeType,
+                    'data'      => $base64,
+                ]
+            ];
+        }
+
+        $prompt = 'Extract the following fields from this Bill of Lading document and return ONLY a JSON object with no other text or markdown:
+{
+  "BL": "Bill of Lading number",
+  "VesselName": "vessel/ship name",
+  "VoyageNo": "voyage number",
+  "POIS": "place of issue",
+  "DOIS": "date of issue in YYYY-MM-DD format",
+  "SOB": "shipped on board date in YYYY-MM-DD format",
+  "POL": "port of loading name",
+  "POD": "port of discharge name",
+  "Destination": "destination",
+  "ContainerNo": "container number(s) comma separated",
+  "SealNo": "seal number(s) comma separated",
+  "ContainerSize": "container size (20 or 40)",
+  "Weight": "gross weight in KG as number only"
+}
+If a field is not found, use empty string "". Return ONLY the JSON object.';
+
+        $apiKey = config('services.google_ai.key');
+
+        $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
+            'Content-Type' => 'application/json',
+        ])->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}", [
+            'contents' => [[
+                'parts' => [
+                    $part,
+                    ['text' => $prompt],
+                ]
+            ]]
+        ]);
+
+        if ($response->failed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'OCR extraction failed.',
+                'status'  => $response->status(),
+                'body'    => $response->body(),
+            ], 500);
+        }
+
+        $text = $response->json('candidates.0.content.parts.0.text');
+
+        try {
+            $clean  = preg_replace('/```json|```/', '', $text);
+            $fields = json_decode(trim($clean), true);
+
+            if (!$fields) {
+                return response()->json(['success' => false, 'message' => 'Could not parse extraction result.'], 500);
+            }
+
+            return response()->json(['success' => true, 'fields' => $fields]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Could not parse extraction result.'], 500);
+        }
+    }
+}

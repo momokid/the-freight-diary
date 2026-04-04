@@ -15,6 +15,7 @@ use App\Http\Controllers\MasterData\ShipperController;
 use App\Http\Controllers\MasterData\CarrierController;
 use App\Http\Controllers\MasterData\PortController;
 use App\Http\Controllers\MasterData\CommodityController;
+use App\Http\Controllers\ConsignmentController;
 
 
 // Guest Routes — accessible only when NOT logged in
@@ -137,5 +138,15 @@ Route::middleware('auth')->group(function () {
             Route::get('/active-accounts', [ActiveAccountController::class, 'index'])->name('active-accounts.index');
             Route::put('/active-accounts/{key}', [ActiveAccountController::class, 'update'])->name('active-accounts.update');
         });
+    });
+
+    // Consignment Register — requires ConsignmentRegister permission
+    Route::middleware('permission:ConsignmentRegister')->prefix('consignments')->name('consignments.')->group(function () {
+        Route::get('/new', [ConsignmentController::class, 'create'])->name('create');
+        Route::post('/containers/add', [ConsignmentController::class, 'addContainer'])->name('containers.add');
+        Route::delete('/containers/remove', [ConsignmentController::class, 'removeContainer'])->name('containers.remove');
+        Route::delete('/containers/clear', [ConsignmentController::class, 'clearContainers'])->name('containers.clear');
+        Route::post('/ocr', [ConsignmentController::class, 'extractFromBL'])->name('ocr');
+        Route::post('/', [ConsignmentController::class, 'store'])->name('store');
     });
 });
