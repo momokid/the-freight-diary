@@ -16,6 +16,7 @@ use App\Http\Controllers\MasterData\CarrierController;
 use App\Http\Controllers\MasterData\PortController;
 use App\Http\Controllers\MasterData\CommodityController;
 use App\Http\Controllers\ConsignmentController;
+use App\Http\Controllers\ManifestController;
 
 
 // Guest Routes — accessible only when NOT logged in
@@ -140,13 +141,31 @@ Route::middleware('auth')->group(function () {
         });
     });
 
-    // Consignment Register — requires ConsignmentRegister permission
-    Route::middleware('permission:ConsignmentRegister')->prefix('consignments')->name('consignments.')->group(function () {
-        Route::get('/new', [ConsignmentController::class, 'create'])->name('create');
-        Route::post('/containers/add', [ConsignmentController::class, 'addContainer'])->name('containers.add');
-        Route::delete('/containers/remove', [ConsignmentController::class, 'removeContainer'])->name('containers.remove');
-        Route::delete('/containers/clear', [ConsignmentController::class, 'clearContainers'])->name('containers.clear');
-        Route::post('/ocr', [ConsignmentController::class, 'extractFromBL'])->name('ocr');
-        Route::post('/', [ConsignmentController::class, 'store'])->name('store');
+    // Consignment and Manifest routes — requires ConsignmentRegister permission
+    Route::middleware('permission:ConsignmentRegister')->group(function () {
+
+        // Consignment routes
+        Route::prefix('consignments')->name('consignments.')->group(function () {
+            Route::get('/new', [ConsignmentController::class, 'create'])->name('create');
+            Route::post('/containers/add', [ConsignmentController::class, 'addContainer'])->name('containers.add');
+            Route::delete('/containers/remove', [ConsignmentController::class, 'removeContainer'])->name('containers.remove');
+            Route::delete('/containers/clear', [ConsignmentController::class, 'clearContainers'])->name('containers.clear');
+            Route::post('/ocr', [ConsignmentController::class, 'extractFromBL'])->name('ocr');
+            Route::post('/', [ConsignmentController::class, 'store'])->name('store');
+        });
+
+        // Manifest routes
+        Route::prefix('manifest')->name('manifest.')->group(function () {
+            Route::get('/', [ManifestController::class, 'index'])->name('index');
+            Route::get('/search', [ManifestController::class, 'search'])->name('search');
+            Route::get('/generate-hbl', [ManifestController::class, 'generateHouseBL'])->name('generate-hbl');
+            Route::post('/entries/add', [ManifestController::class, 'addEntry'])->name('entries.add');
+            Route::delete('/entries/remove', [ManifestController::class, 'removeEntry'])->name('entries.remove');
+            Route::delete('/entries/clear', [ManifestController::class, 'clearEntries'])->name('entries.clear');
+            Route::post('/store', [ManifestController::class, 'store'])->name('store');
+            Route::get('/consignee-search', [ManifestController::class, 'searchConsignee'])->name('consignee-search');
+           
+            Route::get('/manifest-breakdown/{bl}', [ManifestController::class, 'report'])->name('manifest.breakdown');
+        });
     });
 });

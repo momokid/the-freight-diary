@@ -150,7 +150,9 @@
                         New Consignment
                     </a>
                 @endif
-                <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Cargo Manifest — soon</span>
+                 <a href="{{ route('manifest.index') }}" class="submenu-link {{ request()->routeIs('manifest.*') ? 'active' : '' }}">
+                    Cargo Manifest
+                </a>
                 <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Consignment Cmdts — soon</span>
             </div>
         </div>

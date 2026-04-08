@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use App\Services\CompanyService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -49,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
             if (Auth::check()) {
                 static $pendingResetCount = null;
                 static $userAuth = null;
+                static $company           = null;
 
                 if ($pendingResetCount === null) {
                     $pendingResetCount = User::where('reset_requested', 1)->count();
@@ -58,8 +60,14 @@ class AppServiceProvider extends ServiceProvider
                     $userAuth = UserAuth::where('Username', Auth::user()->ID)->first();
                 }
 
+                //company info shared across all views including reports
+                if ($company === null) {
+                    $company = CompanyService::get();
+                }
+
                 $view->with('pendingResetCount', $pendingResetCount);
                 $view->with('userAuth', $userAuth);
+                $view->with('company', $company);
             }
         });
     }

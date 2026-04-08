@@ -38,4 +38,7 @@ return [
         'key' => env('GOOGLE_AI_API_KEY'),
     ],
 
+    'manifest' => [
+        'hbl_prefix' => env('MANIFEST_HBL_PREFIX', 'PSIL'),
+    ],
 ];
