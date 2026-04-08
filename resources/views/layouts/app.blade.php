@@ -149,11 +149,16 @@
                     <a href="{{ route('consignments.create') }}" class="submenu-link {{ request()->routeIs('consignments.create') ? 'active' : '' }}">
                         New Consignment
                     </a>
+
+                    <a href="{{ route('manifest.index') }}" class="submenu-link {{ request()->routeIs('manifest.*') ? 'active' : '' }}">
+                        Cargo Manifest
+                    </a>
+                    <a href="{{ route('cmdts.index') }}" class="submenu-link {{ request()->routeIs('cmdts.*') ? 'active' : '' }}">
+                        Consignment Cmdts
+                    </a>
+
                 @endif
-                 <a href="{{ route('manifest.index') }}" class="submenu-link {{ request()->routeIs('manifest.*') ? 'active' : '' }}">
-                    Cargo Manifest
-                </a>
-                <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Consignment Cmdts — soon</span>
+                 
             </div>
         </div>
 

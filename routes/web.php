@@ -17,6 +17,7 @@ use App\Http\Controllers\MasterData\PortController;
 use App\Http\Controllers\MasterData\CommodityController;
 use App\Http\Controllers\ConsignmentController;
 use App\Http\Controllers\ManifestController;
+use App\Http\Controllers\CmdtsController;
 
 
 // Guest Routes — accessible only when NOT logged in
@@ -164,8 +165,24 @@ Route::middleware('auth')->group(function () {
             Route::delete('/entries/clear', [ManifestController::class, 'clearEntries'])->name('entries.clear');
             Route::post('/store', [ManifestController::class, 'store'])->name('store');
             Route::get('/consignee-search', [ManifestController::class, 'searchConsignee'])->name('consignee-search');
-           
+
             Route::get('/manifest-breakdown/{bl}', [ManifestController::class, 'report'])->name('manifest.breakdown');
+        });
+
+        //// Consignment Cmdts routes
+        Route::prefix('cmdts')->name('cmdts.')->group(function () {
+            Route::get('/', [CmdtsController::class, 'index'])->name('index');
+            Route::post('/containers/add', [CmdtsController::class, 'addContainer'])->name('containers.add');
+            Route::delete('/containers/remove', [CmdtsController::class, 'removeContainer'])->name('containers.remove');
+            Route::delete('/containers/clear', [CmdtsController::class, 'clearContainers'])->name('containers.clear');
+            Route::post('/', [CmdtsController::class, 'store'])->name('store');
+            Route::get('/consignee-search', [CmdtsController::class, 'searchConsignee'])->name('consignee-search');
+            Route::get('/types-by-category', [CmdtsController::class, 'typesByCategory'])->name('types-by-category');
+            Route::post('/release/store', function (\Illuminate\Http\Request $request) {
+                $request->validate(['name' => ['required', 'string', 'max:100']]);
+                $id = DB::table('container_release')->insertGetId(['ReleaseType' => $request->name]);
+                return response()->json(['success' => true, 'id' => $id, 'name' => $request->name]);
+            })->name('release.store');
         });
     });
 });

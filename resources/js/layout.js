@@ -91,7 +91,7 @@ function autoOpenActiveSubmenu() {
             "/master-data/ports",
             "/master-data/commodities",
         ],
-        consignment: ["/consignments", "/manifest"],
+        consignment: ["/consignments", "/manifest", "/cmdts"],
         invoice: ["/invoice"],
         payment: ["/payment"],
         accounting: ["/accounting"],
