@@ -10,6 +10,7 @@ use App\Http\Controllers\Settings\HandlingChargeController;
 use App\Http\Controllers\Settings\DisbursementAccountController;
 use App\Http\Controllers\Settings\ActiveAccountController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\ConsigneeController;
 use App\Http\Controllers\MasterData\ShipperController;
 use App\Http\Controllers\MasterData\CarrierController;
