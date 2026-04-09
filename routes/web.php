@@ -19,7 +19,7 @@ use App\Http\Controllers\MasterData\CommodityController;
 use App\Http\Controllers\ConsignmentController;
 use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\CmdtsController;
-
+use App\Http\Controllers\HblInvoiceController;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -184,6 +184,21 @@ Route::middleware('auth')->group(function () {
                 $id = DB::table('container_release')->insertGetId(['ReleaseType' => $request->name]);
                 return response()->json(['success' => true, 'id' => $id, 'name' => $request->name]);
             })->name('release.store');
+        });
+    });
+
+    // Generate Invoice
+    Route::middleware('permission:GenerateInvoice')->prefix('invoice')->name('invoice.')->group(function () {
+
+        // House BL Invoice
+        Route::prefix('house-bl')->name('hbl.')->group(function () {
+            Route::get('/', [HblInvoiceController::class, 'index'])->name('index');
+            Route::get('/search', [HblInvoiceController::class, 'search'])->name('search');
+            Route::post('/charges/add', [HblInvoiceController::class, 'addCharge'])->name('charges.add');
+            Route::delete('/charges/remove', [HblInvoiceController::class, 'removeCharge'])->name('charges.remove');
+            Route::delete('/charges/clear', [HblInvoiceController::class, 'clearCharges'])->name('charges.clear');
+            Route::post('/store', [HblInvoiceController::class, 'store'])->name('store');
+            Route::get('/report/{hbl}', [HblInvoiceController::class, 'report'])->name('report');
         });
     });
 });

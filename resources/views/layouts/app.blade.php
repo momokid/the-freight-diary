@@ -107,6 +107,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                 </svg>
             </button>
+
             <div class="tooltip">Master Data</div>
             <div id="submenu-masterdata" class="submenu closed">
                 <a href="{{ route('master-data.consignees.index') }}" class="submenu-link {{ request()->routeIs('master-data.consignees.*') ? 'active' : '' }}">
@@ -174,23 +175,48 @@
         ];
         @endphp
 
-        @foreach($transactionMenus as $item)
-        <div class="nav-item-wrapper">
-            <button class="nav-link" onclick="toggleSubmenu('{{ $item['key'] }}')">
-                <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ $item['icon'] }}"/>
-                </svg>
-                <span class="nav-label" style="flex: 1; text-align: left;">{{ $item['label'] }}</span>
-                <svg class="nav-arrow" id="arrow-{{ $item['key'] }}" style="width: 12px; height: 12px; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                </svg>
-            </button>
-            <div class="tooltip">{{ $item['label'] }}</div>
-            <div id="submenu-{{ $item['key'] }}" class="submenu closed">
-                <span class="submenu-link" style="font-style: italic;">Coming soon</span>
+       @foreach($transactionMenus as $item)
+<div class="nav-item-wrapper">
+    <button class="nav-link" onclick="toggleSubmenu('{{ $item['key'] }}')">
+        <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ $item['icon'] }}"/>
+        </svg>
+        <span class="nav-label" style="flex: 1; text-align: left;">{{ $item['label'] }}</span>
+        <svg class="nav-arrow" id="arrow-{{ $item['key'] }}" style="width: 12px; height: 12px; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+    </button>
+    <div class="tooltip">{{ $item['label'] }}</div>
+    <div id="submenu-{{ $item['key'] }}" class="submenu closed">
+
+        {{-- Invoice submenu --}}
+        @if($item['key'] === 'invoice')
+            @if(isset($userAuth) && $userAuth->hasPermission('GenerateInvoice'))
+                <a href="{{ route('invoice.hbl.index') }}" class="submenu-link {{ request()->routeIs('invoice.hbl.*') ? 'active' : '' }}">
+                    House BL Invoice
+                </a>
+                <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Customer Waybill — soon</span>
+                <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Other Serv. Invoice — soon</span>
+                <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Non-Manifest Invoice — soon</span>
+            @endif
+            
+
+                    {{-- Payment submenu --}}
+                    @elseif($item['key'] === 'payment')
+                        <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Coming soon</span>
+
+                    {{-- Accounting submenu --}}
+                    @elseif($item['key'] === 'accounting')
+                        <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Coming soon</span>
+
+                    {{-- Disbursement submenu --}}
+                    @elseif($item['key'] === 'disbursement')
+                        <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Coming soon</span>
+                    @endif
+
+                </div>
             </div>
-        </div>
-        @endforeach
+            @endforeach
 
         {{-- Edit Panel --}}
         <div class="nav-section-label">Edit Panel</div>
