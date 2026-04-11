@@ -14,7 +14,7 @@
     {{-- NProgress loading bar --}}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nprogress/0.2.0/nprogress.min.js"></script>
-    @vite(['resources/css/app.css', 'resources/js/layout.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/layout.js'])
 </head>
 
 <body>

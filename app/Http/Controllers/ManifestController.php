@@ -43,12 +43,33 @@ class ManifestController extends Controller
     }
 
     // Search consignment by Main BL
-    public function search(Request $request)
+   public function search(Request $request)
     {
         $request->validate([
-            'BL' => ['required', 'string', 'max:50'],
+            'BL' => ['nullable', 'string', 'max:50'],
+            'q'  => ['nullable', 'string', 'max:50'],
         ]);
 
+        $user = Auth::user();
+
+        // Typeahead mode — return list of matching BLs
+        if ($request->has('q')) {
+            $q = strtoupper(trim($request->q));
+
+            $results = DB::table('container_main as cm')
+                ->join('shipper_main as s', 'cm.ShipperID', '=', 's.ShipperID')
+                ->where('cm.BL', 'like', "%{$q}%")
+                ->where('cm.Status', 1)
+                ->select('cm.ConsignmentID', 'cm.BL as MainBL', 'cm.VesselName', 's.ShipperName')
+                ->orderByDesc('cm.ConsignmentID')
+                ->limit(8)
+                ->get();
+
+            return response()->json($results);
+        }
+
+        // Exact match mode — return full consignment details
+        $request->validate(['BL' => ['required', 'string', 'max:50']]);
         $bl = strtoupper(trim($request->BL));
 
         $consignment = DB::table('container_main as cm')
@@ -59,8 +80,8 @@ class ManifestController extends Controller
                 'cm.ConsignmentID',
                 'cm.BL as MainBL',
                 'cm.VesselName',
-                'cm.ContWeight',
                 'cm.ETA',
+                'cm.ContWeight',
                 's.ShipperName',
             )
             ->first();
@@ -72,22 +93,20 @@ class ManifestController extends Controller
             ], 404);
         }
 
-        // Get all container details for this consignment
+        // Rest of existing search logic...
         $containers = DB::table('container_details')
             ->where('ConsignmentID', $consignment->ConsignmentID)
             ->where('Status', 1)
             ->get(['ContainerNo', 'ContainerSize', 'Weight']);
 
-        // Check if manifest already exists
         $manifestExists = ManifestBreakdown::where('MainBL', $bl)->exists();
         if ($manifestExists) {
             return response()->json([
                 'success' => false,
-                'message' => 'A manifest already exists for BL# ' . $bl . '. Check the existing manifest.',
+                'message' => 'A manifest already exists for BL# ' . $bl,
             ], 409);
         }
 
-        // Check if another user has this BL in temp
         $tempExists = ManifestTemp::where('MainBL', $bl)
             ->where('Username', '!=', Auth::user()->ID)
             ->exists();
@@ -98,7 +117,6 @@ class ManifestController extends Controller
             ], 409);
         }
 
-        // Check if current user has a different BL in temp
         $userTemp = ManifestTemp::where('Username', Auth::user()->ID)
             ->where('MainBL', '!=', $bl)
             ->first();
@@ -109,15 +127,9 @@ class ManifestController extends Controller
             ], 409);
         }
 
-        // Total weight of all containers
-        $totalWeight = $containers->sum('Weight');
+        $totalWeight  = $containers->sum('Weight');
+        $stagedWeight = ManifestTemp::where('Username', Auth::user()->ID)->where('MainBL', $bl)->sum('Weight');
 
-        // Staged weight so far
-        $stagedWeight = ManifestTemp::where('Username', Auth::user()->ID)
-            ->where('MainBL', $bl)
-            ->sum('Weight');
-
-        // Get staged items for this user and BL
         $stagedItems = ManifestTemp::where('Username', Auth::user()->ID)
             ->where('MainBL', $bl)
             ->get()
@@ -133,6 +145,23 @@ class ManifestController extends Controller
             'items'        => $stagedItems,
         ]);
     }
+
+    // Typeahead search for BL numbers
+    public function searchBL(Request $request)
+    {
+        $q = trim($request->q ?? '');
+        if (strlen($q) < 3) return response()->json([]);
+
+        $results = DB::table('container_main as cm')
+            ->join('shipper_main as s', 'cm.ShipperID', '=', 's.ShipperID')
+            ->where('cm.BL', 'like', "%{$q}%")
+            ->where('cm.Status', 1)
+            ->limit(8)
+            ->get(['cm.BL as MainBL', 's.ShipperName', 'cm.ETA']);
+
+        return response()->json($results);
+    }
+
 
     // Generate next House BL number
     public function generateHouseBL(Request $request)

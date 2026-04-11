@@ -182,3 +182,152 @@ window.addEventListener("load", function () {
         NProgress.done();
     }
 });
+
+// ── SearchDropdown — reusable typeahead component ──
+window.SearchDropdown = class {
+    constructor(options) {
+        this.inputEl = document.getElementById(options.inputId);
+        this.dropdownEl = document.getElementById(options.dropdownId);
+        this.hiddenEl = options.hiddenId
+            ? document.getElementById(options.hiddenId)
+            : null;
+        this.url = options.url;
+        this.labelKey = options.labelKey;
+        this.subKey = options.subKey ?? null;
+        this.valueKey = options.valueKey;
+        this.minLength = options.minLength ?? 2;
+        this.delay = options.delay ?? 400;
+        this.onSelect = options.onSelect ?? null;
+        this.timer = null;
+
+        if (!this.inputEl || !this.dropdownEl) return;
+        this._bindEvents();
+    }
+
+    _bindEvents() {
+        this.inputEl.addEventListener("input", () => {
+            clearTimeout(this.timer);
+            this.timer = setTimeout(() => this._search(), this.delay);
+        });
+        this.inputEl.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") this._close();
+        });
+        document.addEventListener("click", (e) => {
+            if (
+                !this.inputEl.contains(e.target) &&
+                !this.dropdownEl.contains(e.target)
+            ) {
+                this._close();
+            }
+        });
+    }
+
+    _search() {
+        const q = this.inputEl.value.trim();
+        if (q.length < this.minLength) {
+            this._close();
+            return;
+        }
+        const sep = this.url.includes("?") ? "&" : "?";
+
+        // Show loading skeleton
+        this._showLoading();
+
+        fetch(`${this.url}${sep}q=${encodeURIComponent(q)}`, {
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+        })
+            .then((res) => (res.status === 429 ? [] : res.json()))
+            .then((data) => {
+                if (!data?.length) {
+                    this._close();
+                    return;
+                }
+                this._render(data);
+            })
+            .catch(() => this._close());
+    }
+
+    _showLoading() {
+        // Clear existing content
+        while (this.dropdownEl.firstChild)
+            this.dropdownEl.removeChild(this.dropdownEl.firstChild);
+
+        // Show 3 skeleton rows
+        for (let i = 0; i < 3; i++) {
+            const row = document.createElement("div");
+            row.style.cssText =
+                "padding: 10px 14px; border-bottom: 1px solid var(--border-color);";
+
+            const line1 = document.createElement("div");
+            line1.className = "skeleton";
+            line1.style.cssText =
+                "height: 12px; width: 70%; border-radius: 4px; margin-bottom: 4px;";
+
+            const line2 = document.createElement("div");
+            line2.className = "skeleton";
+            line2.style.cssText =
+                "height: 10px; width: 40%; border-radius: 4px;";
+
+            row.appendChild(line1);
+            row.appendChild(line2);
+            this.dropdownEl.appendChild(row);
+        }
+
+        this.dropdownEl.style.display = "block";
+    }
+
+    _render(items) {
+        while (this.dropdownEl.firstChild)
+            this.dropdownEl.removeChild(this.dropdownEl.firstChild);
+        items.forEach((item) => {
+            const label = String(item[this.labelKey] ?? "");
+            const sub = this.subKey ? String(item[this.subKey] ?? "") : "";
+            const value = item[this.valueKey] ?? "";
+            const row = document.createElement("div");
+            row.style.cssText =
+                "padding: 10px 14px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border-color);";
+            const labelEl = document.createElement("div");
+            labelEl.style.cssText =
+                "font-weight: 500; color: var(--text-primary);";
+            labelEl.textContent = label;
+            row.appendChild(labelEl);
+            if (sub) {
+                const subEl = document.createElement("div");
+                subEl.style.cssText =
+                    "color: var(--text-muted); font-size: 0.75rem;";
+                subEl.textContent = sub;
+                row.appendChild(subEl);
+            }
+            row.addEventListener("click", () => this.select(value, label));
+            row.addEventListener(
+                "mouseover",
+                () => (row.style.background = "var(--content-bg)"),
+            );
+            row.addEventListener("mouseout", () => (row.style.background = ""));
+            this.dropdownEl.appendChild(row);
+        });
+        this.dropdownEl.style.display = "block";
+    }
+
+    select(value, label) {
+        this.inputEl.value = label;
+        if (this.hiddenEl) this.hiddenEl.value = value;
+        this._close();
+        if (typeof this.onSelect === "function") this.onSelect(value, label);
+    }
+
+    _close() {
+        this.dropdownEl.style.display = "none";
+    }
+
+    clear() {
+        this.inputEl.value = "";
+        if (this.hiddenEl) this.hiddenEl.value = "";
+        this._close();
+    }
+
+    setValue(value, label) {
+        this.inputEl.value = label;
+        if (this.hiddenEl) this.hiddenEl.value = value;
+    }
+};

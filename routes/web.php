@@ -168,8 +168,10 @@ Route::middleware('auth')->group(function () {
             Route::delete('/entries/remove', [ManifestController::class, 'removeEntry'])->name('entries.remove');
             Route::delete('/entries/clear', [ManifestController::class, 'clearEntries'])->name('entries.clear');
             Route::post('/store', [ManifestController::class, 'store'])->name('store');
-            Route::get('/consignee-search', [ManifestController::class, 'searchConsignee'])->name('consignee-search');
-
+            Route::get('/consignee-search', [ManifestController::class, 'searchConsignee'])->name('consignee-search')->middleware('throttle:60,1');
+            Route::get('/search-bl', [ManifestController::class, 'searchBL'])
+            ->name('search-bl')
+            ->middleware('throttle:60,1');
             Route::get('/manifest-breakdown/{bl}', [ManifestController::class, 'report'])->name('manifest.breakdown');
         });
 
@@ -180,7 +182,7 @@ Route::middleware('auth')->group(function () {
             Route::delete('/containers/remove', [CmdtsController::class, 'removeContainer'])->name('containers.remove');
             Route::delete('/containers/clear', [CmdtsController::class, 'clearContainers'])->name('containers.clear');
             Route::post('/', [CmdtsController::class, 'store'])->name('store');
-            Route::get('/consignee-search', [CmdtsController::class, 'searchConsignee'])->name('consignee-search');
+            Route::get('/consignee-search', [CmdtsController::class, 'searchConsignee'])->name('consignee-search')->middleware('throttle:60,1');
             Route::get('/types-by-category', [CmdtsController::class, 'typesByCategory'])->name('types-by-category');
             Route::post('/release/store', function (\Illuminate\Http\Request $request) {
                 $request->validate(['name' => ['required', 'string', 'max:100']]);
@@ -196,7 +198,7 @@ Route::middleware('auth')->group(function () {
     // House BL Invoice
     Route::prefix('house-bl')->name('hbl.')->group(function () {
         Route::get('/', [HblInvoiceController::class, 'index'])->name('index');
-        Route::get('/search', [HblInvoiceController::class, 'search'])->name('search');
+        Route::get('/search', [HblInvoiceController::class, 'search'])->name('search')->middleware('throttle:60,1');
         Route::post('/charges/add', [HblInvoiceController::class, 'addCharge'])->name('charges.add');
         Route::delete('/charges/remove', [HblInvoiceController::class, 'removeCharge'])->name('charges.remove');
         Route::delete('/charges/clear', [HblInvoiceController::class, 'clearCharges'])->name('charges.clear');
@@ -207,7 +209,7 @@ Route::middleware('auth')->group(function () {
     // Customer Waybill
     Route::prefix('waybill')->name('waybill.')->group(function () {
         Route::get('/', [WaybillController::class, 'index'])->name('index');
-        Route::get('/search', [WaybillController::class, 'search'])->name('search');
+        Route::get('/search', [WaybillController::class, 'search'])->name('search')->middleware('throttle:60,1');
         Route::post('/', [WaybillController::class, 'store'])->name('store');
         Route::get('/report/{id}', [WaybillController::class, 'report'])->name('report');
     });
@@ -215,7 +217,7 @@ Route::middleware('auth')->group(function () {
     // Other Serv. Invoice
     Route::prefix('other-invoice')->name('other-invoice.')->group(function () {
         Route::get('/', [OtherInvoiceController::class, 'index'])->name('index');
-        Route::get('/search-client', [OtherInvoiceController::class, 'searchClient'])->name('search-client');
+        Route::get('/search-client', [OtherInvoiceController::class, 'searchClient'])->name('search-client')->middleware('throttle:60,1');
         Route::post('/charges/add', [OtherInvoiceController::class, 'addCharge'])->name('charges.add');
         Route::delete('/charges/remove', [OtherInvoiceController::class, 'removeCharge'])->name('charges.remove');
         Route::delete('/charges/clear', [OtherInvoiceController::class, 'clearCharges'])->name('charges.clear');
@@ -226,8 +228,8 @@ Route::middleware('auth')->group(function () {
     // Non-Manifest Invoice
     Route::prefix('non-manifest')->name('non-manifest.')->group(function () {
         Route::get('/', [NonManifestInvoiceController::class, 'index'])->name('index');
-        Route::get('/search-client', [NonManifestInvoiceController::class, 'searchClient'])->name('search-client');
-        Route::get('/get-bls', [NonManifestInvoiceController::class, 'getBLs'])->name('get-bls');
+        Route::get('/search-client', [NonManifestInvoiceController::class, 'searchClient'])->name('search-client')->middleware('throttle:60,1');
+        Route::get('/get-bls', [NonManifestInvoiceController::class, 'getBLs'])->name('get-bls')->middleware('throttle:60,1');
         Route::post('/charges/add', [NonManifestInvoiceController::class, 'addCharge'])->name('charges.add');
         Route::delete('/charges/remove', [NonManifestInvoiceController::class, 'removeCharge'])->name('charges.remove');
         Route::delete('/charges/clear', [NonManifestInvoiceController::class, 'clearCharges'])->name('charges.clear');
