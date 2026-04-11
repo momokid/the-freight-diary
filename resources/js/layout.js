@@ -92,7 +92,12 @@ function autoOpenActiveSubmenu() {
             "/master-data/commodities",
         ],
         consignment: ["/consignments", "/manifest", "/cmdts"],
-        invoice: ["/invoice/house-bl"],
+        invoice: [
+            "/invoice/house-bl",
+            "/invoice/waybill",
+            "/invoice/other-invoice",
+            "/invoice/non-manifest",
+        ],
         payment: ["/payment"],
         accounting: ["/accounting"],
         disbursement: ["/disbursement"],

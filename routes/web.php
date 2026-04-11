@@ -20,6 +20,9 @@ use App\Http\Controllers\ConsignmentController;
 use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\CmdtsController;
 use App\Http\Controllers\HblInvoiceController;
+use App\Http\Controllers\WaybillController;
+use App\Http\Controllers\OtherInvoiceController;
+use App\Http\Controllers\NonManifestInvoiceController;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -190,15 +193,47 @@ Route::middleware('auth')->group(function () {
     // Generate Invoice
     Route::middleware('permission:GenerateInvoice')->prefix('invoice')->name('invoice.')->group(function () {
 
-        // House BL Invoice
-        Route::prefix('house-bl')->name('hbl.')->group(function () {
-            Route::get('/', [HblInvoiceController::class, 'index'])->name('index');
-            Route::get('/search', [HblInvoiceController::class, 'search'])->name('search');
-            Route::post('/charges/add', [HblInvoiceController::class, 'addCharge'])->name('charges.add');
-            Route::delete('/charges/remove', [HblInvoiceController::class, 'removeCharge'])->name('charges.remove');
-            Route::delete('/charges/clear', [HblInvoiceController::class, 'clearCharges'])->name('charges.clear');
-            Route::post('/store', [HblInvoiceController::class, 'store'])->name('store');
-            Route::get('/report/{hbl}', [HblInvoiceController::class, 'report'])->name('report');
-        });
+    // House BL Invoice
+    Route::prefix('house-bl')->name('hbl.')->group(function () {
+        Route::get('/', [HblInvoiceController::class, 'index'])->name('index');
+        Route::get('/search', [HblInvoiceController::class, 'search'])->name('search');
+        Route::post('/charges/add', [HblInvoiceController::class, 'addCharge'])->name('charges.add');
+        Route::delete('/charges/remove', [HblInvoiceController::class, 'removeCharge'])->name('charges.remove');
+        Route::delete('/charges/clear', [HblInvoiceController::class, 'clearCharges'])->name('charges.clear');
+        Route::post('/store', [HblInvoiceController::class, 'store'])->name('store');
+        Route::get('/report/{hbl}', [HblInvoiceController::class, 'report'])->name('report');
     });
+
+    // Customer Waybill
+    Route::prefix('waybill')->name('waybill.')->group(function () {
+        Route::get('/', [WaybillController::class, 'index'])->name('index');
+        Route::get('/search', [WaybillController::class, 'search'])->name('search');
+        Route::post('/', [WaybillController::class, 'store'])->name('store');
+        Route::get('/report/{id}', [WaybillController::class, 'report'])->name('report');
+    });
+
+    // Other Serv. Invoice
+    Route::prefix('other-invoice')->name('other-invoice.')->group(function () {
+        Route::get('/', [OtherInvoiceController::class, 'index'])->name('index');
+        Route::get('/search-client', [OtherInvoiceController::class, 'searchClient'])->name('search-client');
+        Route::post('/charges/add', [OtherInvoiceController::class, 'addCharge'])->name('charges.add');
+        Route::delete('/charges/remove', [OtherInvoiceController::class, 'removeCharge'])->name('charges.remove');
+        Route::delete('/charges/clear', [OtherInvoiceController::class, 'clearCharges'])->name('charges.clear');
+        Route::post('/store', [OtherInvoiceController::class, 'store'])->name('store');
+        Route::get('/report/{receiptNo}', [OtherInvoiceController::class, 'report'])->name('report');
+    });
+
+    // Non-Manifest Invoice
+    Route::prefix('non-manifest')->name('non-manifest.')->group(function () {
+        Route::get('/', [NonManifestInvoiceController::class, 'index'])->name('index');
+        Route::get('/search-client', [NonManifestInvoiceController::class, 'searchClient'])->name('search-client');
+        Route::get('/get-bls', [NonManifestInvoiceController::class, 'getBLs'])->name('get-bls');
+        Route::post('/charges/add', [NonManifestInvoiceController::class, 'addCharge'])->name('charges.add');
+        Route::delete('/charges/remove', [NonManifestInvoiceController::class, 'removeCharge'])->name('charges.remove');
+        Route::delete('/charges/clear', [NonManifestInvoiceController::class, 'clearCharges'])->name('charges.clear');
+        Route::post('/store', [NonManifestInvoiceController::class, 'store'])->name('store');
+        Route::get('/report/{receiptNo}', [NonManifestInvoiceController::class, 'report'])->name('report');
+    });
+
+});
 });
