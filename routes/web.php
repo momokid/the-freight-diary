@@ -1,56 +1,54 @@
 <?php
 
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\Settings\UserPrivilegeController;
-use App\Http\Controllers\Settings\LedgerControlController;
-use App\Http\Controllers\Settings\LedgerCategoryController;
-use App\Http\Controllers\Settings\LedgerAccountController;
-use App\Http\Controllers\Settings\HandlingChargeController;
-use App\Http\Controllers\Settings\DisbursementAccountController;
-use App\Http\Controllers\Settings\ActiveAccountController;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\DB;
-use App\Http\Controllers\ConsigneeController;
-use App\Http\Controllers\MasterData\ShipperController;
-use App\Http\Controllers\MasterData\CarrierController;
-use App\Http\Controllers\MasterData\PortController;
-use App\Http\Controllers\MasterData\CommodityController;
-use App\Http\Controllers\ConsignmentController;
-use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\CmdtsController;
+use App\Http\Controllers\ConsigneeController;
+use App\Http\Controllers\ConsignmentController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HblInvoiceController;
-use App\Http\Controllers\WaybillController;
-use App\Http\Controllers\OtherInvoiceController;
+use App\Http\Controllers\ManifestController;
+use App\Http\Controllers\MasterData\CarrierController;
+use App\Http\Controllers\MasterData\CommodityController;
+use App\Http\Controllers\MasterData\PortController;
+use App\Http\Controllers\MasterData\ShipperController;
 use App\Http\Controllers\NonManifestInvoiceController;
+use App\Http\Controllers\OtherInvoiceController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Settings\ActiveAccountController;
+use App\Http\Controllers\Settings\DisbursementAccountController;
+use App\Http\Controllers\Settings\HandlingChargeController;
+use App\Http\Controllers\Settings\LedgerAccountController;
+use App\Http\Controllers\Settings\LedgerCategoryController;
+use App\Http\Controllers\Settings\LedgerControlController;
+use App\Http\Controllers\Settings\UserPrivilegeController;
+use App\Http\Controllers\WaybillController;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->middleware("throttle:login")->name('login.submit');
-    //forgot password request
-    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware("throttle:forgot-password")->name('password.request');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login')->name('login.submit');
+    // forgot password request
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:forgot-password')->name('password.request');
 });
 
 Route::get('/', function () {
     return redirect()->route('login');
 });
 
-
-//Authenticated Routes — accessible only when logged in
+// Authenticated Routes — accessible only when logged in
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-    //change password routes
+    // change password routes
     Route::get('/change-password', [AuthController::class, 'showChangePassword'])->name('password.change');
     Route::post('/change-password', [AuthController::class, 'changePassword'])->name('password.update');
 
-
-    //Dashboard
+    // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-
-    //Consignee management
+    // Consignee management
     Route::prefix('master-data')->name('master-data.')->group(function () {
         Route::get('/consignees', [ConsigneeController::class, 'index'])->name('consignees.index');
         Route::post('/consignees', [ConsigneeController::class, 'store'])->name('consignees.store');
@@ -58,7 +56,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('/consignees/{id}/deactivate', [ConsigneeController::class, 'deactivate'])->name('consignees.deactivate');
         Route::patch('/consignees/{id}/restore', [ConsigneeController::class, 'restore'])->name('consignees.restore');
         Route::get('/consignees/search', [ConsigneeController::class, 'search'])->name('consignees.search');
-        //AJAX table search
+        // AJAX table search
         Route::get('/consignees/table', [ConsigneeController::class, 'table'])->name('consignees.table');
 
         // Shippers
@@ -91,9 +89,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('/commodities/type/{id}', [CommodityController::class, 'destroyType'])->name('commodities.type.destroy');
     });
 
-
-
-    //Settings
+    // Settings
     Route::prefix('settings')->name('settings.')->group(function () {
 
         // User Privilege
@@ -107,14 +103,14 @@ Route::middleware('auth')->group(function () {
 
         // Ledger Control — requires BasicConfig permission
         Route::middleware('permission:BasicConfig')->group(function () {
-            //Ledger Control routes
+            // Ledger Control routes
             Route::get('/ledger-control', [LedgerControlController::class, 'index'])->name('ledger-control.index');
             Route::post('/ledger-control', [LedgerControlController::class, 'store'])->name('ledger-control.store');
             Route::put('/ledger-control/{id}', [LedgerControlController::class, 'update'])->name('ledger-control.update');
             Route::patch('/ledger-control/{id}/deactivate', [LedgerControlController::class, 'deactivate'])->name('ledger-control.deactivate');
             Route::patch('/ledger-control/{id}/restore', [LedgerControlController::class, 'restore'])->name('ledger-control.restore');
 
-            //Ledger Category routes
+            // Ledger Category routes
             Route::get('/ledger-category', [LedgerCategoryController::class, 'index'])->name('ledger-category.index');
             Route::post('/ledger-category/category', [LedgerCategoryController::class, 'storeCategory'])->name('ledger-category.store-category');
             Route::post('/ledger-category', [LedgerCategoryController::class, 'storeSubCategory'])->name('ledger-category.store');
@@ -122,7 +118,7 @@ Route::middleware('auth')->group(function () {
             Route::patch('/ledger-category/{id}/deactivate', [LedgerCategoryController::class, 'deactivate'])->name('ledger-category.deactivate');
             Route::patch('/ledger-category/{id}/restore', [LedgerCategoryController::class, 'restore'])->name('ledger-category.restore');
 
-            //Ledger account routes
+            // Ledger account routes
             Route::get('/ledger-account', [LedgerAccountController::class, 'index'])->name('ledger-account.index');
             Route::post('/ledger-account', [LedgerAccountController::class, 'store'])->name('ledger-account.store');
             Route::put('/ledger-account/{id}', [LedgerAccountController::class, 'update'])->name('ledger-account.update');
@@ -170,12 +166,12 @@ Route::middleware('auth')->group(function () {
             Route::post('/store', [ManifestController::class, 'store'])->name('store');
             Route::get('/consignee-search', [ManifestController::class, 'searchConsignee'])->name('consignee-search')->middleware('throttle:60,1');
             Route::get('/search-bl', [ManifestController::class, 'searchBL'])
-            ->name('search-bl')
-            ->middleware('throttle:60,1');
+                ->name('search-bl')
+                ->middleware('throttle:60,1');
             Route::get('/manifest-breakdown/{bl}', [ManifestController::class, 'report'])->name('manifest.breakdown');
         });
 
-        //// Consignment Cmdts routes
+        // // Consignment Cmdts routes
         Route::prefix('cmdts')->name('cmdts.')->group(function () {
             Route::get('/', [CmdtsController::class, 'index'])->name('index');
             Route::post('/containers/add', [CmdtsController::class, 'addContainer'])->name('containers.add');
@@ -187,6 +183,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/release/store', function (\Illuminate\Http\Request $request) {
                 $request->validate(['name' => ['required', 'string', 'max:100']]);
                 $id = DB::table('container_release')->insertGetId(['ReleaseType' => $request->name]);
+
                 return response()->json(['success' => true, 'id' => $id, 'name' => $request->name]);
             })->name('release.store');
         });
@@ -195,47 +192,61 @@ Route::middleware('auth')->group(function () {
     // Generate Invoice
     Route::middleware('permission:GenerateInvoice')->prefix('invoice')->name('invoice.')->group(function () {
 
-    // House BL Invoice
-    Route::prefix('house-bl')->name('hbl.')->group(function () {
-        Route::get('/', [HblInvoiceController::class, 'index'])->name('index');
-        Route::get('/search', [HblInvoiceController::class, 'search'])->name('search')->middleware('throttle:60,1');
-        Route::post('/charges/add', [HblInvoiceController::class, 'addCharge'])->name('charges.add');
-        Route::delete('/charges/remove', [HblInvoiceController::class, 'removeCharge'])->name('charges.remove');
-        Route::delete('/charges/clear', [HblInvoiceController::class, 'clearCharges'])->name('charges.clear');
-        Route::post('/store', [HblInvoiceController::class, 'store'])->name('store');
-        Route::get('/report/{hbl}', [HblInvoiceController::class, 'report'])->name('report');
+        // House BL Invoice
+        Route::prefix('house-bl')->name('hbl.')->group(function () {
+            Route::get('/', [HblInvoiceController::class, 'index'])->name('index');
+            Route::get('/search', [HblInvoiceController::class, 'search'])->name('search')->middleware('throttle:60,1');
+            Route::post('/charges/add', [HblInvoiceController::class, 'addCharge'])->name('charges.add');
+            Route::delete('/charges/remove', [HblInvoiceController::class, 'removeCharge'])->name('charges.remove');
+            Route::delete('/charges/clear', [HblInvoiceController::class, 'clearCharges'])->name('charges.clear');
+            Route::post('/store', [HblInvoiceController::class, 'store'])->name('store');
+            Route::get('/report/{hbl}', [HblInvoiceController::class, 'report'])->name('report');
+        });
+
+        // Customer Waybill
+        Route::prefix('waybill')->name('waybill.')->group(function () {
+            Route::get('/', [WaybillController::class, 'index'])->name('index');
+            Route::get('/search', [WaybillController::class, 'search'])->name('search')->middleware('throttle:60,1');
+            Route::post('/', [WaybillController::class, 'store'])->name('store');
+            Route::get('/report/{id}', [WaybillController::class, 'report'])->name('report');
+        });
+
+        // Other Serv. Invoice
+        Route::prefix('other-invoice')->name('other-invoice.')->group(function () {
+            Route::get('/', [OtherInvoiceController::class, 'index'])->name('index');
+            Route::get('/search-client', [OtherInvoiceController::class, 'searchClient'])->name('search-client')->middleware('throttle:60,1');
+            Route::post('/charges/add', [OtherInvoiceController::class, 'addCharge'])->name('charges.add');
+            Route::delete('/charges/remove', [OtherInvoiceController::class, 'removeCharge'])->name('charges.remove');
+            Route::delete('/charges/clear', [OtherInvoiceController::class, 'clearCharges'])->name('charges.clear');
+            Route::post('/store', [OtherInvoiceController::class, 'store'])->name('store');
+            Route::get('/report/{receiptNo}', [OtherInvoiceController::class, 'report'])->name('report');
+        });
+
+        // Non-Manifest Invoice
+        Route::prefix('non-manifest')->name('non-manifest.')->group(function () {
+            Route::get('/', [NonManifestInvoiceController::class, 'index'])->name('index');
+            Route::get('/search-client', [NonManifestInvoiceController::class, 'searchClient'])->name('search-client')->middleware('throttle:60,1');
+            Route::get('/get-bls', [NonManifestInvoiceController::class, 'getBLs'])->name('get-bls')->middleware('throttle:60,1');
+            Route::post('/charges/add', [NonManifestInvoiceController::class, 'addCharge'])->name('charges.add');
+            Route::delete('/charges/remove', [NonManifestInvoiceController::class, 'removeCharge'])->name('charges.remove');
+            Route::delete('/charges/clear', [NonManifestInvoiceController::class, 'clearCharges'])->name('charges.clear');
+            Route::post('/store', [NonManifestInvoiceController::class, 'store'])->name('store');
+            Route::get('/report/{receiptNo}', [NonManifestInvoiceController::class, 'report'])->name('report');
+        });
+
     });
 
-    // Customer Waybill
-    Route::prefix('waybill')->name('waybill.')->group(function () {
-        Route::get('/', [WaybillController::class, 'index'])->name('index');
-        Route::get('/search', [WaybillController::class, 'search'])->name('search')->middleware('throttle:60,1');
-        Route::post('/', [WaybillController::class, 'store'])->name('store');
-        Route::get('/report/{id}', [WaybillController::class, 'report'])->name('report');
-    });
+    Route::middleware('auth')->prefix('payment')->name('payment.')->group(function () {
 
-    // Other Serv. Invoice
-    Route::prefix('other-invoice')->name('other-invoice.')->group(function () {
-        Route::get('/', [OtherInvoiceController::class, 'index'])->name('index');
-        Route::get('/search-client', [OtherInvoiceController::class, 'searchClient'])->name('search-client')->middleware('throttle:60,1');
-        Route::post('/charges/add', [OtherInvoiceController::class, 'addCharge'])->name('charges.add');
-        Route::delete('/charges/remove', [OtherInvoiceController::class, 'removeCharge'])->name('charges.remove');
-        Route::delete('/charges/clear', [OtherInvoiceController::class, 'clearCharges'])->name('charges.clear');
-        Route::post('/store', [OtherInvoiceController::class, 'store'])->name('store');
-        Route::get('/report/{receiptNo}', [OtherInvoiceController::class, 'report'])->name('report');
-    });
+        // Process Declaration form + save — requires PaymentTransaction permission
+        Route::middleware('permission:PaymentTransaction')->prefix('declaration')->name('declaration.')->group(function () {
+            Route::get('/', [PaymentController::class, 'declaration'])->name('index');
+            Route::post('/store', [PaymentController::class, 'storeDeclaration'])->name('store');
+            Route::get('/search-bl', [PaymentController::class, 'searchBL'])->name('search-bl')->middleware('throttle:60,1');
+        });
 
-    // Non-Manifest Invoice
-    Route::prefix('non-manifest')->name('non-manifest.')->group(function () {
-        Route::get('/', [NonManifestInvoiceController::class, 'index'])->name('index');
-        Route::get('/search-client', [NonManifestInvoiceController::class, 'searchClient'])->name('search-client')->middleware('throttle:60,1');
-        Route::get('/get-bls', [NonManifestInvoiceController::class, 'getBLs'])->name('get-bls')->middleware('throttle:60,1');
-        Route::post('/charges/add', [NonManifestInvoiceController::class, 'addCharge'])->name('charges.add');
-        Route::delete('/charges/remove', [NonManifestInvoiceController::class, 'removeCharge'])->name('charges.remove');
-        Route::delete('/charges/clear', [NonManifestInvoiceController::class, 'clearCharges'])->name('charges.clear');
-        Route::post('/store', [NonManifestInvoiceController::class, 'store'])->name('store');
-        Route::get('/report/{receiptNo}', [NonManifestInvoiceController::class, 'report'])->name('report');
-    });
+        // Declaration report — auth only, outside permission middleware
+        Route::get('/declaration/report/{receiptNo}', [PaymentController::class, 'declarationReport'])->name('declaration.report');
 
-});
+    });
 });

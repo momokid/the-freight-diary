@@ -267,7 +267,19 @@
 
                             {{-- Payment submenu --}}
                         @elseif($item['key'] === 'payment')
-                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Coming soon</span>
+                            @if (isset($userAuth) && $userAuth->hasPermission('PaymentTransaction'))
+                                <a href="{{ route('payment.declaration.index') }}"
+                                    class="submenu-link {{ request()->routeIs('payment.declaration.*') ? 'active' : '' }}">
+                                    Process Declaration
+                                </a>
+                            @endif
+                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Receive Handl. Charge
+                                — soon</span>
+                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Receive Service
+                                Charge — soon</span>
+                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Handl. Charge Expense
+                                — soon</span>
+
 
                             {{-- Accounting submenu --}}
                         @elseif($item['key'] === 'accounting')
