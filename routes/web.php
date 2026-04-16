@@ -248,5 +248,16 @@ Route::middleware('auth')->group(function () {
         // Declaration report — auth only, outside permission middleware
         Route::get('/declaration/report/{receiptNo}', [PaymentController::class, 'declarationReport'])->name('declaration.report');
 
+        // Receive Handling Charge — requires PaymentTransaction permission
+        Route::middleware('permission:PaymentTransaction')->prefix('handl-charge')->name('handl-charge.')->group(function () {
+            Route::get('/', [PaymentController::class, 'handlCharge'])->name('index');
+            Route::post('/store', [PaymentController::class, 'storeHandlCharge'])->name('store');
+            Route::get('/search-hbl', [PaymentController::class, 'searchHBLForPayment'])->name('search-hbl')->middleware('throttle:60,1');
+            Route::get('/get-balance', [PaymentController::class, 'getHBLBalance'])->name('get-balance')->middleware('throttle:60,1');
+        });
+
+        // Handling Charge receipt — auth only, outside permission middleware
+        Route::get('/handl-charge/report/{receiptNo}', [PaymentController::class, 'handlChargeReport'])->name('handl-charge.report');
+
     });
 });

@@ -298,4 +298,307 @@ class PaymentController extends Controller
 
         return view('payments.declaration-report', compact('declaration', 'bankDetails'));
     }
+
+    // ──────────────────────────────────────────────
+    // RECEIVE HANDLING CHARGE
+    // ──────────────────────────────────────────────
+
+    /**
+     * Show the Receive Handling Charge form.
+     */
+    public function handlCharge()
+    {
+        $cashAccounts = DB::table('active_bank_cash as abc')
+            ->join('ledger_account as la', 'abc.AccountID', '=', 'la.AccountNo')
+            ->where('la.Status', 1)
+            ->orderBy('la.AccountName')
+            ->get(['la.AccountNo', 'la.AccountName']);
+
+        $receipt = ReceiptService::generate(now()->toDateString());
+
+        return view('payments.handl-charge', compact('cashAccounts', 'receipt'));
+    }
+
+    /**
+     * Typeahead search — HBLs that have an outstanding balance.
+     * Searches by HouseBL, MainBL, or consignee name.
+     */
+    public function searchHBLForPayment(Request $request)
+    {
+        $q = trim($request->q ?? '');
+        if (strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        // Subquery: HBLs that still have an outstanding balance in student_fee
+        $outstandingSubquery = DB::table('student_fee')
+            ->select('StudentID', 'SubClassID')
+            ->where('Status', 1)
+            ->where('Stamp', 'BL')
+            ->groupBy('StudentID', 'SubClassID')
+            ->havingRaw('ROUND(SUM(Dr) - SUM(Cr), 2) > 0');
+
+        $results = DB::table('hbl_invoice as hi')
+            ->join('consignee_main as c', 'hi.ConsigneeID', '=', 'c.ConsigneeID')
+            ->joinSub($outstandingSubquery, 'bal', function ($join) {
+                $join->on('bal.StudentID', '=', 'hi.ConsigneeID')
+                    ->on('bal.SubClassID', '=', 'hi.HouseBL');
+            })
+            ->where('hi.Status', 1)
+            ->where(function ($query) use ($q) {
+                $query->where('hi.HouseBL', 'like', "%{$q}%")
+                    ->orWhere('hi.MainBL', 'like', "%{$q}%")
+                    ->orWhere('c.FullName', 'like', "%{$q}%");
+            })
+            ->distinct()
+            ->orderBy('hi.HouseBL')
+            ->limit(8)
+            ->get(['hi.HouseBL', 'hi.MainBL', 'hi.ConsigneeID', 'c.FullName']);
+
+        return response()->json($results->map(fn ($r) => [
+            'HouseBL' => $r->HouseBL,
+            'MainBL' => $r->MainBL,
+            'ConsigneeID' => $r->ConsigneeID,
+            'label' => $r->FullName.' · '.$r->MainBL.' · '.$r->HouseBL,
+        ]));
+    }
+
+    /**
+     * AJAX — return outstanding balance summary for a given HBL + consignee.
+     * Called when user selects a result from the BL search typeahead.
+     */
+    public function getHBLBalance(Request $request)
+    {
+        $hbl = strtoupper(trim($request->hbl ?? ''));
+        $consigneeId = trim($request->consignee_id ?? '');
+
+        if (! $hbl || ! $consigneeId) {
+            return response()->json(['success' => false, 'message' => 'Invalid request.'], 422);
+        }
+
+        $balance = DB::table('student_fee')
+            ->where('StudentID', $consigneeId)
+            ->where('SubClassID', $hbl)
+            ->where('Stamp', 'BL')
+            ->where('Status', 1)
+            ->selectRaw('
+            ROUND(SUM(Dr), 2)             AS TotalCharges,
+            ROUND(SUM(Cr), 2)             AS AmountPaid,
+            ROUND(SUM(Dr) - SUM(Cr), 2)  AS Balance
+        ')
+            ->first();
+
+        if (! $balance || $balance->Balance <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No outstanding balance found for this HBL.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'TotalCharges' => $balance->TotalCharges,
+            'AmountPaid' => $balance->AmountPaid,
+            'Balance' => $balance->Balance,
+        ]);
+    }
+
+    /**
+     * Save the handling charge payment and all related accounting entries.
+     * Writes to: receipt_main, journal (Dr x1 + Cr x N), student_fee (Cr x N)
+     */
+    public function storeHandlCharge(Request $request)
+    {
+        $request->validate([
+            'HouseBL' => ['required', 'string', 'max:50'],
+            'MainBL' => ['required', 'string', 'max:50'],
+            'ConsigneeID' => ['required'],
+            'AccountNo' => ['required', 'integer'],
+            'PaymentDate' => ['required', 'date', 'before_or_equal:today'],
+            'Description' => ['required', 'string', 'max:255'],
+            'ReceiptID' => ['required', 'string'],
+            'ReceiptNo' => ['required', 'string'],
+        ]);
+
+        $user = Auth::user();
+        $hbl = strtoupper(trim($request->HouseBL));
+        $mainBL = strtoupper(trim($request->MainBL));
+
+        // ── Pre-requisite checks ──
+
+        // 1. Active IE account
+        $ieAccount = DB::table('active_ie')->first();
+        if (! $ieAccount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Active IE account not configured. Set it up in Basic Setup.',
+            ], 422);
+        }
+
+        // 2. Receipt number must be unique
+        $receiptExists = DB::table('receipt_main')
+            ->where('ReceiptNo', $request->ReceiptNo)
+            ->exists();
+        if ($receiptExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Receipt number already exists. Please refresh and try again.',
+            ], 409);
+        }
+
+        // 3. Confirm outstanding balance still exists (prevents double-payment race condition)
+        // 3. Fetch outstanding fee lines ordered by payment priority
+        //    student_fee LEFT JOIN handling_charge for POrder (NULL → 0)
+        $feeLines = DB::table('student_fee as sf')
+            ->leftJoin('handling_charge as hc', 'sf.AccountNo', '=', 'hc.AccountNo')
+            ->where('sf.StudentID', $request->ConsigneeID)
+            ->where('sf.SubClassID', $hbl)
+            ->where('sf.Stamp', 'BL')
+            ->where('sf.Status', 1)
+            ->groupBy('sf.AccountNo', 'hc.POrder')
+            ->havingRaw('ROUND(SUM(sf.Dr) - SUM(sf.Cr), 2) > 0')
+            ->orderByRaw('COALESCE(hc.POrder, 0)')
+            ->get([
+                'sf.AccountNo',
+                DB::raw('COALESCE(hc.POrder, 0) as PmtOrder'),
+                DB::raw('ROUND(SUM(sf.Dr) - SUM(sf.Cr), 2) AS Balance'),
+            ]);
+
+        if ($feeLines->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No outstanding balance found for HBL# '.$hbl.'. It may have already been paid.',
+            ], 409);
+        }
+
+        // Total amount = sum of all line balances
+        $totalAmount = round($feeLines->sum('Balance'), 2);
+        $description = strtoupper(trim($request->Description));
+
+        DB::beginTransaction();
+
+        try {
+            // a. Receipt reference
+            DB::table('receipt_main')->insert([
+                'ID' => $request->ReceiptID,
+                'Date' => $request->PaymentDate,
+                'ReceiptNo' => $request->ReceiptNo,
+                'Username' => $user->ID,
+                'Time' => now()->toDateTimeString(),
+            ]);
+
+            // b. Journal Dr — cash/bank account (total payment received)
+            DB::table('journal')->insert([
+                'AccountID' => $request->AccountNo,
+                'SubAccountID' => $request->AccountNo,
+                'Mode' => 'Dr',
+                'TType' => 'Cash',
+                'ReceiptNo' => $request->ReceiptNo,
+                'Dr' => $totalAmount,
+                'Cr' => 0,
+                'Description' => $description,
+                'Date' => $request->PaymentDate,
+                'Username' => $user->ID,
+                'Authorizer' => 'N.Auth',
+                'BranchID' => $user->BranchID,
+                'Status' => 1,
+            ]);
+
+            // c. Per fee line — Journal Cr (IE → fee account) + student_fee Cr row
+            foreach ($feeLines as $line) {
+                $lineAmount = round($line->Balance, 2);
+
+                // Journal Cr — IE control → individual fee income account
+                DB::table('journal')->insert([
+                    'AccountID' => $ieAccount->AccountID,
+                    'SubAccountID' => $line->AccountNo,
+                    'Mode' => 'Cr',
+                    'TType' => 'Cash',
+                    'ReceiptNo' => $request->ReceiptNo,
+                    'Dr' => 0,
+                    'Cr' => $lineAmount,
+                    'Description' => $description,
+                    'Date' => $request->PaymentDate,
+                    'Username' => $user->ID,
+                    'Authorizer' => 'N.Auth',
+                    'BranchID' => $user->BranchID,
+                    'Status' => 1,
+                ]);
+
+                // student_fee Cr — clears the outstanding on the client ledger
+                DB::table('student_fee')->insert([
+                    'StudentID' => $request->ConsigneeID,
+                    'SubClassID' => $hbl,
+                    'CouponID' => $mainBL,
+                    'AccountNo' => $line->AccountNo,
+                    'Stamp' => 'BL',
+                    'Description' => $description,
+                    'ReceiptNo' => $request->ReceiptNo,
+                    'Dr' => 0,
+                    'Cr' => $lineAmount,
+                    'Date' => $request->PaymentDate,
+                    'Time' => now()->toDateTimeString(),
+                    'Username' => $user->ID,
+                    'Status' => 1,
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment saved successfully for HBL# '.$hbl.'.',
+                'ReceiptNo' => $request->ReceiptNo,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save payment. Please try again.',
+                'debug' => app()->environment('local') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Print receipt for a saved handling charge payment.
+     */
+    public function handlChargeReport(string $receiptNo)
+    {
+        // Get payment Cr rows from student_fee (these are the payment lines, not invoice lines)
+        $lines = DB::table('student_fee as sf')
+            ->join('ledger_account as la', 'sf.AccountNo', '=', 'la.AccountNo')
+            ->where('sf.ReceiptNo', $receiptNo)
+            ->where('sf.Stamp', 'BL')
+            ->where('sf.Cr', '>', 0)
+            ->orderBy('la.AccountName')
+            ->get(['sf.*', 'la.AccountName']);
+
+        if ($lines->isEmpty()) {
+            abort(404, 'Receipt not found: '.$receiptNo);
+        }
+
+        $first = $lines->first();
+
+        $consignee = DB::table('consignee_main')
+            ->where('ConsigneeID', $first->StudentID)
+            ->first();
+
+        // Left join so receipt renders even if manifest data is missing
+        $manifest = DB::table('manifestation_breakdown as mb')
+            ->leftJoin('container_main as cm', 'mb.ConsignmentID', '=', 'cm.ConsignmentID')
+            ->where('mb.HouseBL', $first->SubClassID)
+            ->select('mb.MainBL', 'mb.HouseBL', 'cm.VesselName', 'cm.ETA')
+            ->first();
+
+        $bankDetails = DB::table('bank_details')->where('is_active', 1)->first();
+
+        $total = round($lines->sum('Cr'), 2);
+
+        return view('payments.handl-charge-report', compact(
+            'lines', 'first', 'consignee', 'manifest', 'bankDetails', 'total', 'receiptNo'
+        ));
+    }
 }

@@ -272,9 +272,12 @@
                                     class="submenu-link {{ request()->routeIs('payment.declaration.*') ? 'active' : '' }}">
                                     Process Declaration
                                 </a>
+                                <a href="{{ route('payment.handl-charge.index') }}"
+                                    class="submenu-link {{ request()->routeIs('payment.handl-charge.*') ? 'active' : '' }}">
+                                    Receive Handl. Charge
+                                </a>
                             @endif
-                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Receive Handl. Charge
-                                — soon</span>
+
                             <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Receive Service
                                 Charge — soon</span>
                             <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Handl. Charge Expense
