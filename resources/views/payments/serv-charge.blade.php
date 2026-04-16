@@ -1,13 +1,13 @@
 @extends('layouts.app')
 
-@section('title', 'Receive Handling Charge')
-@section('page-title', 'Receive Handling Charge')
+@section('title', 'Receive Service Charge')
+@section('page-title', 'Receive Service Charge')
 
 @section('content')
 
     <div style="display: flex; flex-direction: column; gap: 1.25rem; max-width: 90vw;">
 
-        {{-- ── Row 1: BL Search + Invoice Details ── --}}
+        {{-- ── Row 1: Search + Declaration Details ── --}}
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
 
             {{-- BL# Search Panel --}}
@@ -16,46 +16,77 @@
 
                 <div class="form-group" style="margin-bottom: 0; position: relative; margin-top: 1rem;">
                     <label class="form-label">Search Client Invoice</label>
-                    <input type="text" id="hbl-input" class="form-input"
-                        placeholder="Search by consignee, Main BL or House BL..." style="text-transform: uppercase;"
+                    <input type="text" id="dcl-input" class="form-input"
+                        placeholder="Search by HBL, Declaration No. or Consignee..." style="text-transform: uppercase;"
                         autocomplete="off">
-                    <div id="hbl-dropdown"
+                    <div id="dcl-dropdown"
                         style="display: none; position: absolute; z-index: 100;
                                background: var(--card-bg); border: 1px solid var(--border-color);
                                border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                                width: 100%; top: 100%; max-height: 220px; overflow-y: auto;">
                     </div>
-                    {{-- Hidden fields storing selected values --}}
                     <input type="hidden" id="hbl-value">
                     <input type="hidden" id="main-bl-value">
+                    <input type="hidden" id="declaration-id-value">
+                    <input type="hidden" id="declaration-no-value">
                     <input type="hidden" id="consignee-id-value">
-                    <p id="hbl-error" class="form-error"></p>
+                    <input type="hidden" id="consignee-name-value">
+                    <p id="dcl-error" class="form-error"></p>
                 </div>
             </div>
 
-            {{-- Client Invoice Details Panel --}}
+            {{-- Declaration Details Panel --}}
             <div class="card">
-                <p class="form-title">Client Invoice Details</p>
+                <p class="form-title">Declaration Details</p>
 
-                <div style="margin-top: 1rem; overflow-x: auto;">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>TOTAL CHARGES</th>
-                                <th>AMOUNT PAID</th>
-                                <th>OUTSTANDING BALANCE</th>
-                            </tr>
-                        </thead>
-                        <tbody id="balance-tbody">
-                            <tr id="balance-empty-row">
-                                <td colspan="3"
-                                    style="text-align: center; color: var(--text-muted);
-                                           font-size: 0.8rem; padding: 1.5rem;">
-                                    Search and select a House BL to load balance
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div id="dcl-details-empty"
+                    style="margin-top: 1rem; text-align: center;
+                           color: var(--text-muted); font-size: 0.8rem; padding: 1.5rem 0;">
+                    Search and select a declaration to load details
+                </div>
+
+                <div id="dcl-details" style="display: none; margin-top: 1rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; font-size: 0.82rem;">
+                        <div>
+                            <p
+                                style="color: var(--text-muted); font-size: 0.7rem;
+                                text-transform: uppercase; letter-spacing: 0.05em;">
+                                Consignee</p>
+                            <p id="detail-consignee" style="font-weight: 600; color: var(--text-primary); margin-top: 2px;">
+                            </p>
+                        </div>
+                        <div>
+                            <p
+                                style="color: var(--text-muted); font-size: 0.7rem;
+                                text-transform: uppercase; letter-spacing: 0.05em;">
+                                House BL#</p>
+                            <p id="detail-hbl" style="font-weight: 600; color: var(--text-primary); margin-top: 2px;"></p>
+                        </div>
+                        <div>
+                            <p
+                                style="color: var(--text-muted); font-size: 0.7rem;
+                                text-transform: uppercase; letter-spacing: 0.05em;">
+                                Main BL#</p>
+                            <p id="detail-main-bl" style="font-weight: 600; color: var(--text-primary); margin-top: 2px;">
+                            </p>
+                        </div>
+                        <div>
+                            <p
+                                style="color: var(--text-muted); font-size: 0.7rem;
+                                text-transform: uppercase; letter-spacing: 0.05em;">
+                                Declaration No.</p>
+                            <p id="detail-dcl-no" style="font-weight: 600; color: var(--text-primary); margin-top: 2px;">
+                            </p>
+                        </div>
+                        <div style="grid-column: span 2;">
+                            <p
+                                style="color: var(--text-muted); font-size: 0.7rem;
+                                text-transform: uppercase; letter-spacing: 0.05em;">
+                                Item Description</p>
+                            <p id="detail-description"
+                                style="font-weight: 500; color: var(--text-primary); margin-top: 2px;"></p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -67,11 +98,11 @@
 
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-top: 1.25rem;">
 
-                {{-- Amount — readonly, auto-filled from outstanding balance --}}
+                {{-- Amount --}}
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Amount <span style="color: #ef4444;">*</span></label>
-                    <input type="number" id="amount" class="form-input" placeholder="0.00" step="0.01"
-                        style="background: var(--content-bg); color: var(--text-muted);">
+                    <input type="number" id="amount" class="form-input" min="0.01" step="0.01"
+                        placeholder="0.00">
                     <p id="amount-error" class="form-error"></p>
                 </div>
 
@@ -95,7 +126,7 @@
                     <p id="payment-date-error" class="form-error"></p>
                 </div>
 
-                {{-- Transaction ID — auto-generated, readonly --}}
+                {{-- Transaction ID --}}
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Transaction ID</label>
                     <input type="text" id="receipt-no" class="form-input" value="{{ $receipt['receipt_no'] }}" readonly
@@ -104,11 +135,11 @@
 
             </div>
 
-            {{-- Description — full width below the grid --}}
+            {{-- Description --}}
             <div class="form-group" style="margin-top: 1rem; margin-bottom: 0;">
                 <label class="form-label">Description <span style="color: #ef4444;">*</span></label>
-                <input type="text" id="description" class="form-input"
-                    placeholder="e.g. HANDLING CHARGE PAYMENT IFO JOHN MENSAH" style="text-transform: uppercase;">
+                <input type="text" id="description" class="form-input" placeholder="Auto-filled on selection"
+                    style="text-transform: uppercase;">
                 <p id="description-error" class="form-error"></p>
             </div>
 
@@ -116,18 +147,17 @@
             <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border-color);">
                 <p id="submit-error" class="form-error" style="margin-bottom: 8px; text-align: center;"></p>
                 <p id="submit-success" class="form-success" style="margin-bottom: 8px; text-align: center;"></p>
-                <button onclick="savePayment()" id="save-btn"
+                <button onclick="saveServCharge()" id="save-btn"
                     style="width: 100%; padding: 14px; border-radius: 10px; border: none;
                            background: #16a34a; color: white; font-size: 0.925rem;
                            font-weight: 600; cursor: pointer; letter-spacing: 0.02em;">
-                    Save Invoice Payment
+                    Save Service Charge
                 </button>
             </div>
         </div>
 
     </div>
 
-    {{-- Hidden receipt ID --}}
     <input type="hidden" id="receipt-id" value="{{ $receipt['id'] }}">
 
 @endsection
@@ -136,90 +166,66 @@
     <script>
         const CSRF = '{{ csrf_token() }}';
 
-        function initHBLSearch() {
-            window.hblSearch = new SearchDropdown({
-                inputId: 'hbl-input',
-                dropdownId: 'hbl-dropdown',
+        // ── Declaration Typeahead ──
+        function initDclSearch() {
+            window.dclSearch = new SearchDropdown({
+                inputId: 'dcl-input',
+                dropdownId: 'dcl-dropdown',
                 hiddenId: 'hbl-value',
-                url: '{{ route('payment.handl-charge.search-hbl') }}',
+                url: '{{ route('payment.serv-charge.search-dcl') }}',
                 labelKey: 'label',
-                subKey: 'FullName',
-                valueKey: 'HouseBL',
+                valueKey: 'HBL',
                 minLength: 2,
                 onSelect: (hbl, label) => {
-                    fetch(`{{ route('payment.handl-charge.search-hbl') }}?q=${encodeURIComponent(hbl)}`, {
+                    fetch('{{ route('payment.serv-charge.search-dcl') }}?q=' + encodeURIComponent(hbl), {
                             headers: {
                                 'X-Requested-With': 'XMLHttpRequest'
                             }
                         })
                         .then(res => res.json())
                         .then(data => {
-                            const match = data.find(d => d.HouseBL === hbl);
+                            const match = data.find(d => d.HBL === hbl);
                             if (match) {
+                                // Populate hidden fields
+                                document.getElementById('hbl-value').value = match.HBL;
                                 document.getElementById('main-bl-value').value = match.MainBL;
+                                document.getElementById('declaration-id-value').value = match.DeclarationID;
+                                document.getElementById('declaration-no-value').value = match.DeclarationNo;
                                 document.getElementById('consignee-id-value').value = match.ConsigneeID;
+                                document.getElementById('consignee-name-value').value = match.ConsigneeName;
+
+                                // Populate detail panel
+                                document.getElementById('detail-consignee').textContent = match
+                                    .ConsigneeName;
+                                document.getElementById('detail-hbl').textContent = match.HBL;
+                                document.getElementById('detail-main-bl').textContent = match.MainBL ?? '—';
+                                document.getElementById('detail-dcl-no').textContent = match.DeclarationNo;
+                                document.getElementById('detail-description').textContent = match
+                                    .ItemDescription ?? '—';
+
+                                document.getElementById('dcl-details-empty').style.display = 'none';
+                                document.getElementById('dcl-details').style.display = 'block';
+
+                                // Auto-fill description
                                 document.getElementById('description').value =
-                                    'HANDLING CHARGE PAYMENT IFO ' + hbl;
-                                loadBalance(hbl, match.ConsigneeID);
+                                    'SERVICE CHARGE IFO ~ ' + match.DeclarationNo;
                             }
                         });
                 }
             });
         }
-        setTimeout(initHBLSearch, 0);
 
-        // ── Load Balance ──
-        function loadBalance(hbl, consigneeId) {
-            const tbody = document.getElementById('balance-tbody');
-            tbody.innerHTML = `
-            <tr>
-                <td colspan="3" style="text-align: center; color: var(--text-muted);
-                    font-size: 0.8rem; padding: 1.5rem;">Loading...</td>
-            </tr>`;
-            document.getElementById('amount').value = '';
-
-            fetch(`{{ route('payment.handl-charge.get-balance') }}?hbl=${encodeURIComponent(hbl)}&consignee_id=${encodeURIComponent(consigneeId)}`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (!data.success) {
-                        tbody.innerHTML = `
-                    <tr>
-                        <td colspan="3" style="text-align: center; color: #ef4444;
-                            font-size: 0.8rem; padding: 1.5rem;">${data.message}</td>
-                    </tr>`;
-                        return;
-                    }
-                    tbody.innerHTML = `
-                <tr>
-                    <td style="font-weight: 600; color: var(--text-primary);">
-                        ${formatNumber(data.TotalCharges)}
-                    </td>
-                    <td style="color: var(--text-muted);">
-                        ${formatNumber(data.AmountPaid)}
-                    </td>
-                    <td style="font-weight: 700; color: #16a34a;">
-                        ${formatNumber(data.Balance)}
-                    </td>
-                </tr>`;
-                    document.getElementById('amount').value = data.Balance;
-                })
-                .catch(() => {
-                    tbody.innerHTML = `
-                <tr>
-                    <td colspan="3" style="text-align: center; color: #ef4444;
-                        font-size: 0.8rem; padding: 1.5rem;">
-                        Failed to load balance. Please try again.
-                    </td>
-                </tr>`;
-                });
+        // serv-charge.blade.php
+        if (window.searchDropdownReady) {
+            initDclSearch();
+        } else {
+            document.addEventListener('search-dropdown-ready', initDclSearch);
         }
 
-        // ── Save Payment ──
-        function savePayment() {
+        // setTimeout(initDclSearch, 0);
+
+        // ── Save Service Charge ──
+        function saveServCharge() {
             const btn = document.getElementById('save-btn');
             const errorEl = document.getElementById('submit-error');
             const successEl = document.getElementById('submit-success');
@@ -228,9 +234,13 @@
             successEl.classList.remove('visible');
 
             const fields = {
-                HouseBL: document.getElementById('hbl-value').value.trim(),
+                HBL: document.getElementById('hbl-value').value.trim(),
                 MainBL: document.getElementById('main-bl-value').value.trim(),
-                ConsigneeID: document.getElementById('consignee-id-value').value.trim(),
+                DeclarationID: document.getElementById('declaration-id-value').value,
+                DeclarationNo: document.getElementById('declaration-no-value').value.trim(),
+                ConsigneeID: document.getElementById('consignee-id-value').value,
+                ConsigneeName: document.getElementById('consignee-name-value').value.trim(),
+                Amount: document.getElementById('amount').value,
                 AccountNo: document.getElementById('account-no').value,
                 PaymentDate: document.getElementById('payment-date').value,
                 Description: document.getElementById('description').value.trim(),
@@ -240,7 +250,8 @@
 
             let valid = true;
             const checks = [
-                ['hbl-error', !fields.HouseBL, 'Please search and select a House BL.'],
+                ['dcl-error', !fields.HBL, 'Please search and select a declaration.'],
+                ['amount-error', !fields.Amount || parseFloat(fields.Amount) <= 0, 'Amount is required.'],
                 ['account-no-error', !fields.AccountNo, 'Please select a cash account.'],
                 ['payment-date-error', !fields.PaymentDate, 'Payment date is required.'],
                 ['description-error', !fields.Description, 'Description is required.'],
@@ -263,7 +274,7 @@
             btn.textContent = 'Saving...';
             btn.disabled = true;
 
-            fetch('{{ route('payment.handl-charge.store') }}', {
+            fetch('{{ route('payment.serv-charge.store') }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -277,54 +288,46 @@
                     if (data.success) {
                         successEl.textContent = data.message;
                         successEl.classList.add('visible');
+
                         setTimeout(() => {
                             window.open(
-                                `{{ url('payment/handl-charge/report') }}/${data.ReceiptNo}`,
+                                `{{ url('payment/serv-charge/report') }}/${data.ReceiptNo}`,
                                 '_blank'
                             );
                             resetForm();
                             successEl.classList.remove('visible');
-                            btn.textContent = 'Save Invoice Payment';
+                            btn.textContent = 'Save Service Charge';
                             btn.disabled = false;
                         }, 1500);
                     } else {
-                        errorEl.textContent = data.message ?? 'Failed to save payment.';
+                        errorEl.textContent = data.message ?? 'Failed to save service charge.';
                         errorEl.classList.add('visible');
-                        btn.textContent = 'Save Invoice Payment';
+                        btn.textContent = 'Save Service Charge';
                         btn.disabled = false;
                     }
                 })
                 .catch(() => {
                     errorEl.textContent = 'A network error occurred. Please try again.';
                     errorEl.classList.add('visible');
-                    btn.textContent = 'Save Invoice Payment';
+                    btn.textContent = 'Save Service Charge';
                     btn.disabled = false;
                 });
         }
 
         // ── Reset ──
         function resetForm() {
-            ['hbl-input', 'hbl-value', 'main-bl-value', 'consignee-id-value',
+            ['dcl-input', 'hbl-value', 'main-bl-value', 'declaration-id-value',
+                'declaration-no-value', 'consignee-id-value', 'consignee-name-value',
                 'amount', 'description'
             ].forEach(id => {
                 document.getElementById(id).value = '';
             });
+
             document.getElementById('account-no').value = '';
             document.getElementById('payment-date').value = '{{ now()->toDateString() }}';
-            document.getElementById('balance-tbody').innerHTML = `
-            <tr id="balance-empty-row">
-                <td colspan="3" style="text-align: center; color: var(--text-muted);
-                    font-size: 0.8rem; padding: 1.5rem;">
-                    Search and select a House BL to load balance
-                </td>
-            </tr>`;
-        }
 
-        function formatNumber(val) {
-            return parseFloat(val).toLocaleString('en-GH', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
+            document.getElementById('dcl-details').style.display = 'none';
+            document.getElementById('dcl-details-empty').style.display = 'block';
         }
     </script>
 @endpush

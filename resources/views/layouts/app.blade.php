@@ -276,10 +276,12 @@
                                     class="submenu-link {{ request()->routeIs('payment.handl-charge.*') ? 'active' : '' }}">
                                     Receive Handl. Charge
                                 </a>
+                                <a href="{{ route('payment.serv-charge.index') }}"
+                                    class="submenu-link {{ request()->routeIs('payment.serv-charge.*') ? 'active' : '' }}">
+                                    Receive Service Charge
+                                </a>
                             @endif
 
-                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Receive Service
-                                Charge — soon</span>
                             <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Handl. Charge Expense
                                 — soon</span>
 

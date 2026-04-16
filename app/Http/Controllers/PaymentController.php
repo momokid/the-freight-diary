@@ -41,7 +41,7 @@ class PaymentController extends Controller
     public function searchBL(Request $request)
     {
         $q = trim($request->q ?? '');
-        if (strlen($q) < 2) {
+        if (strlen($q) < 1) {
             return response()->json([]);
         }
 
@@ -326,39 +326,38 @@ class PaymentController extends Controller
     public function searchHBLForPayment(Request $request)
     {
         $q = trim($request->q ?? '');
-        if (strlen($q) < 2) {
+        if (strlen($q) < 1) {
             return response()->json([]);
         }
 
-        // Subquery: HBLs that still have an outstanding balance in student_fee
-        $outstandingSubquery = DB::table('student_fee')
-            ->select('StudentID', 'SubClassID')
-            ->where('Status', 1)
-            ->where('Stamp', 'BL')
-            ->groupBy('StudentID', 'SubClassID')
-            ->havingRaw('ROUND(SUM(Dr) - SUM(Cr), 2) > 0');
-
-        $results = DB::table('hbl_invoice as hi')
-            ->join('consignee_main as c', 'hi.ConsigneeID', '=', 'c.ConsigneeID')
-            ->joinSub($outstandingSubquery, 'bal', function ($join) {
-                $join->on('bal.StudentID', '=', 'hi.ConsigneeID')
-                    ->on('bal.SubClassID', '=', 'hi.HouseBL');
-            })
-            ->where('hi.Status', 1)
+        // Mirrors old query on student_fee_outstading_view_1:
+        // search FullName (starts with), SubClassID/HouseBL (starts with),
+        // CouponID/MainBL (contains) — only where Balance > 0
+        $results = DB::table('student_fee as sf')
+            ->join('consignee_main as c', 'sf.StudentID', '=', 'c.ConsigneeID')
+            ->where('sf.Status', 1)
+            ->where('sf.Stamp', 'BL')
             ->where(function ($query) use ($q) {
-                $query->where('hi.HouseBL', 'like', "%{$q}%")
-                    ->orWhere('hi.MainBL', 'like', "%{$q}%")
-                    ->orWhere('c.FullName', 'like', "%{$q}%");
+                $query->where('c.FullName', 'like', "{$q}%")
+                    ->orWhere('sf.SubClassID', 'like', "{$q}%")
+                    ->orWhere('sf.CouponID', 'like', "%{$q}%");
             })
-            ->distinct()
-            ->orderBy('hi.HouseBL')
+            ->groupBy('sf.StudentID', 'sf.SubClassID', 'sf.CouponID', 'c.FullName')
+            ->havingRaw('ROUND(SUM(sf.Dr) - SUM(sf.Cr), 2) > 0')
+            ->orderBy('sf.SubClassID')
             ->limit(8)
-            ->get(['hi.HouseBL', 'hi.MainBL', 'hi.ConsigneeID', 'c.FullName']);
+            ->get([
+                DB::raw('sf.StudentID as ConsigneeID'),
+                DB::raw('sf.SubClassID as HouseBL'),
+                DB::raw('sf.CouponID as MainBL'),
+                'c.FullName',
+            ]);
 
         return response()->json($results->map(fn ($r) => [
             'HouseBL' => $r->HouseBL,
             'MainBL' => $r->MainBL,
             'ConsigneeID' => $r->ConsigneeID,
+            'FullName' => $r->FullName,
             'label' => $r->FullName.' · '.$r->MainBL.' · '.$r->HouseBL,
         ]));
     }
@@ -600,5 +599,276 @@ class PaymentController extends Controller
         return view('payments.handl-charge-report', compact(
             'lines', 'first', 'consignee', 'manifest', 'bankDetails', 'total', 'receiptNo'
         ));
+    }
+
+    // ──────────────────────────────────────────────
+    // RECEIVE SERVICE CHARGE
+    // ──────────────────────────────────────────────
+
+    /**
+     * Show the Receive Service Charge form.
+     */
+    public function servCharge()
+    {
+        $cashAccounts = DB::table('active_bank_cash as abc')
+            ->join('ledger_account as la', 'abc.AccountID', '=', 'la.AccountNo')
+            ->where('la.Status', 1)
+            ->orderBy('la.AccountName')
+            ->get(['la.AccountNo', 'la.AccountName']);
+
+        $receipt = ReceiptService::generate(now()->toDateString());
+
+        return view('payments.serv-charge', compact('cashAccounts', 'receipt'));
+    }
+
+    /**
+     * Typeahead search — declarations that have not yet had a service charge raised.
+     * Uses declaration_main_view_0 as instructed.
+     */
+    public function searchDclForServCharge(Request $request)
+    {
+        $q = trim($request->q ?? '');
+        if (strlen($q) < 1) {
+            return response()->json([]);
+        }
+
+        $results = DB::table('declaration_main_view_0 as d')
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('service_charge_main')
+                    ->whereColumn('service_charge_main.BL', 'd.HBL');
+            })
+            ->where(function ($query) use ($q) {
+                $query->where('d.HBL', 'like', "%{$q}%")
+                    ->orWhere('d.DeclarationNo', 'like', "%{$q}%")
+                    ->orWhere('d.ConsigneeName', 'like', "%{$q}%");
+            })
+            ->orderBy('d.HBL')
+            ->limit(8)
+            ->get([
+                'd.DeclarationID',
+                'd.MainBL',
+                'd.HBL',
+                'd.ConsigneeID',
+                'd.ConsigneeName',
+                'd.DeclarationNo',
+                'd.ItemDescription',
+            ]);
+
+        return response()->json($results->map(fn ($r) => [
+            'DeclarationID' => $r->DeclarationID,
+            'MainBL' => $r->MainBL,
+            'HBL' => $r->HBL,
+            'ConsigneeID' => $r->ConsigneeID,
+            'ConsigneeName' => $r->ConsigneeName,
+            'DeclarationNo' => $r->DeclarationNo,
+            'ItemDescription' => $r->ItemDescription,
+            'label' => $r->ConsigneeName.' · '.$r->HBL.' · '.$r->DeclarationNo,
+        ]));
+    }
+
+    /**
+     * Save the service charge payment and all related accounting entries.
+     * Writes to: receipt_main, journal (x2), pnl_transaction, service_charge_main
+     */
+    public function storeServCharge(Request $request)
+    {
+        $request->validate([
+            'HBL' => ['required', 'string', 'max:50'],
+            'MainBL' => ['required', 'string', 'max:50'],
+            'DeclarationID' => ['required', 'integer'],
+            'DeclarationNo' => ['required', 'string', 'max:50'],
+            'ConsigneeID' => ['required'],
+            'ConsigneeName' => ['required', 'string', 'max:255'],
+            'Description' => ['required', 'string', 'max:255'],
+            'Amount' => ['required', 'numeric', 'min:0.01'],
+            'AccountNo' => ['required', 'integer'],
+            'PaymentDate' => ['required', 'date', 'before_or_equal:today'],
+            'ReceiptID' => ['required', 'string'],
+            'ReceiptNo' => ['required', 'string'],
+        ]);
+
+        $user = Auth::user();
+        $hbl = strtoupper(trim($request->HBL));
+
+        // ── Pre-requisite checks ──
+
+        // 1. Active IE account
+        $ieAccount = DB::table('active_ie')->first();
+        if (! $ieAccount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Active IE account not configured. Set it up in Basic Setup.',
+            ], 422);
+        }
+
+        // 2. Active service charge income account
+        $servChargeAccount = DB::table('active_service_charge')->first();
+        if (! $servChargeAccount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Active service charge income account not configured. Set it up in Basic Setup.',
+            ], 422);
+        }
+
+        // 3. DeclarationNo must be unique in service_charge_main
+        $dclExists = DB::table('service_charge_main')
+            ->where('DeclarationNo', $request->DeclarationNo)
+            ->exists();
+        if ($dclExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Declaration No. already has a service charge recorded.',
+            ], 409);
+        }
+
+        // 4. BL must be unique in service_charge_main
+        $blExists = DB::table('service_charge_main')
+            ->where('BL', $hbl)
+            ->exists();
+        if ($blExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'HBL# '.$hbl.' already has a service charge recorded.',
+            ], 409);
+        }
+
+        // 5. Receipt number must be unique
+        $receiptExists = DB::table('receipt_main')
+            ->where('ReceiptNo', $request->ReceiptNo)
+            ->exists();
+        if ($receiptExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Receipt number already exists. Please refresh and try again.',
+            ], 409);
+        }
+
+        $description = 'SERVICE CHARGE IFO ~ '.$request->DeclarationNo;
+
+        DB::beginTransaction();
+
+        try {
+            // a. Receipt reference
+            DB::table('receipt_main')->insert([
+                'ID' => $request->ReceiptID,
+                'Date' => $request->PaymentDate,
+                'ReceiptNo' => $request->ReceiptNo,
+                'Username' => $user->ID,
+                'Time' => now()->toDateTimeString(),
+            ]);
+
+            // b. Journal Dr — cash/bank account
+            DB::table('journal')->insert([
+                'AccountID' => $request->AccountNo,
+                'SubAccountID' => $request->AccountNo,
+                'Mode' => 'Dr',
+                'TType' => 'Cash',
+                'ReceiptNo' => $request->ReceiptNo,
+                'Dr' => $request->Amount,
+                'Cr' => 0,
+                'Description' => $description,
+                'Date' => $request->PaymentDate,
+                'Username' => $user->ID,
+                'Authorizer' => 'N.Auth',
+                'BranchID' => $user->BranchID,
+                'Status' => 1,
+            ]);
+
+            // c. Journal Cr — IE control → service charge income account
+            DB::table('journal')->insert([
+                'AccountID' => $ieAccount->AccountID,
+                'SubAccountID' => $servChargeAccount->AccountNo,
+                'Mode' => 'Cr',
+                'TType' => 'Cash',
+                'ReceiptNo' => $request->ReceiptNo,
+                'Dr' => 0,
+                'Cr' => $request->Amount,
+                'Description' => $description,
+                'Date' => $request->PaymentDate,
+                'Username' => $user->ID,
+                'Authorizer' => 'N.Auth',
+                'BranchID' => $user->BranchID,
+                'Status' => 1,
+            ]);
+
+            // d. P&L transaction
+            DB::table('pnl_transaction')->insert([
+                'AccountID' => $servChargeAccount->AccountNo,
+                'Stamp' => 'NB',
+                'Mode' => 'Cr',
+                'MainBL' => $hbl,
+                'HouseBL' => $hbl,
+                'ReceiptNo' => $request->ReceiptNo,
+                'Description' => $description,
+                'Dr' => 0,
+                'Cr' => $request->Amount,
+                'Date' => $request->PaymentDate,
+                'Time' => now()->toDateTimeString(),
+                'BranchID' => $user->BranchID,
+                'Username' => $user->ID,
+                'Status' => 1,
+            ]);
+
+            // e. Service charge main record
+            DB::table('service_charge_main')->insert([
+                'BL' => $hbl,
+                'DeclarationID' => $request->DeclarationID,
+                'DeclarationNo' => trim($request->DeclarationNo),
+                'ConsigneeID' => $request->ConsigneeID,
+                'ConsigneeName' => trim($request->ConsigneeName),
+                'Description' => trim($request->Description),
+                'Amount' => $request->Amount,
+                'ReceiptNo' => $request->ReceiptNo,
+                'Date' => $request->PaymentDate,
+                'Time' => now()->toDateTimeString(),
+                'Username' => $user->ID,
+                'BranchID' => $user->BranchID,
+                'Status' => 1,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Service charge saved successfully for HBL# '.$hbl.'.',
+                'ReceiptNo' => $request->ReceiptNo,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save service charge. Please try again.',
+                'debug' => app()->environment('local') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Print receipt for a saved service charge.
+     */
+    public function servChargeReport(string $receiptNo)
+    {
+        $charge = DB::table('service_charge_main as s')
+            ->leftJoin('manifestation_breakdown as mb', 's.BL', '=', 'mb.HouseBL')
+            ->leftJoin('container_main as cm', 'mb.ConsignmentID', '=', 'cm.ConsignmentID')
+            ->where('s.ReceiptNo', $receiptNo)
+            ->select(
+                's.*',
+                'mb.MainBL',
+                'cm.VesselName',
+                'cm.ETA',
+            )
+            ->first();
+
+        if (! $charge) {
+            abort(404, 'Service charge receipt not found: '.$receiptNo);
+        }
+
+        $bankDetails = DB::table('bank_details')->where('is_active', 1)->first();
+
+        return view('payments.serv-charge-report', compact('charge', 'bankDetails', 'receiptNo'));
     }
 }

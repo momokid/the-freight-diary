@@ -259,5 +259,15 @@ Route::middleware('auth')->group(function () {
         // Handling Charge receipt — auth only, outside permission middleware
         Route::get('/handl-charge/report/{receiptNo}', [PaymentController::class, 'handlChargeReport'])->name('handl-charge.report');
 
+        // Receive Service Charge — requires PaymentTransaction permission
+        Route::middleware('permission:PaymentTransaction')->prefix('serv-charge')->name('serv-charge.')->group(function () {
+            Route::get('/', [PaymentController::class, 'servCharge'])->name('index');
+            Route::post('/store', [PaymentController::class, 'storeServCharge'])->name('store');
+            Route::get('/search-dcl', [PaymentController::class, 'searchDclForServCharge'])->name('search-dcl')->middleware('throttle:60,1');
+        });
+
+        // Service Charge receipt — auth only, outside permission middleware
+        Route::get('/serv-charge/report/{receiptNo}', [PaymentController::class, 'servChargeReport'])->name('serv-charge.report');
+
     });
 });

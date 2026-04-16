@@ -98,7 +98,11 @@ function autoOpenActiveSubmenu() {
             "/invoice/other-invoice",
             "/invoice/non-manifest",
         ],
-        payment: ["/payment/declaration", "/payment/handl-charge"],
+        payment: [
+            "/payment/declaration",
+            "/payment/handl-charge",
+            "/payment/serv-charge",
+        ],
         accounting: ["/accounting"],
         disbursement: ["/disbursement"],
         edit: ["/edit"],
