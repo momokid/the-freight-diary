@@ -222,7 +222,7 @@
             document.addEventListener('search-dropdown-ready', initDclSearch);
         }
 
-        // setTimeout(initDclSearch, 0);
+        setTimeout(initDclSearch, 0);
 
         // ── Save Service Charge ──
         function saveServCharge() {

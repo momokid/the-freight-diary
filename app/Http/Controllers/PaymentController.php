@@ -628,20 +628,19 @@ class PaymentController extends Controller
     public function searchDclForServCharge(Request $request)
     {
         $q = trim($request->q ?? '');
-        if (strlen($q) < 1) {
+        if (strlen($q) < 2) {
             return response()->json([]);
         }
 
         $results = DB::table('declaration_main_view_0 as d')
+            ->where(function ($query) use ($q) {
+                $query->where('d.ConsigneeName', 'like', "%{$q}%")
+                    ->orWhere('d.HBL', 'like', "%{$q}%");
+            })
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('service_charge_main')
                     ->whereColumn('service_charge_main.BL', 'd.HBL');
-            })
-            ->where(function ($query) use ($q) {
-                $query->where('d.HBL', 'like', "%{$q}%")
-                    ->orWhere('d.DeclarationNo', 'like', "%{$q}%")
-                    ->orWhere('d.ConsigneeName', 'like', "%{$q}%");
             })
             ->orderBy('d.HBL')
             ->limit(8)
@@ -870,5 +869,317 @@ class PaymentController extends Controller
         $bankDetails = DB::table('bank_details')->where('is_active', 1)->first();
 
         return view('payments.serv-charge-report', compact('charge', 'bankDetails', 'receiptNo'));
+    }
+
+    // ──────────────────────────────────────────────
+    // HANDLING CHARGE EXPENSE
+    // ──────────────────────────────────────────────
+
+    /**
+     * Show the Handling Charge Expense form.
+     */
+    public function handlingChargeExpense()
+    {
+        $cashAccounts = DB::table('active_bank_cash as abc')
+            ->join('ledger_account as la', 'abc.AccountID', '=', 'la.AccountNo')
+            ->where('la.Status', 1)
+            ->orderBy('la.AccountName')
+            ->get(['la.AccountNo', 'la.AccountName']);
+
+        $expenditureAccounts = DB::table('ledger_account')
+            ->where('Type', 'Expenditure')
+            ->where('Status', 1)
+            ->orderBy('AccountName')
+            ->get(['AccountNo', 'AccountName']);
+
+        $receipt = ReceiptService::generate(now()->toDateString());
+
+        return view('payments.handling-charge-expense', compact(
+            'cashAccounts',
+            'expenditureAccounts',
+            'receipt'
+        ));
+    }
+
+    /**
+     * Typeahead search — MainBLs that have an outstanding handling charge balance.
+     * Uses container_exp_pmt_3 view as instructed.
+     */
+    public function searchMainBLForExpense(Request $request)
+    {
+        $q = trim($request->q ?? '');
+        if (strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $results = DB::table('container_exp_pmt_3')
+            ->where('MainBL', 'like', "%{$q}%")
+            ->orderBy('MainBL')
+            ->limit(8)
+            ->get([
+                'ConsignmentID',
+                'MainBL',
+                'VesselName',
+                'ShipperName',
+                'TFee',
+                'TDr',
+                'Balance',
+                'TDate',
+            ]);
+
+        return response()->json($results->map(fn ($r) => [
+            'ConsignmentID' => $r->ConsignmentID,
+            'MainBL' => $r->MainBL,
+            'VesselName' => $r->VesselName,
+            'ShipperName' => $r->ShipperName,
+            'TFee' => $r->TFee,
+            'TDr' => $r->TDr,
+            'Balance' => $r->Balance,
+            'TDate' => $r->TDate,
+            'label' => $r->ShipperName.' '.$r->MainBL,
+        ]));
+    }
+
+    /**
+     * AJAX — return consignment balance details for a selected MainBL.
+     */
+    public function getConsignmentForExpense(Request $request)
+    {
+        $mainBL = strtoupper(trim($request->main_bl ?? ''));
+
+        if (! $mainBL) {
+            return response()->json(['success' => false, 'message' => 'Invalid request.'], 422);
+        }
+
+        $consignment = DB::table('container_exp_pmt_3')
+            ->where('MainBL', $mainBL)
+            ->first();
+
+        if (! $consignment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No outstanding balance found for Main BL# '.$mainBL,
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'ConsignmentID' => $consignment->ConsignmentID,
+            'MainBL' => $consignment->MainBL,
+            'VesselName' => $consignment->VesselName,
+            'ShipperName' => $consignment->ShipperName,
+            'TFee' => $consignment->TFee,
+            'TDr' => $consignment->TDr,
+            'Balance' => $consignment->Balance,
+            'TDate' => $consignment->TDate,
+        ]);
+    }
+
+    /**
+     * Save the handling charge expense and all related accounting entries.
+     * Writes to: receipt_main, journal (Dr x1 + Cr x1), pnl_transaction
+     */
+    public function storeHandlingChargeExpense(Request $request)
+    {
+        $request->validate([
+            'MainBL' => ['required', 'string', 'max:50'],
+            'ConsignmentID' => ['required', 'integer'],
+            'SourceAccountNo' => ['required', 'integer'],
+            'ExpenditureAccountNo' => ['required', 'integer'],
+            'Amount' => ['required', 'numeric', 'min:0.01'],
+            'PaymentDate' => ['required', 'date', 'before_or_equal:today'],
+            'Description' => ['required', 'string', 'max:255'],
+            'ReceiptID' => ['required', 'string'],
+            'ReceiptNo' => ['required', 'string'],
+        ]);
+
+        $user = Auth::user();
+        $mainBL = strtoupper(trim($request->MainBL));
+
+        // ── Pre-requisite checks ──
+
+        // 1. Active IE account
+        $ieAccount = DB::table('active_ie')->first();
+        if (! $ieAccount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Active IE account not configured. Set it up in Basic Setup.',
+            ], 422);
+        }
+
+        // 2. Source and Expenditure accounts must be different
+        if ($request->SourceAccountNo == $request->ExpenditureAccountNo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Source account and expenditure account cannot be the same.',
+            ], 422);
+        }
+
+        // 3. Confirm MainBL exists and get its details
+        $consignment = DB::table('container_exp_pmt_3')
+            ->where('MainBL', $mainBL)
+            ->first();
+
+        if (! $consignment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Main BL# '.$mainBL.' not found or has no outstanding balance.',
+            ], 404);
+        }
+
+        // 4. Amount cannot exceed balance
+        if ($request->Amount > $consignment->Balance) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Expenditure amount cannot exceed outstanding balance of '.
+                    number_format($consignment->Balance, 2),
+            ], 422);
+        }
+
+        // 5. Payment date cannot be before TDate
+        if ($request->PaymentDate < $consignment->TDate) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment date cannot be before '.
+                    \Carbon\Carbon::parse($consignment->TDate)->format('M d, Y'),
+            ], 422);
+        }
+
+        // 6. Receipt number must be unique
+        $receiptExists = DB::table('receipt_main')
+            ->where('ReceiptNo', $request->ReceiptNo)
+            ->exists();
+        if ($receiptExists) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Receipt number already exists. Please refresh and try again.',
+            ], 409);
+        }
+
+        $description = strtoupper(trim($request->Description));
+
+        DB::beginTransaction();
+
+        try {
+            // a. Receipt reference
+            DB::table('receipt_main')->insert([
+                'ID' => $request->ReceiptID,
+                'Date' => $request->PaymentDate,
+                'ReceiptNo' => $request->ReceiptNo,
+                'Username' => $user->ID,
+                'Time' => now()->toDateTimeString(),
+            ]);
+
+            // b. Journal Dr — IE control → Source Account (bank/cash)
+            DB::table('journal')->insert([
+                'AccountID' => $ieAccount->AccountID,
+                'SubAccountID' => $request->SourceAccountNo,
+                'Mode' => 'Dr',
+                'TType' => 'NCash',
+                'ReceiptNo' => $request->ReceiptNo,
+                'Dr' => $request->Amount,
+                'Cr' => 0,
+                'Description' => $description,
+                'Date' => $request->PaymentDate,
+                'Username' => $user->ID,
+                'Authorizer' => 'N.Auth',
+                'BranchID' => $user->BranchID,
+                'Status' => 1,
+            ]);
+
+            // c. Journal Cr — Expenditure Account
+            DB::table('journal')->insert([
+                'AccountID' => $request->ExpenditureAccountNo,
+                'SubAccountID' => $request->ExpenditureAccountNo,
+                'Mode' => 'Cr',
+                'TType' => 'NCash',
+                'ReceiptNo' => $request->ReceiptNo,
+                'Dr' => 0,
+                'Cr' => $request->Amount,
+                'Description' => $description,
+                'Date' => $request->PaymentDate,
+                'Username' => $user->ID,
+                'Authorizer' => 'N.Auth',
+                'BranchID' => $user->BranchID,
+                'Status' => 1,
+            ]);
+
+            // d. P&L transaction — Dr against Source Account
+            DB::table('pnl_transaction')->insert([
+                'AccountID' => $request->SourceAccountNo,
+                'Stamp' => 'NB',
+                'Mode' => 'Dr',
+                'MainBL' => $mainBL,
+                'HouseBL' => (string) $request->ConsignmentID,
+                'ReceiptNo' => $request->ReceiptNo,
+                'Description' => $description,
+                'Dr' => $request->Amount,
+                'Cr' => 0,
+                'Date' => $request->PaymentDate,
+                'Time' => now()->toDateTimeString(),
+                'BranchID' => $user->BranchID,
+                'Username' => $user->ID,
+                'Status' => 1,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Handling charge expense saved successfully for Main BL# '.$mainBL.'.',
+                'ReceiptNo' => $request->ReceiptNo,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save expense. Please try again.',
+                'debug' => app()->environment('local') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Print receipt for a saved handling charge expense.
+     */
+    public function handlingChargeExpenseReport(string $receiptNo)
+    {
+        // Get the pnl_transaction Dr row for this receipt
+        $expense = DB::table('pnl_transaction as p')
+            ->join('ledger_account as la', 'p.AccountID', '=', 'la.AccountNo')
+            ->leftJoin('container_main as cm', 'p.HouseBL', '=', DB::raw('CAST(cm.ConsignmentID AS CHAR)'))
+            ->where('p.ReceiptNo', $receiptNo)
+            ->where('p.Mode', 'Dr')
+            ->where('p.Stamp', 'NB')
+            ->select(
+                'p.*',
+                'la.AccountName as SourceAccountName',
+                'cm.VesselName',
+                'cm.ETA',
+            )
+            ->first();
+
+        if (! $expense) {
+            abort(404, 'Expense receipt not found: '.$receiptNo);
+        }
+
+        // Get the Cr journal entry to show expenditure account
+        $crEntry = DB::table('journal as j')
+            ->join('ledger_account as la', 'j.AccountID', '=', 'la.AccountNo')
+            ->where('j.ReceiptNo', $receiptNo)
+            ->where('j.Mode', 'Cr')
+            ->select('j.*', 'la.AccountName')
+            ->first();
+
+        $bankDetails = DB::table('bank_details')->where('is_active', 1)->first();
+
+        return view('payments.handling-charge-expense-report', compact(
+            'expense',
+            'crEntry',
+            'bankDetails',
+            'receiptNo'
+        ));
     }
 }

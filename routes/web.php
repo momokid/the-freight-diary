@@ -269,5 +269,16 @@ Route::middleware('auth')->group(function () {
         // Service Charge receipt — auth only, outside permission middleware
         Route::get('/serv-charge/report/{receiptNo}', [PaymentController::class, 'servChargeReport'])->name('serv-charge.report');
 
+        // Handling Charge Expense — requires PaymentTransaction permission
+        Route::middleware('permission:PaymentTransaction')->prefix('handling-charge-expense')->name('handling-charge-expense.')->group(function () {
+            Route::get('/', [PaymentController::class, 'handlingChargeExpense'])->name('index');
+            Route::post('/store', [PaymentController::class, 'storeHandlingChargeExpense'])->name('store');
+            Route::get('/search-main-bl', [PaymentController::class, 'searchMainBLForExpense'])->name('search-main-bl')->middleware('throttle:60,1');
+            Route::get('/get-consignment', [PaymentController::class, 'getConsignmentForExpense'])->name('get-consignment')->middleware('throttle:60,1');
+        });
+
+        // Handling Charge Expense receipt — auth only, outside permission middleware
+        Route::get('/handling-charge-expense/report/{receiptNo}', [PaymentController::class, 'handlingChargeExpenseReport'])->name('handling-charge-expense.report');
+
     });
 });

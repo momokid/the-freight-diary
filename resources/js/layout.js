@@ -102,6 +102,7 @@ function autoOpenActiveSubmenu() {
             "/payment/declaration",
             "/payment/handl-charge",
             "/payment/serv-charge",
+            "/payment/handling-charge-expense",
         ],
         accounting: ["/accounting"],
         disbursement: ["/disbursement"],
