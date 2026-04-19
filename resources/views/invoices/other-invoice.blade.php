@@ -360,19 +360,19 @@
             </thead>
             <tbody>
                 ${entries.map(e => `
-                            <tr>
-                                <td style="font-size: 0.8rem;">${e.AccountName}</td>
-                                <td style="text-align: right;">${formatAmount(e.Amount)}</td>
-                                <td style="text-align: right; color: var(--text-muted); font-size: 0.8rem;">${formatAmount(parseFloat(e.GetFund) + parseFloat(e.VAT))}</td>
-                                <td style="text-align: right; font-weight: 600; color: #16a34a;">${formatAmount(e.SubTotal)}</td>
-                                <td style="text-align: center;">
-                                    <button onclick="removeCharge(${e.AccountNo})" class="btn-icon btn-icon-danger">
-                                        <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                        </svg>
-                                    </button>
-                                </td>
-                            </tr>`).join('')}
+                                <tr>
+                                    <td style="font-size: 0.8rem;">${e.AccountName}</td>
+                                    <td style="text-align: right;">${formatAmount(e.Amount)}</td>
+                                    <td style="text-align: right; color: var(--text-muted); font-size: 0.8rem;">${formatAmount(parseFloat(e.GetFund) + parseFloat(e.VAT))}</td>
+                                    <td style="text-align: right; font-weight: 600; color: #16a34a;">${formatAmount(e.SubTotal)}</td>
+                                    <td style="text-align: center;">
+                                        <button onclick="removeCharge(${e.AccountNo})" class="btn-icon btn-icon-danger">
+                                            <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>`).join('')}
                 <tr style="background: var(--content-bg);">
                     <td colspan="3" style="text-align: right; font-weight: 700; padding-right: 12px;">TOTAL CHARGES:</td>
                     <td style="text-align: right; font-weight: 800; color: #16a34a;">${formatAmount(total)}</td>
@@ -475,6 +475,9 @@
                             document.getElementById('invoice-description').value = '';
                             successEl.classList.remove('visible');
                             btn.style.display = 'none';
+
+                            // Refresh receipt number for next transaction
+                            window.refreshReceipt('receipt-no', 'receipt-id');
                         }, 1500);
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to save invoice.';
