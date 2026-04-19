@@ -107,7 +107,8 @@
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Payment Date <span style="color: #ef4444;">*</span></label>
                     <input type="date" id="payment-date" class="form-input" value="{{ now()->toDateString() }}"
-                        max="{{ now()->toDateString() }}">
+                        max="{{ now()->toDateString() }}"
+                        onchange="window.refreshReceipt('receipt-no', 'receipt-id', 'payment-date')">
                     <p id="payment-date-error" class="form-error"></p>
                 </div>
 
@@ -270,6 +271,9 @@
                             successEl.classList.remove('visible');
                             btn.textContent = 'Save Handling Charge Expenditure';
                             btn.disabled = false;
+
+                            // Refresh receipt number for next transaction
+                            window.refreshReceipt('receipt-no', 'receipt-id', 'payment-date');
                         }, 1500);
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to save expense.';
@@ -303,6 +307,7 @@
                     Search and select a Main BL to load balance
                 </td>
             </tr>`;
+
         }
 
         function formatNumber(val) {

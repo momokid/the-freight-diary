@@ -288,7 +288,12 @@
 
                             {{-- Accounting submenu --}}
                         @elseif($item['key'] === 'accounting')
-                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Coming soon</span>
+                            @if (isset($userAuth) && $userAuth->hasPermission('GLTransaction'))
+                                <a href="{{ route('accounting.transaction.index') }}"
+                                    class="submenu-link {{ request()->routeIs('accounting.transaction.*') ? 'active' : '' }}">
+                                    Accounting Transaction
+                                </a>
+                            @endif
 
                             {{-- Disbursement submenu --}}
                         @elseif($item['key'] === 'disbursement')

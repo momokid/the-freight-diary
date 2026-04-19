@@ -85,7 +85,8 @@
                 <label class="form-label">Payment Date <span style="color: #ef4444;">*</span></label>
                 {{-- Default to today — cannot be a future date --}}
                 <input type="date" id="payment-date" class="form-input" value="{{ now()->toDateString() }}"
-                    max="{{ now()->toDateString() }}">
+                    max="{{ now()->toDateString() }}"
+                    onchange="window.refreshReceipt('receipt-no', 'receipt-id', 'payment-date')">
                 <p id="payment-date-error" class="form-error"></p>
             </div>
 
@@ -262,6 +263,10 @@
 
                             btn.textContent = 'Save Declaration';
                             btn.disabled = false;
+
+                            // Refresh receipt number for next transaction
+                            window.refreshReceipt('receipt-no', 'receipt-id', 'payment-date');
+
                         }, 1500);
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to save declaration.';

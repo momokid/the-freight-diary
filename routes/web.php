@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CmdtsController;
 use App\Http\Controllers\ConsigneeController;
@@ -39,11 +40,20 @@ Route::get('/', function () {
 
 // Authenticated Routes — accessible only when logged in
 Route::middleware('auth')->group(function () {
+
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     // change password routes
     Route::get('/change-password', [AuthController::class, 'showChangePassword'])->name('password.change');
     Route::post('/change-password', [AuthController::class, 'changePassword'])->name('password.update');
+
+    // Fresh receipt number — called after every successful save
+    Route::get('/receipt/generate', function (\Illuminate\Http\Request $request) {
+        $date = $request->date ?? now()->toDateString();
+        $receipt = \App\Services\ReceiptService::generate($date);
+
+        return response()->json($receipt);
+    })->name('receipt.generate');
 
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -279,6 +289,16 @@ Route::middleware('auth')->group(function () {
 
         // Handling Charge Expense receipt — auth only, outside permission middleware
         Route::get('/handling-charge-expense/report/{receiptNo}', [PaymentController::class, 'handlingChargeExpenseReport'])->name('handling-charge-expense.report');
+
+    });
+
+    // Accounting Transaction
+    Route::middleware('auth')->prefix('accounting')->name('accounting.')->group(function () {
+
+        Route::middleware('permission:GLTransaction')->group(function () {
+            Route::get('/transaction', [AccountingController::class, 'transaction'])->name('transaction.index');
+            Route::post('/transaction/store', [AccountingController::class, 'storeTransaction'])->name('transaction.store');
+        });
 
     });
 });

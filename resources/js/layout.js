@@ -104,7 +104,7 @@ function autoOpenActiveSubmenu() {
             "/payment/serv-charge",
             "/payment/handling-charge-expense",
         ],
-        accounting: ["/accounting"],
+        accounting: ["/accounting/transaction"],
         disbursement: ["/disbursement"],
         edit: ["/edit"],
         reports: ["/reports"],
@@ -187,6 +187,26 @@ window.addEventListener("load", function () {
         NProgress.done();
     }
 });
+
+// ── Refresh receipt number after a successful save ──
+window.refreshReceipt = function (receiptNoId, receiptIdId, dateFieldId) {
+    const dateEl = dateFieldId ? document.getElementById(dateFieldId) : null;
+    const date =
+        dateEl && dateEl.value
+            ? dateEl.value
+            : new Date().toISOString().split("T")[0];
+
+    fetch(`/receipt/generate?date=${date}`, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+    })
+        .then((res) => res.json())
+        .then((data) => {
+            const noEl = document.getElementById(receiptNoId);
+            const idEl = document.getElementById(receiptIdId);
+            if (noEl) noEl.value = data.receipt_no;
+            if (idEl) idEl.value = data.id;
+        });
+};
 
 // ── SearchDropdown — reusable typeahead component ──
 window.SearchDropdown = class {
