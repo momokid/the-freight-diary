@@ -6,6 +6,7 @@ use App\Http\Controllers\CmdtsController;
 use App\Http\Controllers\ConsigneeController;
 use App\Http\Controllers\ConsignmentController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DisbursementAnalysisController;
 use App\Http\Controllers\HblInvoiceController;
 use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\MasterData\CarrierController;
@@ -301,4 +302,21 @@ Route::middleware('auth')->group(function () {
         });
 
     });
+
+    // Disbursement Analysis
+    Route::middleware('permission:DisbursementAnalysis')
+        ->prefix('disbursement')
+        ->name('disbursement.')
+        ->group(function () {
+            Route::get('/analysis', [DisbursementAnalysisController::class, 'index'])->name('analysis.index');
+            Route::get('/analysis/search', [DisbursementAnalysisController::class, 'searchBL'])->name('analysis.search');
+            Route::post('/analysis/load', [DisbursementAnalysisController::class, 'loadBL'])->name('analysis.load');
+            Route::delete('/analysis/temp', [DisbursementAnalysisController::class, 'clearTemp'])->name('analysis.temp.clear');
+            Route::post('/analysis/temp', [DisbursementAnalysisController::class, 'saveTempRow'])->name('analysis.temp.save');
+            Route::delete('/analysis/temp/{accountNo}', [DisbursementAnalysisController::class, 'deleteTempRow'])->name('analysis.temp.delete');
+            Route::post('/analysis/save', [DisbursementAnalysisController::class, 'save'])->name('analysis.save');
+            Route::post('/analysis/reopen', [DisbursementAnalysisController::class, 'reopen'])->name('analysis.reopen');
+            Route::post('/analysis/hbl', [DisbursementAnalysisController::class, 'loadHBL'])->name('analysis.hbl.load');
+            Route::post('/analysis/temp/add', [DisbursementAnalysisController::class, 'addTempRow'])->name('analysis.temp.add');
+        });
 });

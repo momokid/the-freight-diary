@@ -297,12 +297,18 @@
 
                             {{-- Disbursement submenu --}}
                         @elseif($item['key'] === 'disbursement')
-                            <span class="submenu-link" style="font-style: italic; opacity: 0.5;">Coming soon</span>
+                            @if (isset($userAuth) && $userAuth->hasPermission('DisbursementAnalysis'))
+                                <a href="{{ route('disbursement.analysis.index') }}"
+                                    class="submenu-link {{ request()->routeIs('disbursement.analysis.*') ? 'active' : '' }}">
+                                    Disbursement Analysis
+                                </a>
+                            @endif
                         @endif
 
                     </div>
                 </div>
             @endforeach
+
 
             {{-- Edit Panel --}}
             <div class="nav-section-label">Edit Panel</div>
