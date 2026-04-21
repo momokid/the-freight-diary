@@ -7,6 +7,7 @@ use App\Http\Controllers\ConsigneeController;
 use App\Http\Controllers\ConsignmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisbursementAnalysisController;
+use App\Http\Controllers\GateOutExpenseController;
 use App\Http\Controllers\HblInvoiceController;
 use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\MasterData\CarrierController;
@@ -318,5 +319,15 @@ Route::middleware('auth')->group(function () {
             Route::post('/analysis/reopen', [DisbursementAnalysisController::class, 'reopen'])->name('analysis.reopen');
             Route::post('/analysis/hbl', [DisbursementAnalysisController::class, 'loadHBL'])->name('analysis.hbl.load');
             Route::post('/analysis/temp/add', [DisbursementAnalysisController::class, 'addTempRow'])->name('analysis.temp.add');
+        });
+
+    // Gate-Out Expense — requires ConsignmentExpense permission
+    Route::middleware('permission:ConsignmentExpense')
+        ->prefix('disbursement')
+        ->name('disbursement.')
+        ->group(function () {
+            Route::get('/gate-out', [GateOutExpenseController::class, 'index'])->name('gate-out.index');
+            Route::get('/gate-out/consignments', [GateOutExpenseController::class, 'getConsignments'])->name('gate-out.consignments');
+            Route::post('/gate-out/save', [GateOutExpenseController::class, 'save'])->name('gate-out.save');
         });
 });

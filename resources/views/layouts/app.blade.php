@@ -303,6 +303,13 @@
                                     Disbursement Analysis
                                 </a>
                             @endif
+
+                            @if (isset($userAuth) && $userAuth->hasPermission('ConsignmentExpense'))
+                                <a href="{{ route('disbursement.gate-out.index') }}"
+                                    class="submenu-link {{ request()->routeIs('disbursement.gate-out.*') ? 'active' : '' }}">
+                                    Gate-Out Expense
+                                </a>
+                            @endif
                         @endif
 
                     </div>
