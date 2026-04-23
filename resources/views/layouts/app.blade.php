@@ -310,6 +310,18 @@
                                     Gate-Out Expense
                                 </a>
                             @endif
+                            @if (isset($userAuth) && $userAuth->hasPermission('DisbursementApproval'))
+                                <a href="{{ route('disbursement.approval.index') }}"
+                                    class="submenu-link {{ request()->routeIs('disbursement.approval.*') ? 'active' : '' }}">
+                                    Approval Review
+                                </a>
+                            @endif
+                            @if (isset($userAuth) && $userAuth->hasPermission('DisbursementOtherExpense'))
+                                <a href="{{ route('disbursement.other-expenditure.index') }}"
+                                    class="submenu-link {{ request()->routeIs('disbursement.other-expenditure.*') ? 'active' : '' }}">
+                                    Other Expenditure - Admin
+                                </a>
+                            @endif
                         @endif
 
                     </div>

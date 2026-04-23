@@ -7,6 +7,7 @@ use App\Http\Controllers\ConsigneeController;
 use App\Http\Controllers\ConsignmentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisbursementAnalysisController;
+use App\Http\Controllers\DisbursementApprovalController;
 use App\Http\Controllers\GateOutExpenseController;
 use App\Http\Controllers\HblInvoiceController;
 use App\Http\Controllers\ManifestController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\MasterData\CommodityController;
 use App\Http\Controllers\MasterData\PortController;
 use App\Http\Controllers\MasterData\ShipperController;
 use App\Http\Controllers\NonManifestInvoiceController;
+use App\Http\Controllers\OtherExpenditureController;
 use App\Http\Controllers\OtherInvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Settings\ActiveAccountController;
@@ -329,5 +331,27 @@ Route::middleware('auth')->group(function () {
             Route::get('/gate-out', [GateOutExpenseController::class, 'index'])->name('gate-out.index');
             Route::get('/gate-out/consignments', [GateOutExpenseController::class, 'getConsignments'])->name('gate-out.consignments');
             Route::post('/gate-out/save', [GateOutExpenseController::class, 'save'])->name('gate-out.save');
+        });
+
+    // Disbursement Approval — requires DisbursementApproval permission
+    Route::middleware('permission:DisbursementApproval')
+        ->prefix('disbursement')
+        ->name('disbursement.')
+        ->group(function () {
+            Route::get('/approval', [DisbursementApprovalController::class, 'index'])->name('approval.index');
+            Route::post('/approval/approve', [DisbursementApprovalController::class, 'approve'])->name('approval.approve');
+            Route::post('/approval/decline', [DisbursementApprovalController::class, 'decline'])->name('approval.decline');
+            Route::post('/approval/approve-all', [DisbursementApprovalController::class, 'approveAll'])->name('approval.approve-all');
+            Route::get('/approval/hbls', [DisbursementApprovalController::class, 'getHBLs'])->name('approval.hbls');
+        });
+
+    // Other Expenditure - Admin — requires DisbursementOtherExpense permission
+    Route::middleware('permission:DisbursementOtherExpense')
+        ->prefix('disbursement')
+        ->name('disbursement.')
+        ->group(function () {
+            Route::get('/other-expenditure', [OtherExpenditureController::class, 'index'])->name('other-expenditure.index');
+            Route::get('/other-expenditure/search', [OtherExpenditureController::class, 'searchBL'])->name('other-expenditure.search')->middleware('throttle:60,1');
+            Route::post('/other-expenditure/save', [OtherExpenditureController::class, 'save'])->name('other-expenditure.save');
         });
 });

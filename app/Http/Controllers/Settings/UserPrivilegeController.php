@@ -21,51 +21,52 @@ class UserPrivilegeController extends Controller
                 'BasicConfig' => 'Basic Config',
             ],
             'Consignment' => [
-                'ConsignmentRegister'      => 'Consignment Register',
+                'ConsignmentRegister' => 'Consignment Register',
                 'AssignConsignmentOfficer' => 'Assign Consignment Officer',
             ],
             'Transactions' => [
-                'GenerateInvoice'    => 'Generate Invoice',
+                'GenerateInvoice' => 'Generate Invoice',
                 'PaymentTransaction' => 'Payment Transaction',
-                'GLTransaction'      => 'GL Transaction',
+                'GLTransaction' => 'GL Transaction',
                 'ReverseTransaction' => 'Reverse Transaction',
             ],
             'Disbursement' => [
-                'Disbursement'             => 'Disbursement',
-                'DisbursementAnalysis'     => 'Disbursement Analysis',
-                'DisbursementRevenue'      => 'Disbursement Revenue',
+                'Disbursement' => 'Disbursement',
+                'DisbursementAnalysis' => 'Disbursement Analysis',
+                'DisbursementRevenue' => 'Disbursement Revenue',
                 'DisbursementOtherExpense' => 'Disbursement Other Expense',
-                'DisbursementApproval'     => 'Disbursement Approval',
+                'DisbursementApproval' => 'Disbursement Approval',
             ],
             'Expenses' => [
                 'ConsignmentExpense' => 'Consignment Expense',
-                'CashExpenditure'    => 'Cash Expenditure',
-                'PettyCash'          => 'Petty Cash',
+                'CashExpenditure' => 'Cash Expenditure',
+                'PettyCash' => 'Petty Cash',
             ],
             'Transport' => [
-                'Transport'        => 'Transport',
-                'TransportTrip'    => 'Transport Trip',
+                'Transport' => 'Transport',
+                'TransportTrip' => 'Transport Trip',
                 'TransportExpense' => 'Transport Expense',
             ],
             'Reports' => [
                 'AccountingReport' => 'Accounting Report',
             ],
             'Dashboard Widgets' => [
-                'CnsAwaitingClearance'    => 'Consignments Awaiting Clearance',
+                'CnsAwaitingClearance' => 'Consignments Awaiting Clearance',
                 'PendingGateOutDashboard' => 'Pending Gate Out',
-                'VehicleHubDashboard'     => 'Vehicle Hub',
+                'VehicleHubDashboard' => 'Vehicle Hub',
             ],
             'Admin' => [
                 'UserPrivilege' => 'User Privilege',
-                'EditData'      => 'Edit Data',
-                'Hashing'       => 'Hashing',
+                'EditData' => 'Edit Data',
+                'Hashing' => 'Hashing',
+                'ReportVisibility' => 'Report Visibility (Full Access)',
             ],
         ];
 
         return view('settings.user-privilege', compact('users', 'permissionGroups'));
     }
 
-    //returns a user's permissions as JSON for the AJAX call in the view
+    // returns a user's permissions as JSON for the AJAX call in the view
     public function show(string $userId)
     {
         $userAuth = UserAuth::where('Username', $userId)->first();
@@ -79,7 +80,7 @@ class UserPrivilegeController extends Controller
 
         // Build permissions array from the model — only the permission columns
         $permissions = collect(UserAuth::PERMISSIONS)
-            ->mapWithKeys(fn($permission) => [$permission => $userAuth->$permission])
+            ->mapWithKeys(fn ($permission) => [$permission => $userAuth->$permission])
             ->toArray();
 
         $user = User::where('ID', $userId)->first();
@@ -91,7 +92,7 @@ class UserPrivilegeController extends Controller
         ]);
     }
 
-    //Initialise permissions for a user — creates a new row in user_auth with all permissions set to 0
+    // Initialise permissions for a user — creates a new row in user_auth with all permissions set to 0
     public function initialise(Request $request)
     {
         $request->validate([
@@ -123,27 +124,27 @@ class UserPrivilegeController extends Controller
     public function toggle(Request $request)
     {
         $request->validate([
-            'username'   => ['required', 'string', 'exists:user_auth,Username'],
-            'permission' => ['required', 'string', 'in:' . implode(',', UserAuth::PERMISSIONS)],
+            'username' => ['required', 'string', 'exists:user_auth,Username'],
+            'permission' => ['required', 'string', 'in:'.implode(',', UserAuth::PERMISSIONS)],
         ]);
 
         $userAuth = UserAuth::where('Username', $request->username)->firstOrFail();
 
-        $permission    = $request->permission;
-        $currentValue  = $userAuth->$permission;
+        $permission = $request->permission;
+        $currentValue = $userAuth->$permission;
 
         // Flip the value — true becomes false, false becomes true
         $userAuth->$permission = ! $currentValue;
         $userAuth->save();
 
         return response()->json([
-            'success'   => true,
+            'success' => true,
             'permission' => $permission,
-            'value'     => $userAuth->$permission,
+            'value' => $userAuth->$permission,
         ]);
     }
 
-    //resets a user's password, generates a temporary one and forces change on next login
+    // resets a user's password, generates a temporary one and forces change on next login
     public function resetPassword(Request $request)
     {
         $request->validate([
@@ -153,7 +154,7 @@ class UserPrivilegeController extends Controller
         $user = User::where('ID', $request->username)->firstOrFail();
 
         // CHANGED: using random_int instead of str_shuffle for cryptographically secure password generation
-        $characters  = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         $length = 6;
         $tempPassword = '';
 
@@ -162,15 +163,15 @@ class UserPrivilegeController extends Controller
         }
 
         // Hash and save the temporary password
-        $user->HashPassword        = bcrypt($tempPassword);
+        $user->HashPassword = bcrypt($tempPassword);
         $user->must_change_password = 1;
-        $user->reset_requested     = 0; // CHANGED: clear the reset request flag
+        $user->reset_requested = 0; // CHANGED: clear the reset request flag
         $user->save();
 
         return response()->json([
-            'success'       => true,
+            'success' => true,
             'temp_password' => $tempPassword, // shown to admin once, never stored in plain text
-            'message'       => 'Password reset successfully.',
+            'message' => 'Password reset successfully.',
         ]);
     }
 }

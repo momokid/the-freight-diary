@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class UserAuth extends Model
 {
-
     // ADDED: single source of truth for all permission columns
     // To add a new permission in future, only add it here
     const PERMISSIONS = [
@@ -35,19 +34,22 @@ class UserAuth extends Model
         'VehicleHubDashboard',
         'UserPrivilege',
         'Hashing',
+        'ReportVisibility',
     ];
 
     protected $table = 'user_auth';
 
     protected $primaryKey = 'Username';
+
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     public $timestamps = false;
 
     protected $fillable = [
         'Username',
-        ...self::PERMISSIONS
+        ...self::PERMISSIONS,
     ];
 
     // Cast all permission columns to boolean so we get true/false instead of 1/0
