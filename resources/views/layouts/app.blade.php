@@ -323,7 +323,12 @@
                                 </a>
                             @endif
                         @endif
-
+                        @if (isset($userAuth) && $userAuth->hasPermission('DisbursementRevenue'))
+                            <a href="{{ route('disbursement.consignment-revenue.index') }}"
+                                class="submenu-link {{ request()->routeIs('disbursement.consignment-revenue.*') ? 'active' : '' }}">
+                                Consignment Revenue
+                            </a>
+                        @endif
                     </div>
                 </div>
             @endforeach

@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CmdtsController;
 use App\Http\Controllers\ConsigneeController;
 use App\Http\Controllers\ConsignmentController;
+use App\Http\Controllers\ConsignmentRevenueController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisbursementAnalysisController;
 use App\Http\Controllers\DisbursementApprovalController;
@@ -154,6 +155,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/active-accounts', [ActiveAccountController::class, 'index'])->name('active-accounts.index');
             Route::put('/active-accounts/{key}', [ActiveAccountController::class, 'update'])->name('active-accounts.update');
         });
+
     });
 
     // Consignment and Manifest routes — requires ConsignmentRegister permission
@@ -306,13 +308,13 @@ Route::middleware('auth')->group(function () {
 
     });
 
-    // Disbursement Analysis
-    Route::middleware('permission:DisbursementAnalysis')
-        ->prefix('disbursement')
-        ->name('disbursement.')
-        ->group(function () {
+    // Disbursement routes
+    Route::prefix('disbursement')->name('disbursement.')->group(function () {
+
+        // Disbursement Analysis
+        Route::middleware('permission:DisbursementAnalysis')->group(function () {
             Route::get('/analysis', [DisbursementAnalysisController::class, 'index'])->name('analysis.index');
-            Route::get('/analysis/search', [DisbursementAnalysisController::class, 'searchBL'])->name('analysis.search');
+            Route::get('/analysis/search', [DisbursementAnalysisController::class, 'searchBL'])->name('analysis.search')->middleware('throttle:60,1');
             Route::post('/analysis/load', [DisbursementAnalysisController::class, 'loadBL'])->name('analysis.load');
             Route::delete('/analysis/temp', [DisbursementAnalysisController::class, 'clearTemp'])->name('analysis.temp.clear');
             Route::post('/analysis/temp', [DisbursementAnalysisController::class, 'saveTempRow'])->name('analysis.temp.save');
@@ -323,21 +325,15 @@ Route::middleware('auth')->group(function () {
             Route::post('/analysis/temp/add', [DisbursementAnalysisController::class, 'addTempRow'])->name('analysis.temp.add');
         });
 
-    // Gate-Out Expense — requires ConsignmentExpense permission
-    Route::middleware('permission:ConsignmentExpense')
-        ->prefix('disbursement')
-        ->name('disbursement.')
-        ->group(function () {
+        // Gate-Out Expense
+        Route::middleware('permission:ConsignmentExpense')->group(function () {
             Route::get('/gate-out', [GateOutExpenseController::class, 'index'])->name('gate-out.index');
             Route::get('/gate-out/consignments', [GateOutExpenseController::class, 'getConsignments'])->name('gate-out.consignments');
             Route::post('/gate-out/save', [GateOutExpenseController::class, 'save'])->name('gate-out.save');
         });
 
-    // Disbursement Approval — requires DisbursementApproval permission
-    Route::middleware('permission:DisbursementApproval')
-        ->prefix('disbursement')
-        ->name('disbursement.')
-        ->group(function () {
+        // Disbursement Approval
+        Route::middleware('permission:DisbursementApproval')->group(function () {
             Route::get('/approval', [DisbursementApprovalController::class, 'index'])->name('approval.index');
             Route::post('/approval/approve', [DisbursementApprovalController::class, 'approve'])->name('approval.approve');
             Route::post('/approval/decline', [DisbursementApprovalController::class, 'decline'])->name('approval.decline');
@@ -345,13 +341,19 @@ Route::middleware('auth')->group(function () {
             Route::get('/approval/hbls', [DisbursementApprovalController::class, 'getHBLs'])->name('approval.hbls');
         });
 
-    // Other Expenditure - Admin — requires DisbursementOtherExpense permission
-    Route::middleware('permission:DisbursementOtherExpense')
-        ->prefix('disbursement')
-        ->name('disbursement.')
-        ->group(function () {
+        // Other Expenditure - Admin
+        Route::middleware('permission:DisbursementOtherExpense')->group(function () {
             Route::get('/other-expenditure', [OtherExpenditureController::class, 'index'])->name('other-expenditure.index');
             Route::get('/other-expenditure/search', [OtherExpenditureController::class, 'searchBL'])->name('other-expenditure.search')->middleware('throttle:60,1');
             Route::post('/other-expenditure/save', [OtherExpenditureController::class, 'save'])->name('other-expenditure.save');
         });
+
+        // Consignment Revenue
+        Route::middleware('permission:DisbursementRevenue')->group(function () {
+            Route::get('/consignment-revenue', [ConsignmentRevenueController::class, 'index'])->name('consignment-revenue.index');
+            Route::get('/consignment-revenue/search', [ConsignmentRevenueController::class, 'searchBL'])->name('consignment-revenue.search')->middleware('throttle:60,1');
+            Route::post('/consignment-revenue/save', [ConsignmentRevenueController::class, 'save'])->name('consignment-revenue.save');
+        });
+
+    });
 });
