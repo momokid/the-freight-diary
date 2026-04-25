@@ -9,6 +9,9 @@ use App\Http\Controllers\ConsignmentRevenueController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisbursementAnalysisController;
 use App\Http\Controllers\DisbursementApprovalController;
+use App\Http\Controllers\EditData\EditConsignmentController;
+use App\Http\Controllers\EditData\EditWeightController;
+use App\Http\Controllers\EditData\ReverseTransactionController;
 use App\Http\Controllers\GateOutExpenseController;
 use App\Http\Controllers\HblInvoiceController;
 use App\Http\Controllers\ManifestController;
@@ -353,6 +356,54 @@ Route::middleware('auth')->group(function () {
             Route::get('/consignment-revenue', [ConsignmentRevenueController::class, 'index'])->name('consignment-revenue.index');
             Route::get('/consignment-revenue/search', [ConsignmentRevenueController::class, 'searchBL'])->name('consignment-revenue.search')->middleware('throttle:60,1');
             Route::post('/consignment-revenue/save', [ConsignmentRevenueController::class, 'save'])->name('consignment-revenue.save');
+        });
+
+    });
+
+    // Edit Data
+    Route::middleware('auth')->prefix('edit-data')->name('edit-data.')->group(function () {
+
+        Route::middleware('permission:EditData')->group(function () {
+
+            // Edit Consignment
+            Route::prefix('consignment')->name('consignment.')->group(function () {
+                Route::get('/', [EditConsignmentController::class, 'index'])->name('index');
+                Route::get('/search-bl', [EditConsignmentController::class, 'searchBL'])->name('search-bl')->middleware('throttle:60,1');
+                Route::get('/load-bl', [EditConsignmentController::class, 'loadBL'])->name('load-bl')->middleware('throttle:60,1');
+                Route::put('/update-bl', [EditConsignmentController::class, 'updateBL'])->name('update-bl');
+                Route::put('/update-container', [EditConsignmentController::class, 'updateContainer'])->name('update-container');
+                Route::get('/search-hbl', [EditConsignmentController::class, 'searchHBL'])->name('search-hbl')->middleware('throttle:60,1');
+                Route::get('/load-hbl', [EditConsignmentController::class, 'loadHBL'])->name('load-hbl')->middleware('throttle:60,1');
+                Route::put('/update-hbl', [EditConsignmentController::class, 'updateHBL'])->name('update-hbl');
+            });
+
+            // Add weight routes inside edit-data group
+
+            Route::prefix('weight')->name('weight.')->group(function () {
+                Route::get('/', [EditWeightController::class, 'index'])->name('index');
+                Route::get('/search-bl', [EditWeightController::class, 'searchBL'])->name('search-bl')->middleware('throttle:60,1');
+                Route::get('/load-bl', [EditWeightController::class, 'loadBL'])->name('load-bl')->middleware('throttle:60,1');
+                Route::put('/update', [EditWeightController::class, 'update'])->name('update');
+            });
+
+            Route::prefix('reverse-transaction')->name('reverse-transaction.')->group(function () {
+                Route::get('/', [ReverseTransactionController::class, 'index'])->name('index');
+
+                // Reverse Consignment — ReverseConsignment permission
+                Route::middleware('permission:ReverseConsignment')->group(function () {
+                    Route::get('/load-consignment', [ReverseTransactionController::class, 'loadConsignment'])->name('load-consignment');
+                    Route::put('/reverse-consignment', [ReverseTransactionController::class, 'reverseConsignment'])->name('reverse-consignment');
+                });
+
+                // Reverse Manifest + Transaction — ReverseTransaction permission
+                Route::middleware('permission:ReverseTransaction')->group(function () {
+                    Route::get('/load-manifest', [ReverseTransactionController::class, 'loadManifest'])->name('load-manifest');
+                    Route::put('/reverse-manifest', [ReverseTransactionController::class, 'reverseManifest'])->name('reverse-manifest');
+                    Route::get('/load-transaction', [ReverseTransactionController::class, 'loadTransaction'])->name('load-transaction');
+                    Route::put('/reverse-transaction', [ReverseTransactionController::class, 'reverseTransaction'])->name('reverse-transaction');
+                });
+            });
+
         });
 
     });

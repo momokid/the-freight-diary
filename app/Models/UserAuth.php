@@ -24,6 +24,7 @@ class UserAuth extends Model
         'DisbursementOtherExpense',
         'DisbursementApproval',
         'ReverseTransaction',
+        'ReverseConsignment',
         'AccountingReport',
         'CashExpenditure',
         'TransportTrip',

@@ -334,27 +334,46 @@
             @endforeach
 
 
-            {{-- Edit Panel --}}
-            <div class="nav-section-label">Edit Panel</div>
-            <div class="nav-item-wrapper">
-                <button class="nav-link" onclick="toggleSubmenu('edit')">
-                    <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    <span class="nav-label" style="flex: 1; text-align: left;">Edit Data</span>
-                    <svg class="nav-arrow" id="arrow-edit"
-                        style="width: 12px; height: 12px; transition: transform 0.2s;" fill="none"
-                        stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                </button>
-                <div class="tooltip">Edit Data</div>
-                <div id="submenu-edit" class="submenu closed">
-                    <span class="submenu-link" style="font-style: italic;">Coming soon</span>
+            {{-- ADDED: Edit Panel section --}}
+            @if (isset($userAuth) && $userAuth->hasPermission('EditData'))
+                <div class="nav-section-label">Edit Panel</div>
+                <div class="nav-item-wrapper">
+                    <button onclick="toggleSubmenu('edit')" class="nav-link">
+                        <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
+                           m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span class="nav-label">Edit Data</span>
+                        <svg id="arrow-edit" class="nav-arrow" style="width:14px;height:14px;margin-left:auto;"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                    <div class="tooltip">Edit Data</div>
                 </div>
-            </div>
+                <div id="submenu-edit" class="submenu closed">
+                    <a href="{{ route('edit-data.consignment.index') }}"
+                        class="submenu-link
+                {{ request()->routeIs('edit-data.consignment.*') ? 'active' : '' }}">
+                        Edit Consignment
+                    </a>
+                    <a href="{{ route('edit-data.weight.index') }}"
+                        class="submenu-link
+                        {{ request()->routeIs('edit-data.weight.*') ? 'active' : '' }}">
+                        Edit Weight
+                    </a>
+                    @if (isset($userAuth) &&
+                            ($userAuth->hasPermission('ReverseTransaction') || $userAuth->hasPermission('ReverseConsignment')))
+                        <a href="{{ route('edit-data.reverse-transaction.index') }}"
+                            class="submenu-link
+                            {{ request()->routeIs('edit-data.reverse-transaction.*') ? 'active' : '' }}">
+                            Reverse Transaction
+                        </a>
+                    @endif
+                </div>
+            @endif
 
             {{-- System Report --}}
             <div class="nav-section-label">System Report</div>

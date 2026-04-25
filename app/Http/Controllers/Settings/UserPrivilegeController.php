@@ -28,7 +28,7 @@ class UserPrivilegeController extends Controller
                 'GenerateInvoice' => 'Generate Invoice',
                 'PaymentTransaction' => 'Payment Transaction',
                 'GLTransaction' => 'GL Transaction',
-                'ReverseTransaction' => 'Reverse Transaction',
+
             ],
             'Disbursement' => [
                 'Disbursement' => 'Disbursement',
@@ -58,6 +58,8 @@ class UserPrivilegeController extends Controller
             'Admin' => [
                 'UserPrivilege' => 'User Privilege',
                 'EditData' => 'Edit Data',
+                'ReverseTransaction' => 'Reverse Transaction',
+                'ReverseConsignment' => 'Reverse Consignment',
                 'Hashing' => 'Hashing',
                 'ReportVisibility' => 'Report Visibility (Full Access)',
             ],

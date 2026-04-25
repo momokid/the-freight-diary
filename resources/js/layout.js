@@ -106,7 +106,7 @@ function autoOpenActiveSubmenu() {
         ],
         accounting: ["/accounting/transaction"],
         disbursement: ["/disbursement"],
-        edit: ["/edit"],
+        edit: ["/edit-data"],
         reports: ["/reports"],
     };
 

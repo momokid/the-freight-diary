@@ -133,7 +133,8 @@
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span style="color: var(--text-muted);">Base Amount</span>
                             <span id="preview-base">0.00</span>
-                        </div>
+                        </div><p id="cns-submit-error" class="form-error" style="text-align: center; margin-bottom: 8px;"></p>
+<p id="cns-submit-success" class="form-error" style="text-align: center; margin-bottom: 8px;"></p>
                         <div id="preview-tax-lines"></div>
                         <div
                             style="display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); margin-top: 6px; padding-top: 6px;">
