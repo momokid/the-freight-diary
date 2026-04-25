@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisbursementAnalysisController;
 use App\Http\Controllers\DisbursementApprovalController;
 use App\Http\Controllers\EditData\EditConsignmentController;
+use App\Http\Controllers\EditData\EditDisbursementController;
 use App\Http\Controllers\EditData\EditWeightController;
 use App\Http\Controllers\EditData\ReverseTransactionController;
 use App\Http\Controllers\GateOutExpenseController;
@@ -402,9 +403,22 @@ Route::middleware('auth')->group(function () {
                     Route::get('/load-transaction', [ReverseTransactionController::class, 'loadTransaction'])->name('load-transaction');
                     Route::put('/reverse-transaction', [ReverseTransactionController::class, 'reverseTransaction'])->name('reverse-transaction');
                 });
+
+            });
+
+            Route::prefix('disbursement')->name('disbursement.')->group(function () {
+                Route::middleware('permission:EditDisbursementAnalysis')->group(function () {
+                    Route::get('/', [EditDisbursementController::class, 'index'])->name('index');
+                    Route::get('/search-bl', [EditDisbursementController::class, 'searchBL'])->name('search-bl')->middleware('throttle:60,1');
+                    Route::get('/load-hbls', [EditDisbursementController::class, 'loadHBLs'])->name('load-hbls');
+                    Route::get('/load-entries', [EditDisbursementController::class, 'loadEntries'])->name('load-entries');
+                    Route::get('/cash-accounts', [EditDisbursementController::class, 'cashAccounts'])->name('cash-accounts');
+                    Route::put('/update', [EditDisbursementController::class, 'update'])->name('update');
+                });
             });
 
         });
 
     });
+
 });

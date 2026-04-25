@@ -60,6 +60,7 @@ class UserPrivilegeController extends Controller
                 'EditData' => 'Edit Data',
                 'ReverseTransaction' => 'Reverse Transaction',
                 'ReverseConsignment' => 'Reverse Consignment',
+                'EditDisbursementAnalysis' => 'Edit Disbursement Analysis',
                 'Hashing' => 'Hashing',
                 'ReportVisibility' => 'Report Visibility (Full Access)',
             ],

@@ -372,6 +372,13 @@
                             Reverse Transaction
                         </a>
                     @endif
+                    @if (isset($userAuth) && $userAuth->hasPermission('EditDisbursementAnalysis'))
+                        <a href="{{ route('edit-data.disbursement.index') }}"
+                            class="submenu-link
+                            {{ request()->routeIs('edit-data.disbursement.*') ? 'active' : '' }}">
+                            Reverse Disbursement Analysis
+                        </a>
+                    @endif
                 </div>
             @endif
 
