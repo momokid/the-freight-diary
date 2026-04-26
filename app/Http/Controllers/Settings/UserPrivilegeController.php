@@ -49,6 +49,10 @@ class UserPrivilegeController extends Controller
             ],
             'Reports' => [
                 'AccountingReport' => 'Accounting Report',
+                'OperationsReport' => 'Operations Report',
+                'ClientReport' => 'Client Report',
+                'DisbursementReport' => 'Disbursement Report',
+                'ManagementReport' => 'Management Report',
             ],
             'Dashboard Widgets' => [
                 'CnsAwaitingClearance' => 'Consignments Awaiting Clearance',

@@ -37,6 +37,11 @@ class UserAuth extends Model
         'UserPrivilege',
         'Hashing',
         'ReportVisibility',
+        'AccountingReport',
+        'OperationsReport',
+        'ClientReport',
+        'DisbursementReport',
+        'ManagementReport',
     ];
 
     protected $table = 'user_auth';

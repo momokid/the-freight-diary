@@ -385,25 +385,56 @@
             {{-- System Report --}}
             <div class="nav-section-label">System Report</div>
             <div class="nav-item-wrapper">
-                <button class="nav-link" onclick="toggleSubmenu('reports')">
-                    <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor"
+                <button onclick="toggleSubmenu('reports')" class="nav-link">
+                    <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <span class="nav-label" style="flex: 1; text-align: left;">Report Viewer</span>
-                    <svg class="nav-arrow" id="arrow-reports"
-                        style="width: 12px; height: 12px; transition: transform 0.2s;" fill="none"
-                        stroke="currentColor" viewBox="0 0 24 24">
+                    <span class="nav-label">Report Viewer</span>
+                    <svg id="arrow-reports" class="nav-arrow" style="width:14px;height:14px;margin-left:auto;"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                 </button>
                 <div class="tooltip">Report Viewer</div>
-                <div id="submenu-reports" class="submenu closed">
-                    <span class="submenu-link" style="font-style: italic;">Coming soon</span>
-                </div>
             </div>
-
+            <div id="submenu-reports" class="submenu closed">
+                @if (isset($userAuth) && $userAuth->hasPermission('OperationsReport'))
+                    <a href="{{ route('reports.operations.consignment-status') }}"
+                        class="submenu-link {{ request()->routeIs('reports.operations.*') ? 'active' : '' }}">
+                        Operations Reports
+                    </a>
+                @endif
+                @if (isset($userAuth) && $userAuth->hasPermission('ClientReport'))
+                    <a href="#"
+                        class="submenu-link {{ request()->routeIs('reports.client.*') ? 'active' : '' }}">
+                        Client Reports
+                    </a>
+                @endif
+                @if (isset($userAuth) && $userAuth->hasPermission('DisbursementReport'))
+                    <a href="#"
+                        class="submenu-link {{ request()->routeIs('reports.disbursement.*') ? 'active' : '' }}">
+                        Disbursement Reports
+                    </a>
+                @endif
+                @if (isset($userAuth) && $userAuth->hasPermission('AccountingReport'))
+                    <a href="#"
+                        class="submenu-link {{ request()->routeIs('reports.accounting.*') ? 'active' : '' }}">
+                        Accounting Reports
+                    </a>
+                @endif
+                @if (isset($userAuth) && $userAuth->hasPermission('ManagementReport'))
+                    <a href="#"
+                        class="submenu-link {{ request()->routeIs('reports.management.*') ? 'active' : '' }}">
+                        Management Reports
+                    </a>
+                @endif
+                <a href="{{ route('reports.index') }}"
+                    class="submenu-link {{ request()->routeIs('reports.index') ? 'active' : '' }}">
+                    All Reports
+                </a>
+            </div>
         </nav>
 
         {{-- User info at bottom of sidebar --}}

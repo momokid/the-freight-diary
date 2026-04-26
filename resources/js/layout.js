@@ -107,7 +107,14 @@ function autoOpenActiveSubmenu() {
         accounting: ["/accounting/transaction"],
         disbursement: ["/disbursement"],
         edit: ["/edit-data"],
-        reports: ["/reports"],
+        reports: [
+            "/reports",
+            "/reports/operations",
+            "/reports/client",
+            "/reports/disbursement",
+            "/reports/accounting",
+            "/reports/management",
+        ],
     };
 
     Object.entries(submenus).forEach(([key, paths]) => {
