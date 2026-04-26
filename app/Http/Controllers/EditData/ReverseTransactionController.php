@@ -4,6 +4,7 @@ namespace App\Http\Controllers\EditData;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class ReverseTransactionController extends Controller
@@ -304,7 +305,11 @@ class ReverseTransactionController extends Controller
             // Soft delete — set Reversed = 1
             DB::table('journal')
                 ->where('ReceiptNo', $receiptNo)
-                ->update(['Reversed' => 1]);
+                ->update([
+                    'Reversed' => 1,
+                    'ReversedBy' => Auth::user()->ID,
+                    'ReversedAt' => now()->toDateTimeString(),
+                ]);
 
             DB::commit();
 
