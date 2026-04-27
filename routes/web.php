@@ -463,6 +463,26 @@ Route::middleware('auth')->group(function () {
                     ->name('consignment-carrier.print');
                 Route::get('/consignment-carrier/export', [OperationsReportController::class, 'consignmentCarrierExport'])
                     ->name('consignment-carrier.export');
+
+                // ── Port Aging Report ─────────────────────────────────────────────────
+                Route::get('/port-aging', [OperationsReportController::class, 'portAging'])
+                    ->name('port-aging');
+                Route::get('/port-aging/print', [OperationsReportController::class, 'portAgingPrint'])
+                    ->name('port-aging.print');
+                Route::get('/port-aging/export', [OperationsReportController::class, 'portAgingExport'])
+                    ->name('port-aging.export');
+
+                // ── Pending Clearance Report ──────────────────────────────────────────
+                Route::get('/pending-clearance', [OperationsReportController::class, 'pendingClearance'])
+                    ->name('pending-clearance');
+                Route::get('/pending-clearance/print', [OperationsReportController::class, 'pendingClearancePrint'])
+                    ->name('pending-clearance.print');
+                Route::get('/pending-clearance/export', [OperationsReportController::class, 'pendingClearanceExport'])
+                    ->name('pending-clearance.export');
+
+                // ── Consignment Detail Modal (AJAX) ──────────────────────────────────────
+                Route::get('/consignment-modal/{consignmentId}', [OperationsReportController::class, 'consignmentModal'])
+                    ->name('consignment-modal');
             });
 
         // Client Reports
