@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Reports;
 
 use App\Http\Controllers\Controller;
+use App\Models\UserAuth;
+use Illuminate\Support\Facades\Auth;
 
 class ReportIndexController extends Controller
 {
     public function index()
     {
-        $userAuth = auth()->user()->auth;
+        $userAuth = UserAuth::where('Username', Auth::user()->ID)->first();
 
         $groups = [
             [
@@ -86,7 +88,6 @@ class ReportIndexController extends Controller
             ],
         ];
 
-        // Filter to only groups the user has permission for
         $visibleGroups = array_filter($groups, function ($group) use ($userAuth) {
             return $userAuth && $userAuth->hasPermission($group['permission']);
         });

@@ -157,7 +157,7 @@
             color: #fff;
             padding: 8px 10px;
             text-align: left;
-            font-size: 9px;
+            font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -172,6 +172,7 @@
             border-bottom: 1px solid #e5e7eb;
             color: #111827;
             vertical-align: middle;
+            font-size: 14px;
         }
 
         tbody td.r {
@@ -184,7 +185,7 @@
 
         .badge {
             display: inline-block;
-            font-size: 9px;
+            font-size: 11px;
             font-weight: 700;
             padding: 2px 7px;
             border-radius: 99px;
@@ -250,13 +251,16 @@
 
     <div class="rpt-header">
         <div class="rpt-logo-block">
-            <img src="{{ asset('images/logo.png') }}" alt="{{ $company->CompanyName ?? 'PSIL' }}" class="rpt-logo">
+            <img src="{{ asset('images/logo.png') }}" alt="{{ $company?->InstName ?? 'PSIL' }}" class="rpt-logo"
+                onerror="this.style.display='none'">
             <div>
-                <p class="rpt-company-name">{{ $company->CompanyName ?? 'Prime Survivors International Ltd' }}</p>
+                <p class="rpt-company-name">{{ $company?->InstName ?? 'Prime Survivors International Ltd' }}</p>
                 <p class="rpt-company-sub">
-                    {{ $company->Address ?? '' }}<br>
-                    Tel: {{ $company->Phone ?? '' }}
-                    @if (!empty($company->Email))
+                    {{ $company?->Address ?? '' }}<br>
+                    @if ($company?->TelNo)
+                        Tel: {{ $company->TelNo }}
+                    @endif
+                    @if ($company?->Email)
                         &nbsp;·&nbsp; {{ $company->Email }}
                     @endif
                 </p>
@@ -302,11 +306,11 @@
                 <th style="width:4%">#</th>
                 <th style="width:16%">Main BL</th>
                 <th style="width:26%">Consignee</th>
-                <th style="width:16%">Container No.</th>
+                <th style="width:18%">Container No(s).</th>
                 <th style="width:7%">Type</th>
                 <th style="width:11%">Status</th>
                 <th class="r" style="width:8%">Age (days)</th>
-                <th class="r" style="width:12%">Date Registered</th>
+                <th class="r" style="width:10%">Date Registered</th>
             </tr>
         </thead>
         <tbody>
@@ -324,10 +328,11 @@
                     <td style="color:#9ca3af">{{ $i + 1 }}</td>
                     <td style="font-family:monospace">{{ $row->MainBL ?? '-' }}</td>
                     <td>{{ $row->ConsigneeName ?? '-' }}</td>
-                    <td style="font-family:monospace">{{ $row->ContainerNo ?? '-' }}</td>
+                    <td style="font-family:monospace">{{ $row->ContainerNos ?? '-' }}</td>
                     <td>{{ $row->CmdtTypeID == 1 ? 'LCL' : 'FCL' }}</td>
                     <td><span class="badge {{ $st['cls'] }}">{{ $st['label'] }}</span></td>
-                    <td class="r {{ $row->AgeDays > 7 ? 'age-warn' : 'age-ok' }}">{{ $row->AgeDays }}</td>
+                    <td class="r {{ $row->Status != 0 && $row->AgeDays > 7 ? 'age-warn' : 'age-ok' }}">
+                        {{ $row->AgeDays }}</td>
                     <td class="r" style="color:#6b7280">{{ \Carbon\Carbon::parse($row->Date)->format('d M Y') }}
                     </td>
                 </tr>
@@ -342,7 +347,7 @@
     </table>
 
     <div class="rpt-footer">
-        <span>The Freight Diary &nbsp;·&nbsp; {{ $company->CompanyName ?? 'Prime Survivors International Ltd' }}
+        <span>The Freight Diary &nbsp;·&nbsp; {{ $company?->InstName ?? 'Prime Survivors International Ltd' }}
             &nbsp;·&nbsp; Confidential — for internal use only</span>
         <span>Printed by: {{ auth()->user()->FullName ?? auth()->user()->ID }} &nbsp;·&nbsp;
             {{ now()->format('d M Y, h:i A') }}</span>

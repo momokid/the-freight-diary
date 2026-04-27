@@ -14,6 +14,43 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class OperationsReportController extends Controller
 {
+    // ── Shared query builder ─────────────────────────────────────────────────
+    // One place to maintain — used by Data (AJAX), Print and Export.
+
+    private function buildConsignmentStatusQuery(string $dateFrom, string $dateTo, string $status, string $branchID)
+    {
+        $query = DB::table('container_main as cm')
+            ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
+            ->leftJoin('container_details as cd', 'cm.ConsignmentID', '=', 'cd.ConsignmentID')
+            ->where('cm.BranchID', $branchID)
+            ->where('cm.Status', '!=', 9)
+            ->whereBetween('cm.Date', [$dateFrom, $dateTo])
+            ->groupBy(
+                'cm.ConsignmentID',
+                'cm.BL',
+                'co.FullName',
+                'cm.CmdtTypeID',
+                'cm.Status',
+                'cm.Date'
+            )
+            ->select([
+                'cm.ConsignmentID',
+                'cm.BL as MainBL',
+                'co.FullName as ConsigneeName',
+                'cm.CmdtTypeID',
+                'cm.Status',
+                'cm.Date',
+                DB::raw('DATEDIFF(CURDATE(), cm.Date) as AgeDays'),
+                DB::raw('GROUP_CONCAT(cd.ContainerNo ORDER BY cd.ContainerNo SEPARATOR ", ") as ContainerNos'),
+            ]);
+
+        if ($status !== 'all') {
+            $query->where('cm.Status', (int) $status);
+        }
+
+        return $query->orderBy('cm.Date', 'asc')->get();
+    }
+
     // ── Consignment Status Summary ───────────────────────────────────────────
 
     public function consignmentStatus()
@@ -34,30 +71,8 @@ class OperationsReportController extends Controller
         $dateTo = $request->date_to;
         $status = $request->input('status', 'all');
 
-        $query = DB::table('container_main as cm')
-            ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
-            ->leftJoin('container_details as cd', 'cm.ConsignmentID', '=', 'cd.ConsignmentID')
-            ->where('cm.BranchID', $user->BranchID)
-            ->where('cm.Status', '!=', 9)
-            ->whereBetween('cm.Date', [$dateFrom, $dateTo])
-            ->select([
-                'cm.ConsignmentID',
-                'cm.BL as MainBL',
-                'co.FullName as ConsigneeName',
-                'cd.ContainerNo',
-                'cm.CmdtTypeID',
-                'cm.Status',
-                'cm.Date',
-                DB::raw('DATEDIFF(CURDATE(), cm.Date) as AgeDays'),
-            ]);
+        $rows = $this->buildConsignmentStatusQuery($dateFrom, $dateTo, $status, $user->BranchID);
 
-        if ($status !== 'all') {
-            $query->where('cm.Status', $status);
-        }
-
-        $rows = $query->orderBy('cm.Date', 'asc')->get();
-
-        // Summary counts
         $summary = [
             'not_arrived' => $rows->where('Status', 1)->count(),
             'pending' => $rows->where('Status', 2)->count(),
@@ -88,28 +103,7 @@ class OperationsReportController extends Controller
         $dateTo = $request->date_to;
         $status = $request->input('status', 'all');
 
-        $query = DB::table('container_main as cm')
-            ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
-            ->leftJoin('container_details as cd', 'cm.ConsignmentID', '=', 'cd.ConsignmentID')
-            ->where('cm.BranchID', $user->BranchID)
-            ->where('cm.Status', '!=', 9)
-            ->whereBetween('cm.Date', [$dateFrom, $dateTo])
-            ->select([
-                'cm.ConsignmentID',
-                'cm.BL as MainBL',
-                'co.FullName as ConsigneeName',
-                'cd.ContainerNo',
-                'cm.CmdtTypeID',
-                'cm.Status',
-                'cm.Date',
-                DB::raw('DATEDIFF(CURDATE(), cm.Date) as AgeDays'),
-            ]);
-
-        if ($status !== 'all') {
-            $query->where('cm.Status', $status);
-        }
-
-        $rows = $query->orderBy('cm.Date', 'asc')->get();
+        $rows = $this->buildConsignmentStatusQuery($dateFrom, $dateTo, $status, $user->BranchID);
 
         $summary = [
             'not_arrived' => $rows->where('Status', 1)->count(),
@@ -123,10 +117,10 @@ class OperationsReportController extends Controller
         $dateFrom = \Carbon\Carbon::parse($dateFrom)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($dateTo)->format('d M Y');
 
-        $company = DB::table('company_main')->where('BranchID', $user->BranchID)->first();
+        // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.consignment-status-print', compact(
-            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo', 'company'
+            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo'
         ));
     }
 
@@ -143,28 +137,7 @@ class OperationsReportController extends Controller
         $dateTo = $request->date_to;
         $status = $request->input('status', 'all');
 
-        $query = DB::table('container_main as cm')
-            ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
-            ->leftJoin('container_details as cd', 'cm.ConsignmentID', '=', 'cd.ConsignmentID')
-            ->where('cm.BranchID', $user->BranchID)
-            ->where('cm.Status', '!=', 9)
-            ->whereBetween('cm.Date', [$dateFrom, $dateTo])
-            ->select([
-                'cm.ConsignmentID',
-                'cm.BL as MainBL',
-                'co.FullName as ConsigneeName',
-                'cd.ContainerNo',
-                'cm.CmdtTypeID',
-                'cm.Status',
-                'cm.Date',
-                DB::raw('DATEDIFF(CURDATE(), cm.Date) as AgeDays'),
-            ]);
-
-        if ($status !== 'all') {
-            $query->where('cm.Status', $status);
-        }
-
-        $rows = $query->orderBy('cm.Date', 'asc')->get();
+        $rows = $this->buildConsignmentStatusQuery($dateFrom, $dateTo, $status, $user->BranchID);
 
         $statusLabels = [0 => 'Cleared', 1 => 'Not Arrived', 2 => 'Pending', 3 => 'Gated Out'];
 
@@ -173,8 +146,9 @@ class OperationsReportController extends Controller
         $sheet->setTitle('Consignment Status');
 
         // ── Company header ───────────────────────────────────────────────────
+        $company = app('company'); // already resolved by AppServiceProvider
         $sheet->mergeCells('A1:H1');
-        $sheet->setCellValue('A1', $user->BranchID ?? 'Prime Survivors International Ltd');
+        $sheet->setCellValue('A1', $company?->InstName ?? 'Prime Survivors International Ltd');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
@@ -188,22 +162,21 @@ class OperationsReportController extends Controller
         $sheet->getStyle('A3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $sheet->mergeCells('A4:H4');
-        $sheet->setCellValue('A4', 'Generated: '.now()->format('d M Y, h:i A').'  |  By: '.(Auth::user()->FullName ?? Auth::user()->ID));
+        $sheet->setCellValue('A4', 'Generated: '.now()->format('d M Y, h:i A').'  |  By: '.($user->FullName ?? $user->ID));
         $sheet->getStyle('A4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('A4')->getFont()->setSize(9);
 
         // ── Column headers ───────────────────────────────────────────────────
-        $headers = ['#', 'Main BL', 'House BL', 'Consignee', 'Container No.', 'Type', 'Status', 'Age (Days)', 'Date Registered'];
+        $headers = ['#', 'Main BL', 'Consignee', 'Container No(s).', 'Type', 'Status', 'Age (Days)', 'Date Registered'];
         $col = 'A';
-        $row = 6;
         foreach ($headers as $header) {
-            $sheet->setCellValue($col.$row, $header);
-            $sheet->getStyle($col.$row)->getFont()->setBold(true);
-            $sheet->getStyle($col.$row)->getFill()
+            $sheet->setCellValue($col.'6', $header);
+            $sheet->getStyle($col.'6')->getFont()->setBold(true);
+            $sheet->getStyle($col.'6')->getFill()
                 ->setFillType(Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('185FA5');
-            $sheet->getStyle($col.$row)->getFont()->getColor()->setRGB('FFFFFF');
-            $sheet->getStyle($col.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle($col.'6')->getFont()->getColor()->setRGB('FFFFFF');
+            $sheet->getStyle($col.'6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $col++;
         }
 
@@ -211,43 +184,42 @@ class OperationsReportController extends Controller
         $dataRow = 7;
         foreach ($rows as $i => $r) {
             $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL);
-            $sheet->setCellValue('C'.$dataRow, $r->HouseBL ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $r->ConsigneeName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->ContainerNo ?? '-');
-            $sheet->setCellValue('F'.$dataRow, $r->CmdtTypeID == 1 ? 'LCL' : 'FCL');
-            $sheet->setCellValue('G'.$dataRow, $statusLabels[$r->Status] ?? '-');
-            $sheet->setCellValue('H'.$dataRow, $r->AgeDays);
-            $sheet->setCellValue('I'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C'.$dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('D'.$dataRow, $r->ContainerNos ?? '-');
+            $sheet->setCellValue('E'.$dataRow, $r->CmdtTypeID == 1 ? 'LCL' : 'FCL');
+            $sheet->setCellValue('F'.$dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('G'.$dataRow, $r->AgeDays);
+            $sheet->setCellValue('H'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
 
-            // Highlight overdue rows
-            if ($r->AgeDays > 7) {
-                $sheet->getStyle('H'.$dataRow)->getFont()->getColor()->setRGB('A32D2D');
-                $sheet->getStyle('H'.$dataRow)->getFont()->setBold(true);
+            if ($r->Status != 0 && $r->AgeDays > 7) {
+                $sheet->getStyle('G'.$dataRow)->getFont()->getColor()->setRGB('B91C1C');
+                $sheet->getStyle('G'.$dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
         }
 
         // ── Column widths ────────────────────────────────────────────────────
-        $widths = ['A' => 5, 'B' => 18, 'C' => 18, 'D' => 30, 'E' => 18, 'F' => 8, 'G' => 14, 'H' => 12, 'I' => 16];
+        $widths = ['A' => 5, 'B' => 20, 'C' => 30, 'D' => 28, 'E' => 8, 'F' => 14, 'G' => 12, 'H' => 18];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
         }
 
-        // ── Border on data ───────────────────────────────────────────────────
+        // ── Borders ──────────────────────────────────────────────────────────
         if ($dataRow > 7) {
-            $sheet->getStyle('A6:I'.($dataRow - 1))->getBorders()->getAllBorders()
-                ->setBorderStyle(Border::BORDER_THIN);
+            $sheet->getStyle('A6:H'.($dataRow - 1))->getBorders()
+                ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         }
 
-        $writer = new Xlsx($spreadsheet);
+        // ── Stream to browser ────────────────────────────────────────────────
         $filename = 'consignment-status-'.now()->format('Ymd-His').'.xlsx';
 
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment;filename="'.$filename.'"');
         header('Cache-Control: max-age=0');
 
+        $writer = new Xlsx($spreadsheet);
         $writer->save('php://output');
         exit;
     }
