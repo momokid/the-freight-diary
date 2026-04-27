@@ -430,11 +430,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [ReportIndexController::class, 'index'])
             ->name('index');
 
-        // Operations Reports
+        // REPLACE — operations group with all three reports
         Route::middleware('permission:OperationsReport')
             ->prefix('operations')
             ->name('operations.')
             ->group(function () {
+
+                // ── Consignment Status Summary ────────────────────────────────────
                 Route::get('/consignment-status', [OperationsReportController::class, 'consignmentStatus'])
                     ->name('consignment-status');
                 Route::get('/consignment-status/data', [OperationsReportController::class, 'consignmentStatusData'])
@@ -443,6 +445,8 @@ Route::middleware('auth')->group(function () {
                     ->name('consignment-status.print');
                 Route::get('/consignment-status/export', [OperationsReportController::class, 'consignmentStatusExport'])
                     ->name('consignment-status.export');
+
+                // ── Consignment Detail Report ─────────────────────────────────────
                 Route::get('/consignment-detail', [OperationsReportController::class, 'consignmentDetail'])
                     ->name('consignment-detail');
                 Route::get('/consignment-detail/print', [OperationsReportController::class, 'consignmentDetailPrint'])
@@ -450,6 +454,15 @@ Route::middleware('auth')->group(function () {
                 Route::get('/consignment-detail/export', [OperationsReportController::class, 'consignmentDetailExport'])
                     ->name('consignment-detail.export');
 
+                // ── Consignment Carrier Report ────────────────────────────────────
+                Route::get('/consignment-carrier', [OperationsReportController::class, 'consignmentCarrier'])
+                    ->name('consignment-carrier');
+                Route::get('/consignment-carrier/carriers', [OperationsReportController::class, 'carrierList'])
+                    ->name('consignment-carrier.carriers');
+                Route::get('/consignment-carrier/print', [OperationsReportController::class, 'consignmentCarrierPrint'])
+                    ->name('consignment-carrier.print');
+                Route::get('/consignment-carrier/export', [OperationsReportController::class, 'consignmentCarrierExport'])
+                    ->name('consignment-carrier.export');
             });
 
         // Client Reports

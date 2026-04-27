@@ -13,23 +13,24 @@
 
         <div style="display:flex; flex-wrap:wrap; gap:1.25rem; align-items:flex-start;">
 
-            {{-- ── Consignment Status Summary ── --}}
+            {{-- ── Card 1: Consignment Status Summary ── --}}
             <div class="card" style="padding:0; width:320px;">
                 <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
                     <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
-                        CONSIGNMENT SUMMARY REPORT
+                        CONSIGNMENT STATUS SUMMARY
                     </p>
                 </div>
                 <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem;">
-                    <input type="date" id="ss_date_from" class="form-input"> {{-- RENAMED: date_from → ss_date_from --}}
-                    <input type="date" id="ss_date_to" class="form-input"> {{-- RENAMED: date_to → ss_date_to --}}
-                    <select id="ss_status" class="form-input"> {{-- RENAMED: status_filter → ss_status --}}
+                    <input type="date" id="ss_date_from" class="form-input">
+                    <input type="date" id="ss_date_to" class="form-input">
+                    <select id="ss_status" class="form-input">
                         <option value="all">All Statuses</option>
                         <option value="1">Not Arrived</option>
                         <option value="2">Pending</option>
                         <option value="3">Gated Out</option>
                         <option value="0">Cleared</option>
                     </select>
+                    <p id="ss_error" style="display:none; font-size:0.75rem; color:#b91c1c; text-align:center;"></p>
                     <button onclick="window.viewConsignmentStatus()" class="btn-primary"
                         style="width:100%; margin-top:0.25rem;">
                         View Report
@@ -37,7 +38,7 @@
                 </div>
             </div>
 
-            {{-- ── Consignment Detail Report — NEW CARD ── --}}
+            {{-- ── Card 2: Consignment Detail Report ── --}}
             <div class="card" style="padding:0; width:320px;">
                 <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
                     <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
@@ -54,6 +55,7 @@
                         <option value="3">Gated Out</option>
                         <option value="0">Cleared</option>
                     </select>
+                    <p id="cd_error" style="display:none; font-size:0.75rem; color:#b91c1c; text-align:center;"></p>
                     <button onclick="window.viewConsignmentDetail()" class="btn-primary"
                         style="width:100%; margin-top:0.25rem;">
                         View Report
@@ -61,16 +63,35 @@
                 </div>
             </div>
 
-        </div> {{-- END of flex row --}}
-    </div>
+            {{-- ── Card 3: Consignment Carrier Report ── --}}
+            <div class="card" style="padding:0; width:320px;">
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                    <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
+                        CONSIGNMENT CARRIER REPORT
+                    </p>
+                </div>
+                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem;">
+                    <input type="date" id="cc_date_from" class="form-input" onchange="window.loadCarriers()">
+                    <input type="date" id="cc_date_to" class="form-input" onchange="window.loadCarriers()">
+                    <select id="cc_carrier" class="form-input">
+                        <option value="">Loading carriers...</option>
+                    </select>
+                    <p id="cc_error" style="display:none; font-size:0.75rem; color:#b91c1c; text-align:center;"></p>
+                    <button onclick="window.viewConsignmentCarrier()" class="btn-primary"
+                        style="width:100%; margin-top:0.25rem;">
+                        View Report
+                    </button>
+                </div>
+            </div>
 
-    </div>
+        </div>
     </div>
 
 @endsection
 
 @push('scripts')
     <script>
+        // ── Route config ─────────────────────────────────────────────────────────
         window.ConsignmentStatusReport = {
             printUrl: '{{ route('reports.operations.consignment-status.print') }}',
             exportUrl: '{{ route('reports.operations.consignment-status.export') }}',
@@ -81,44 +102,126 @@
             exportUrl: '{{ route('reports.operations.consignment-detail.export') }}',
         };
 
+        window.ConsignmentCarrierReport = {
+            printUrl: '{{ route('reports.operations.consignment-carrier.print') }}',
+            exportUrl: '{{ route('reports.operations.consignment-carrier.export') }}',
+            carriersUrl: '{{ route('reports.operations.consignment-carrier.carriers') }}',
+        };
+
+        // ── Card 1: Consignment Status Summary ───────────────────────────────────
         window.viewConsignmentStatus = function() {
             const dateFrom = document.getElementById('ss_date_from').value;
             const dateTo = document.getElementById('ss_date_to').value;
             const status = document.getElementById('ss_status').value;
 
+            const ssErr = document.getElementById('ss_error');
             if (!dateFrom || !dateTo) {
-                alert('Please select both Date From and Date To.');
+                ssErr.textContent = 'Please select both Date From and Date To.';
+                ssErr.style.display = 'block';
                 return;
             }
+            ssErr.style.display = 'none';
 
-            const url = window.ConsignmentStatusReport.printUrl + '?' +
+            window.open(
+                window.ConsignmentStatusReport.printUrl + '?' +
                 new URLSearchParams({
                     date_from: dateFrom,
                     date_to: dateTo,
                     status
-                });
-
-            window.open(url, '_blank');
+                }),
+                '_blank'
+            );
         };
 
+        // ── Card 2: Consignment Detail Report ────────────────────────────────────
         window.viewConsignmentDetail = function() {
             const dateFrom = document.getElementById('cd_date_from').value;
             const dateTo = document.getElementById('cd_date_to').value;
             const status = document.getElementById('cd_status').value;
 
+            const cdErr = document.getElementById('cd_error');
             if (!dateFrom || !dateTo) {
-                alert('Please select both Date From and Date To.');
+                cdErr.textContent = 'Please select both Date From and Date To.';
+                cdErr.style.display = 'block';
                 return;
             }
+            cdErr.style.display = 'none';
 
-            const url = window.ConsignmentDetailReport.printUrl + '?' +
+            window.open(
+                window.ConsignmentDetailReport.printUrl + '?' +
                 new URLSearchParams({
                     date_from: dateFrom,
                     date_to: dateTo,
                     status
-                });
+                }),
+                '_blank'
+            );
+        };
 
-            window.open(url, '_blank');
+        // ── Card 3: Consignment Carrier Report ───────────────────────────────────
+        window.viewConsignmentCarrier = function() {
+            const dateFrom = document.getElementById('cc_date_from').value;
+            const dateTo = document.getElementById('cc_date_to').value;
+            const carrierId = document.getElementById('cc_carrier').value;
+
+            const ccErr = document.getElementById('cc_error');
+            if (!dateFrom || !dateTo) {
+                ccErr.textContent = 'Please select both Date From and Date To.';
+                ccErr.style.display = 'block';
+                return;
+            }
+            ccErr.style.display = 'none';
+
+            const params = {
+                date_from: dateFrom,
+                date_to: dateTo
+            };
+            if (carrierId) params.carrier_id = carrierId;
+
+            window.open(
+                window.ConsignmentCarrierReport.printUrl + '?' +
+                new URLSearchParams(params),
+                '_blank'
+            );
+        };
+
+        // ── Load carriers based on selected dates ────────────────────────────────
+        // Fires when either date changes — only fetches if both dates are filled.
+        window.loadCarriers = function() {
+            const dateFrom = document.getElementById('cc_date_from').value;
+            const dateTo = document.getElementById('cc_date_to').value;
+            const sel = document.getElementById('cc_carrier');
+
+            if (!dateFrom || !dateTo) return;
+
+            sel.innerHTML = '<option value="">Loading...</option>';
+
+            fetch(window.ConsignmentCarrierReport.carriersUrl + '?' +
+                    new URLSearchParams({
+                        date_from: dateFrom,
+                        date_to: dateTo
+                    }), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                .then(res => res.json())
+                .then(data => {
+                    sel.innerHTML = '<option value="">All Carriers</option>';
+                    if (data.length === 0) {
+                        sel.innerHTML = '<option value="">No carriers found</option>';
+                        return;
+                    }
+                    data.forEach(function(c) {
+                        const opt = document.createElement('option');
+                        opt.value = c.CarrierID;
+                        opt.textContent = c.CarrierName;
+                        sel.appendChild(opt);
+                    });
+                })
+                .catch(function() {
+                    sel.innerHTML = '<option value="">All Carriers</option>';
+                });
         };
     </script>
 @endpush
