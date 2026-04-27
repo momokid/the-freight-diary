@@ -2,23 +2,22 @@
 
 namespace App\Http\Controllers\Reports;
 
-use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
-class OperationsReportController extends Controller
+class OperationsReportController extends BaseReportController
 {
-    // ── Shared query builder ─────────────────────────────────────────────────
-    // One place to maintain — used by Data (AJAX), Print and Export.
+    // ── Consignment Status — shared query builder ────────────────────────────
+    // Used by Data (AJAX), Print and Export — one place to maintain.
 
-    private function buildConsignmentStatusQuery(string $dateFrom, string $dateTo, string $status, string $branchID)
-    {
+    private function buildConsignmentStatusQuery(
+        string $dateFrom,
+        string $dateTo,
+        string $status,
+        string $branchID
+    ) {
         $query = DB::table('container_main as cm')
             ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
             ->leftJoin('container_details as cd', 'cm.ConsignmentID', '=', 'cd.ConsignmentID')
@@ -51,7 +50,78 @@ class OperationsReportController extends Controller
         return $query->orderBy('cm.Date', 'asc')->get();
     }
 
-    // ── Consignment Status Summary ───────────────────────────────────────────
+    // ── Consignment Detail — shared query builder ────────────────────────────
+    // Used by Print and Export — one place to maintain.
+
+    private function buildConsignmentDetailQuery(
+        string $dateFrom,
+        string $dateTo,
+        string $status,
+        string $branchID
+    ) {
+        $query = DB::table('container_main as cm')
+            ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
+            ->leftJoin('ship_carrier as sc', 'cm.CarrierID', '=', 'sc.CarrierID')
+            ->leftJoin('shipper_main as sm', 'cm.ShipperID', '=', 'sm.ShipperID')
+            ->leftJoin('pol as p', 'cm.POL_ID', '=', 'p.POL_ID')
+            ->leftJoin('container_details as cd', 'cm.ConsignmentID', '=', 'cd.ConsignmentID')
+            ->where('cm.BranchID', $branchID)
+            ->where('cm.Status', '!=', 9)
+            ->whereBetween('cm.Date', [$dateFrom, $dateTo])
+            ->groupBy(
+                'cm.ConsignmentID',
+                'cm.BL',
+                'cm.VesselName',
+                'cm.VoyageNo',
+                'sc.CarrierName',
+                'sm.ShipperName',
+                'co.FullName',
+                'p.POL_Name',
+                'cm.CmdtTypeID',
+                'cm.Status',
+                'cm.Date'
+            )
+            ->select([
+                'cm.ConsignmentID',
+                'cm.BL as MainBL',
+                'cm.VesselName',
+                'cm.VoyageNo',
+                'sc.CarrierName',
+                'sm.ShipperName',
+                'co.FullName as ConsigneeName',
+                'p.POL_Name',
+                'cm.CmdtTypeID',
+                'cm.Status',
+                'cm.Date',
+                DB::raw('DATEDIFF(CURDATE(), cm.Date) as AgeDays'),
+                DB::raw('GROUP_CONCAT(cd.ContainerNo ORDER BY cd.ContainerNo SEPARATOR ", ") as ContainerNos'),
+                DB::raw('(SELECT COUNT(*) FROM manifestation_breakdown WHERE ConsignmentID = cm.ConsignmentID) as HBLCount'),
+            ]);
+
+        if ($status !== 'all') {
+            $query->where('cm.Status', (int) $status);
+        }
+
+        return $query->orderBy('cm.Date', 'asc')->get();
+    }
+
+    // ── Shared summary builder ───────────────────────────────────────────────
+    // Counts rows by status — used by both Print and Data methods.
+
+    private function buildSummary($rows): array
+    {
+        return [
+            'not_arrived' => $rows->where('Status', 1)->count(),
+            'pending' => $rows->where('Status', 2)->count(),
+            'gated_out' => $rows->where('Status', 3)->count(),
+            'cleared' => $rows->where('Status', 0)->count(),
+            'total' => $rows->count(),
+        ];
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CONSIGNMENT STATUS SUMMARY
+    // ════════════════════════════════════════════════════════════════════════
 
     public function consignmentStatus()
     {
@@ -73,18 +143,10 @@ class OperationsReportController extends Controller
 
         $rows = $this->buildConsignmentStatusQuery($dateFrom, $dateTo, $status, $user->BranchID);
 
-        $summary = [
-            'not_arrived' => $rows->where('Status', 1)->count(),
-            'pending' => $rows->where('Status', 2)->count(),
-            'gated_out' => $rows->where('Status', 3)->count(),
-            'cleared' => $rows->where('Status', 0)->count(),
-            'total' => $rows->count(),
-        ];
-
         return response()->json([
             'success' => true,
             'rows' => $rows,
-            'summary' => $summary,
+            'summary' => $this->buildSummary($rows),
             'dateFrom' => \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
             'dateTo' => \Carbon\Carbon::parse($dateTo)->format('d M Y'),
         ]);
@@ -104,15 +166,7 @@ class OperationsReportController extends Controller
         $status = $request->input('status', 'all');
 
         $rows = $this->buildConsignmentStatusQuery($dateFrom, $dateTo, $status, $user->BranchID);
-
-        $summary = [
-            'not_arrived' => $rows->where('Status', 1)->count(),
-            'pending' => $rows->where('Status', 2)->count(),
-            'gated_out' => $rows->where('Status', 3)->count(),
-            'cleared' => $rows->where('Status', 0)->count(),
-            'total' => $rows->count(),
-        ];
-
+        $summary = $this->buildSummary($rows);
         $reportTitle = 'Consignment Status Summary';
         $dateFrom = \Carbon\Carbon::parse($dateFrom)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($dateTo)->format('d M Y');
@@ -136,52 +190,28 @@ class OperationsReportController extends Controller
         $dateFrom = $request->date_from;
         $dateTo = $request->date_to;
         $status = $request->input('status', 'all');
+        $statusLabels = [0 => 'Cleared', 1 => 'Not Arrived', 2 => 'Pending', 3 => 'Gated Out'];
 
         $rows = $this->buildConsignmentStatusQuery($dateFrom, $dateTo, $status, $user->BranchID);
-
-        $statusLabels = [0 => 'Cleared', 1 => 'Not Arrived', 2 => 'Pending', 3 => 'Gated Out'];
 
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Consignment Status');
 
-        // ── Company header ───────────────────────────────────────────────────
-        $company = app('company'); // already resolved by AppServiceProvider
-        $sheet->mergeCells('A1:H1');
-        $sheet->setCellValue('A1', $company?->InstName ?? 'Prime Survivors International Ltd');
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-        $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        // ── Header rows (company, title, period, generated-by) ──────────────
+        $this->buildExcelHeader(
+            $sheet,
+            'Consignment Status Summary',
+            \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
+            \Carbon\Carbon::parse($dateTo)->format('d M Y'),
+            'H'
+        );
 
-        $sheet->mergeCells('A2:H2');
-        $sheet->setCellValue('A2', 'Consignment Status Summary');
-        $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-        $sheet->mergeCells('A3:H3');
-        $sheet->setCellValue('A3', 'Period: '.\Carbon\Carbon::parse($dateFrom)->format('d M Y').' — '.\Carbon\Carbon::parse($dateTo)->format('d M Y'));
-        $sheet->getStyle('A3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-
-        $sheet->mergeCells('A4:H4');
-        $sheet->setCellValue('A4', 'Generated: '.now()->format('d M Y, h:i A').'  |  By: '.($user->FullName ?? $user->ID));
-        $sheet->getStyle('A4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('A4')->getFont()->setSize(9);
-
-        // ── Column headers ───────────────────────────────────────────────────
+        // ── Blue column header row ───────────────────────────────────────────
         $headers = ['#', 'Main BL', 'Consignee', 'Container No(s).', 'Type', 'Status', 'Age (Days)', 'Date Registered'];
-        $col = 'A';
-        foreach ($headers as $header) {
-            $sheet->setCellValue($col.'6', $header);
-            $sheet->getStyle($col.'6')->getFont()->setBold(true);
-            $sheet->getStyle($col.'6')->getFill()
-                ->setFillType(Fill::FILL_SOLID)
-                ->getStartColor()->setRGB('185FA5');
-            $sheet->getStyle($col.'6')->getFont()->getColor()->setRGB('FFFFFF');
-            $sheet->getStyle($col.'6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $col++;
-        }
+        $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
         // ── Data rows ────────────────────────────────────────────────────────
-        $dataRow = 7;
         foreach ($rows as $i => $r) {
             $sheet->setCellValue('A'.$dataRow, $i + 1);
             $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
@@ -192,6 +222,7 @@ class OperationsReportController extends Controller
             $sheet->setCellValue('G'.$dataRow, $r->AgeDays);
             $sheet->setCellValue('H'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
 
+            // Age warning — red bold if active and overdue
             if ($r->Status != 0 && $r->AgeDays > 7) {
                 $sheet->getStyle('G'.$dataRow)->getFont()->getColor()->setRGB('B91C1C');
                 $sheet->getStyle('G'.$dataRow)->getFont()->setBold(true);
@@ -206,21 +237,121 @@ class OperationsReportController extends Controller
             $sheet->getColumnDimension($c)->setWidth($w);
         }
 
-        // ── Borders ──────────────────────────────────────────────────────────
-        if ($dataRow > 7) {
-            $sheet->getStyle('A6:H'.($dataRow - 1))->getBorders()
-                ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        // ── Borders + stream ─────────────────────────────────────────────────
+        $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'H');
+        $this->streamExcel($spreadsheet, 'consignment-status-'.now()->format('Ymd-His').'.xlsx');
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CONSIGNMENT DETAIL REPORT
+    // ════════════════════════════════════════════════════════════════════════
+
+    public function consignmentDetail()
+    {
+        // Reuses the same filter page — both cards live there
+        return view('reports.operations.consignment-status');
+    }
+
+    public function consignmentDetailPrint(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+            'status' => ['nullable', 'in:0,1,2,3,all'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+        $status = $request->input('status', 'all');
+
+        $rows = $this->buildConsignmentDetailQuery($dateFrom, $dateTo, $status, $user->BranchID);
+        $summary = $this->buildSummary($rows);
+        $reportTitle = 'Consignment Detail Report';
+        $dateFrom = \Carbon\Carbon::parse($dateFrom)->format('d M Y');
+        $dateTo = \Carbon\Carbon::parse($dateTo)->format('d M Y');
+
+        // $company is auto-shared by AppServiceProvider — do NOT query it here.
+
+        return view('reports.operations.consignment-detail-print', compact(
+            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo'
+        ));
+    }
+
+    public function consignmentDetailExport(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+            'status' => ['nullable', 'in:0,1,2,3,all'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+        $status = $request->input('status', 'all');
+        $statusLabels = [0 => 'Cleared', 1 => 'Not Arrived', 2 => 'Pending', 3 => 'Gated Out'];
+
+        $rows = $this->buildConsignmentDetailQuery($dateFrom, $dateTo, $status, $user->BranchID);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Consignment Detail');
+
+        // ── Header rows (company, title, period, generated-by) ──────────────
+        $this->buildExcelHeader(
+            $sheet,
+            'Consignment Detail Report',
+            \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
+            \Carbon\Carbon::parse($dateTo)->format('d M Y'),
+            'L'
+        );
+
+        // ── Blue column header row ───────────────────────────────────────────
+        $headers = ['#', 'Main BL', 'Vessel / Voyage', 'Carrier', 'Shipper', 'Consignee / HBLs', 'POL', 'Container No(s).', 'Type', 'Status', 'Age (Days)', 'Date Registered'];
+        $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
+
+        // ── Data rows ────────────────────────────────────────────────────────
+        foreach ($rows as $i => $r) {
+            // LCL shows HBL count, FCL shows consignee name
+            $consigneeCell = $r->CmdtTypeID == 1
+                ? ($r->HBLCount.' HBL'.($r->HBLCount != 1 ? 's' : ''))
+                : ($r->ConsigneeName ?? '-');
+
+            $sheet->setCellValue('A'.$dataRow, $i + 1);
+            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C'.$dataRow, trim(($r->VesselName ?? '-').' / '.($r->VoyageNo ?? '-')));
+            $sheet->setCellValue('D'.$dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('E'.$dataRow, $r->ShipperName ?? '-');
+            $sheet->setCellValue('F'.$dataRow, $consigneeCell);
+            $sheet->setCellValue('G'.$dataRow, $r->POL_Name ?? '-');
+            $sheet->setCellValue('H'.$dataRow, $r->ContainerNos ?? '-');
+            $sheet->setCellValue('I'.$dataRow, $r->CmdtTypeID == 1 ? 'LCL' : 'FCL');
+            $sheet->setCellValue('J'.$dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('K'.$dataRow, $r->AgeDays);
+            $sheet->setCellValue('L'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+
+            // Age warning — red bold if active and overdue
+            if ($r->Status != 0 && $r->AgeDays > 7) {
+                $sheet->getStyle('K'.$dataRow)->getFont()->getColor()->setRGB('B91C1C');
+                $sheet->getStyle('K'.$dataRow)->getFont()->setBold(true);
+            }
+
+            $dataRow++;
         }
 
-        // ── Stream to browser ────────────────────────────────────────────────
-        $filename = 'consignment-status-'.now()->format('Ymd-His').'.xlsx';
+        // ── Column widths ────────────────────────────────────────────────────
+        $widths = [
+            'A' => 5,  'B' => 20, 'C' => 24, 'D' => 18,
+            'E' => 22, 'F' => 22, 'G' => 16, 'H' => 24,
+            'I' => 8,  'J' => 14, 'K' => 12, 'L' => 18,
+        ];
+        foreach ($widths as $c => $w) {
+            $sheet->getColumnDimension($c)->setWidth($w);
+        }
 
-        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment;filename="'.$filename.'"');
-        header('Cache-Control: max-age=0');
-
-        $writer = new Xlsx($spreadsheet);
-        $writer->save('php://output');
-        exit;
+        // ── Borders + stream ─────────────────────────────────────────────────
+        $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'L');
+        $this->streamExcel($spreadsheet, 'consignment-detail-'.now()->format('Ymd-His').'.xlsx');
     }
 }

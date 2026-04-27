@@ -24,6 +24,8 @@ use App\Http\Controllers\NonManifestInvoiceController;
 use App\Http\Controllers\OtherExpenditureController;
 use App\Http\Controllers\OtherInvoiceController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Reports\OperationsReportController;
+use App\Http\Controllers\Reports\ReportIndexController;
 use App\Http\Controllers\Settings\ActiveAccountController;
 use App\Http\Controllers\Settings\DisbursementAccountController;
 use App\Http\Controllers\Settings\HandlingChargeController;
@@ -34,12 +36,6 @@ use App\Http\Controllers\Settings\UserPrivilegeController;
 use App\Http\Controllers\WaybillController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Reports\ReportIndexController;
-use App\Http\Controllers\Reports\OperationsReportController;
-use App\Http\Controllers\Reports\ClientReportController;
-use App\Http\Controllers\Reports\DisbursementReportController;
-use App\Http\Controllers\Reports\AccountingReportController;
-use App\Http\Controllers\Reports\ManagementReportController;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -428,58 +424,65 @@ Route::middleware('auth')->group(function () {
     });
 
     // ── System Reports ──────────────────────────────────────────────────────────
-Route::prefix('reports')->name('reports.')->group(function () {
+    Route::prefix('reports')->name('reports.')->group(function () {
 
-    // Hub
-    Route::get('/', [ReportIndexController::class, 'index'])
-        ->name('index');
+        // Hub
+        Route::get('/', [ReportIndexController::class, 'index'])
+            ->name('index');
 
-    // Operations Reports
-    Route::middleware('permission:OperationsReport')
-        ->prefix('operations')
-        ->name('operations.')
-        ->group(function () {
-            Route::get('/consignment-status', [OperationsReportController::class, 'consignmentStatus'])
-                ->name('consignment-status');
-            Route::get('/consignment-status/data', [OperationsReportController::class, 'consignmentStatusData'])
-                ->name('consignment-status.data');
-            Route::get('/consignment-status/print', [OperationsReportController::class, 'consignmentStatusPrint'])
-                ->name('consignment-status.print');
-            Route::get('/consignment-status/export', [OperationsReportController::class, 'consignmentStatusExport'])
-                ->name('consignment-status.export');
-        });
+        // Operations Reports
+        Route::middleware('permission:OperationsReport')
+            ->prefix('operations')
+            ->name('operations.')
+            ->group(function () {
+                Route::get('/consignment-status', [OperationsReportController::class, 'consignmentStatus'])
+                    ->name('consignment-status');
+                Route::get('/consignment-status/data', [OperationsReportController::class, 'consignmentStatusData'])
+                    ->name('consignment-status.data');
+                Route::get('/consignment-status/print', [OperationsReportController::class, 'consignmentStatusPrint'])
+                    ->name('consignment-status.print');
+                Route::get('/consignment-status/export', [OperationsReportController::class, 'consignmentStatusExport'])
+                    ->name('consignment-status.export');
+                Route::get('/consignment-detail', [OperationsReportController::class, 'consignmentDetail'])
+                    ->name('consignment-detail');
+                Route::get('/consignment-detail/print', [OperationsReportController::class, 'consignmentDetailPrint'])
+                    ->name('consignment-detail.print');
+                Route::get('/consignment-detail/export', [OperationsReportController::class, 'consignmentDetailExport'])
+                    ->name('consignment-detail.export');
 
-    // Client Reports
-    Route::middleware('permission:ClientReport')
-        ->prefix('client')
-        ->name('client.')
-        ->group(function () {
-            // reports added here as built
-        });
+            });
 
-    // Disbursement Reports
-    Route::middleware('permission:DisbursementReport')
-        ->prefix('disbursement')
-        ->name('disbursement.')
-        ->group(function () {
-            // reports added here as built
-        });
+        // Client Reports
+        Route::middleware('permission:ClientReport')
+            ->prefix('client')
+            ->name('client.')
+            ->group(function () {
+                // reports added here as built
+            });
 
-    // Accounting Reports
-    Route::middleware('permission:AccountingReport')
-        ->prefix('accounting')
-        ->name('accounting.')
-        ->group(function () {
-            // reports added here as built
-        });
+        // Disbursement Reports
+        Route::middleware('permission:DisbursementReport')
+            ->prefix('disbursement')
+            ->name('disbursement.')
+            ->group(function () {
+                // reports added here as built
+            });
 
-    // Management Reports
-    Route::middleware('permission:ManagementReport')
-        ->prefix('management')
-        ->name('management.')
-        ->group(function () {
-            // reports added here as built
-        });
-});
+        // Accounting Reports
+        Route::middleware('permission:AccountingReport')
+            ->prefix('accounting')
+            ->name('accounting.')
+            ->group(function () {
+                // reports added here as built
+            });
+
+        // Management Reports
+        Route::middleware('permission:ManagementReport')
+            ->prefix('management')
+            ->name('management.')
+            ->group(function () {
+                // reports added here as built
+            });
+    });
 
 });
