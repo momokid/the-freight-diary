@@ -1339,4 +1339,221 @@ class OperationsReportController extends BaseReportController
             'consignment-volume-'.now()->format('Ymd-His').'.xlsx'
         );
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // GATE-OUT REGISTER
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Shared query builder ─────────────────────────────────────────────────
+    // Filters by GateOutDate range.
+    // Status filter: 'all', 'gatedout' (no return date), 'returned' (has return date)
+
+    private function buildGateOutRegisterQuery(
+        string $dateFrom,
+        string $dateTo,
+        string $status,
+        string $branchID
+    ) {
+        $query = DB::table('container_details as cd')
+            ->join('container_main as cm', function ($join) {
+                $join->on('cd.ConsignmentID', '=', 'cm.ConsignmentID')
+                    ->on('cd.BL', '=', 'cm.BL');
+            })
+            ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
+            ->leftJoin('ship_carrier as sc', 'cm.CarrierID', '=', 'sc.CarrierID')
+            ->where('cm.BranchID', $branchID)
+            ->where('cm.Status', '!=', 9)
+            ->whereNotNull('cd.GateOutDate')
+            ->where('cd.GateOutDate', '!=', '0000-00-00')
+            ->whereBetween('cd.GateOutDate', [$dateFrom, $dateTo])
+            ->select([
+                'cm.ConsignmentID',
+                'cm.BL as MainBL',
+                'cm.ETA',
+                'cd.ContainerNo',
+                'cd.ContainerSize',
+                'cd.GateOutDate',
+                'cd.ReturnDate',
+                'co.FullName as ConsigneeName',
+                'sc.CarrierName',
+                'cm.Status',
+                // Demurrage: days from GateOut to ReturnDate or today
+                DB::raw('
+                CASE
+                    WHEN cd.ReturnDate IS NOT NULL AND cd.ReturnDate != "0000-00-00"
+                    THEN DATEDIFF(cd.ReturnDate, cd.GateOutDate)
+                    ELSE DATEDIFF(CURDATE(), cd.GateOutDate)
+                END as DemurrageDays
+            '),
+                DB::raw('
+                CASE
+                    WHEN cd.ReturnDate IS NOT NULL AND cd.ReturnDate != "0000-00-00"
+                    THEN "returned"
+                    ELSE "gatedout"
+                END as ReturnStatus
+            '),
+            ]);
+
+        // Status filter
+        if ($status === 'gatedout') {
+            // Not yet returned
+            $query->where(function ($q) {
+                $q->whereNull('cd.ReturnDate')
+                    ->orWhere('cd.ReturnDate', '0000-00-00');
+            });
+        } elseif ($status === 'returned') {
+            // Already returned
+            $query->whereNotNull('cd.ReturnDate')
+                ->where('cd.ReturnDate', '!=', '0000-00-00');
+        }
+
+        return $query->orderBy('cd.GateOutDate', 'desc')->get();
+    }
+
+    // ── Gate-out summary builder ─────────────────────────────────────────────
+    private function buildGateOutSummary($rows): array
+    {
+        $gatedOut = $rows->where('ReturnStatus', 'gatedout')->count();
+        $returned = $rows->where('ReturnStatus', 'returned')->count();
+
+        return [
+            'total' => $rows->count(),
+            'gated_out' => $gatedOut,
+            'returned' => $returned,
+            'total_demurrage_days' => $rows->sum('DemurrageDays'),
+        ];
+    }
+
+    // ── Filter page ──────────────────────────────────────────────────────────
+    public function gateOutRegister()
+    {
+        return view('reports.operations.consignment-status');
+    }
+
+    // ── Print view ───────────────────────────────────────────────────────────
+    public function gateOutRegisterPrint(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+            'status' => ['nullable', 'in:all,gatedout,returned'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+        $status = $request->input('status', 'all');
+
+        $rows = $this->buildGateOutRegisterQuery($dateFrom, $dateTo, $status, $user->BranchID);
+        $summary = $this->buildGateOutSummary($rows);
+
+        $reportTitle = 'Gate-Out Register';
+        $dateFrom = \Carbon\Carbon::parse($dateFrom)->format('d M Y');
+        $dateTo = \Carbon\Carbon::parse($dateTo)->format('d M Y');
+
+        // $company is auto-shared by AppServiceProvider — do NOT query it here.
+
+        return view('reports.operations.gate-out-register-print', compact(
+            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo'
+        ));
+    }
+
+    // ── Export ───────────────────────────────────────────────────────────────
+    public function gateOutRegisterExport(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+            'status' => ['nullable', 'in:all,gatedout,returned'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+        $status = $request->input('status', 'all');
+
+        $rows = $this->buildGateOutRegisterQuery($dateFrom, $dateTo, $status, $user->BranchID);
+        $summary = $this->buildGateOutSummary($rows);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Gate-Out Register');
+
+        // ── Header rows ──────────────────────────────────────────────────────
+        $this->buildExcelHeader(
+            $sheet,
+            'Gate-Out Register',
+            \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
+            \Carbon\Carbon::parse($dateTo)->format('d M Y'),
+            'K'
+        );
+
+        // ── Blue column header row ───────────────────────────────────────────
+        $headers = [
+            '#', 'Main BL', 'ETA', 'Container No', 'Size',
+            'Consignee', 'Carrier', 'Gate Out Date',
+            'Return Date', 'Demurrage (Days)', 'Status',
+        ];
+        $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
+
+        // ── Data rows ────────────────────────────────────────────────────────
+        foreach ($rows as $i => $r) {
+            $days = (int) $r->DemurrageDays;
+
+            $sheet->setCellValue('A'.$dataRow, $i + 1);
+            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C'.$dataRow, $r->ETA
+                ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
+            $sheet->setCellValue('D'.$dataRow, $r->ContainerNo ?? '-');
+            $sheet->setCellValue('E'.$dataRow, $r->ContainerSize ?? '-');
+            $sheet->setCellValue('F'.$dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('G'.$dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('H'.$dataRow, $r->GateOutDate
+                ? \Carbon\Carbon::parse($r->GateOutDate)->format('d M Y') : '-');
+            $sheet->setCellValue('I'.$dataRow, ($r->ReturnDate && $r->ReturnDate !== '0000-00-00')
+                ? \Carbon\Carbon::parse($r->ReturnDate)->format('d M Y') : '—');
+            $sheet->setCellValue('J'.$dataRow, $days);
+            $sheet->setCellValue('K'.$dataRow, $r->ReturnStatus === 'returned' ? 'Returned' : 'Gated Out');
+
+            // Demurrage colour coding
+            if ($days > 7) {
+                $sheet->getStyle('J'.$dataRow)->getFont()->getColor()->setRGB('b91c1c');
+                $sheet->getStyle('J'.$dataRow)->getFont()->setBold(true);
+            } elseif ($days >= 1) {
+                $sheet->getStyle('J'.$dataRow)->getFont()->getColor()->setRGB('b45309');
+            } else {
+                $sheet->getStyle('J'.$dataRow)->getFont()->getColor()->setRGB('6b7280');
+            }
+
+            $dataRow++;
+        }
+
+        // ── Summary totals row ───────────────────────────────────────────────
+        $sheet->setCellValue('A'.$dataRow, 'TOTALS');
+        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('F'.$dataRow, 'Gated Out: '.$summary['gated_out'].'  |  Returned: '.$summary['returned']);
+        $sheet->getStyle('F'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('J'.$dataRow, $summary['total_demurrage_days'].' days total');
+        $sheet->getStyle('J'.$dataRow)->getFont()->setBold(true);
+        $sheet->getStyle('A'.$dataRow.':K'.$dataRow)
+            ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('f3f4f6');
+
+        // ── Column widths ────────────────────────────────────────────────────
+        $widths = [
+            'A' => 5,  'B' => 20, 'C' => 14, 'D' => 18,
+            'E' => 10, 'F' => 26, 'G' => 18, 'H' => 16,
+            'I' => 16, 'J' => 16, 'K' => 14,
+        ];
+        foreach ($widths as $c => $w) {
+            $sheet->getColumnDimension($c)->setWidth($w);
+        }
+
+        // ── Borders + stream ─────────────────────────────────────────────────
+        $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'K');
+        $this->streamExcel(
+            $spreadsheet,
+            'gate-out-register-'.now()->format('Ymd-His').'.xlsx'
+        );
+    }
 }

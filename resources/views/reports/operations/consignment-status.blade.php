@@ -150,6 +150,30 @@
                 </div>
             </div>
 
+            {{-- ── Card 7: Gate-Out Register ── --}}
+            <div class="card" style="padding:0;">
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                    <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
+                        GATE-OUT REGISTER
+                    </p>
+                </div>
+                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem;">
+                    <input type="date" id="go_date_from" class="form-input">
+                    <input type="date" id="go_date_to" class="form-input">
+                    <select id="go_status" class="form-input">
+                        <option value="all">All</option>
+                        <option value="gatedout">Gated Out (Outstanding)</option>
+                        <option value="returned">Returned</option>
+                    </select>
+                    <p id="go_error" style="display:none; font-size:0.75rem; color:#b91c1c; text-align:center;"></p>
+                    <button onclick="window.viewGateOutRegister()" class="btn-primary"
+                        style="width:100%; margin-top:0.25rem;">
+                        View Report
+                    </button>
+                </div>
+            </div>
+
+
         </div>
     </div>
 
@@ -337,6 +361,32 @@
                 new URLSearchParams({
                     date_from: dateFrom,
                     date_to: dateTo
+                }),
+                '_blank'
+            );
+        };
+
+        // ── Card 7: Gate-Out Register ─────────────────────────────────────────────
+        window.viewGateOutRegister = function() {
+            const dateFrom = document.getElementById('go_date_from').value;
+            const dateTo = document.getElementById('go_date_to').value;
+            const status = document.getElementById('go_status').value;
+            const goErr = document.getElementById('go_error');
+
+            if (!dateFrom || !dateTo) {
+                goErr.textContent = 'Please select both Date From and Date To.';
+                goErr.style.display = 'block';
+                return;
+            }
+
+            goErr.style.display = 'none';
+
+            window.open(
+                window.GateOutRegisterReport.printUrl + '?' +
+                new URLSearchParams({
+                    date_from: dateFrom,
+                    date_to: dateTo,
+                    status
                 }),
                 '_blank'
             );

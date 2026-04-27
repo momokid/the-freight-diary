@@ -488,6 +488,14 @@ Route::middleware('auth')->group(function () {
                 Route::get('/consignment-volume/export', [OperationsReportController::class, 'consignmentVolumeExport'])
                     ->name('consignment-volume.export');
 
+                // ── Gate-Out Register ─────────────────────────────────────────────────────
+                Route::get('/gate-out-register', [OperationsReportController::class, 'gateOutRegister'])
+                    ->name('gate-out-register');
+                Route::get('/gate-out-register/print', [OperationsReportController::class, 'gateOutRegisterPrint'])
+                    ->name('gate-out-register.print');
+                Route::get('/gate-out-register/export', [OperationsReportController::class, 'gateOutRegisterExport'])
+                    ->name('gate-out-register.export');
+
                 // ── Consignment Detail Modal (AJAX) ──────────────────────────────────────
                 Route::get('/consignment-modal/{consignmentId}', [OperationsReportController::class, 'consignmentModal'])
                     ->name('consignment-modal');
