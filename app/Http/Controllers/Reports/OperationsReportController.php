@@ -1132,4 +1132,211 @@ class OperationsReportController extends BaseReportController
             'totalRevenue' => $totalRevenue,
         ]);
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CONSIGNMENT VOLUME REPORT
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Shared query builder ─────────────────────────────────────────────────
+    // Returns one row per month within the selected period.
+    // % change is calculated in PHP after the query.
+
+    private function buildConsignmentVolumeQuery(
+        string $dateFrom,
+        string $dateTo,
+        string $branchID
+    ) {
+        $rows = DB::table('container_main')
+            ->where('BranchID', $branchID)
+            ->where('Status', '!=', 9)
+            ->whereBetween('Date', [$dateFrom, $dateTo])
+            ->groupBy(
+                DB::raw('YEAR(Date)'),
+                DB::raw('MONTH(Date)')
+            )
+            ->orderBy(DB::raw('YEAR(Date)'), 'asc')
+            ->orderBy(DB::raw('MONTH(Date)'), 'asc')
+            ->get([
+                DB::raw('YEAR(Date) as Year'),
+                DB::raw('MONTH(Date) as MonthNum'),
+                DB::raw('DATE_FORMAT(Date, "%M %Y") as MonthLabel'),
+                DB::raw('COUNT(*) as Total'),
+                DB::raw('SUM(CASE WHEN CmdtTypeID = 1 THEN 1 ELSE 0 END) as LCL'),
+                DB::raw('SUM(CASE WHEN CmdtTypeID != 1 THEN 1 ELSE 0 END) as FCL'),
+                DB::raw('COUNT(DISTINCT ConsigneeID) as UniqueConsignees'),
+            ]);
+
+        // Calculate % change vs previous month
+        return $rows->map(function ($row, $index) use ($rows) {
+            $prev = $index > 0 ? $rows[$index - 1] : null;
+
+            $row->PctChange = null;
+            if ($prev && $prev->Total > 0) {
+                $row->PctChange = round((($row->Total - $prev->Total) / $prev->Total) * 100, 1);
+            }
+
+            return $row;
+        });
+    }
+
+    // ── Period totals ────────────────────────────────────────────────────────
+    private function buildVolumePeriodTotals($rows, string $dateFrom, string $dateTo, string $branchID): array
+    {
+        $totals = DB::table('container_main')
+            ->where('BranchID', $branchID)
+            ->where('Status', '!=', 9)
+            ->whereBetween('Date', [$dateFrom, $dateTo])
+            ->selectRaw('
+            COUNT(*) as Total,
+            SUM(CASE WHEN CmdtTypeID = 1 THEN 1 ELSE 0 END) as LCL,
+            SUM(CASE WHEN CmdtTypeID != 1 THEN 1 ELSE 0 END) as FCL,
+            COUNT(DISTINCT ConsigneeID) as UniqueConsignees
+        ')
+            ->first();
+
+        // Best and worst month
+        $best = $rows->sortByDesc('Total')->first();
+        $worst = $rows->sortBy('Total')->first();
+
+        return [
+            'total' => $totals->Total ?? 0,
+            'lcl' => $totals->LCL ?? 0,
+            'fcl' => $totals->FCL ?? 0,
+            'unique_consignees' => $totals->UniqueConsignees ?? 0,
+            'best_month' => $best?->MonthLabel ?? '—',
+            'best_month_count' => $best?->Total ?? 0,
+            'worst_month' => $worst?->MonthLabel ?? '—',
+            'worst_month_count' => $worst?->Total ?? 0,
+            'months_count' => $rows->count(),
+        ];
+    }
+
+    // ── Filter page ──────────────────────────────────────────────────────────
+    public function consignmentVolume()
+    {
+        return view('reports.operations.consignment-status');
+    }
+
+    // ── Print view ───────────────────────────────────────────────────────────
+    public function consignmentVolumePrint(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+
+        $rows = $this->buildConsignmentVolumeQuery($dateFrom, $dateTo, $user->BranchID);
+        $periodTotals = $this->buildVolumePeriodTotals($rows, $dateFrom, $dateTo, $user->BranchID);
+
+        $reportTitle = 'Consignment Volume Report';
+        $dateFrom = \Carbon\Carbon::parse($dateFrom)->format('d M Y');
+        $dateTo = \Carbon\Carbon::parse($dateTo)->format('d M Y');
+
+        // $company is auto-shared by AppServiceProvider — do NOT query it here.
+
+        return view('reports.operations.consignment-volume-print', compact(
+            'rows', 'periodTotals', 'reportTitle', 'dateFrom', 'dateTo'
+        ));
+    }
+
+    // ── Export ───────────────────────────────────────────────────────────────
+    public function consignmentVolumeExport(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+
+        $rows = $this->buildConsignmentVolumeQuery($dateFrom, $dateTo, $user->BranchID);
+        $periodTotals = $this->buildVolumePeriodTotals($rows, $dateFrom, $dateTo, $user->BranchID);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Consignment Volume');
+
+        // ── Header rows ──────────────────────────────────────────────────────
+        $this->buildExcelHeader(
+            $sheet,
+            'Consignment Volume Report',
+            \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
+            \Carbon\Carbon::parse($dateTo)->format('d M Y'),
+            'F'
+        );
+
+        // ── Blue column header row ───────────────────────────────────────────
+        $headers = ['Month', 'Total', 'LCL', 'FCL', 'Unique Consignees', '% Change'];
+        $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
+
+        // ── Data rows ────────────────────────────────────────────────────────
+        foreach ($rows as $r) {
+            $sheet->setCellValue('A'.$dataRow, $r->MonthLabel);
+            $sheet->setCellValue('B'.$dataRow, $r->Total);
+            $sheet->setCellValue('C'.$dataRow, $r->LCL);
+            $sheet->setCellValue('D'.$dataRow, $r->FCL);
+            $sheet->setCellValue('E'.$dataRow, $r->UniqueConsignees);
+            $sheet->setCellValue('F'.$dataRow, $r->PctChange !== null
+                ? ($r->PctChange > 0 ? '+' : '').$r->PctChange.'%'
+                : '—');
+
+            // % change colour coding
+            if ($r->PctChange !== null) {
+                $hex = $r->PctChange > 0 ? '15803d'
+                     : ($r->PctChange < 0 ? 'b91c1c' : '6b7280');
+                $sheet->getStyle('F'.$dataRow)->getFont()->getColor()->setRGB($hex);
+                if ($r->PctChange != 0) {
+                    $sheet->getStyle('F'.$dataRow)->getFont()->setBold(true);
+                }
+            }
+
+            $dataRow++;
+        }
+
+        // ── Period totals row ────────────────────────────────────────────────
+        $sheet->setCellValue('A'.$dataRow, 'PERIOD TOTAL');
+        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('B'.$dataRow, $periodTotals['total']);
+        $sheet->getStyle('B'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('C'.$dataRow, $periodTotals['lcl']);
+        $sheet->getStyle('C'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('D'.$dataRow, $periodTotals['fcl']);
+        $sheet->getStyle('D'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('E'.$dataRow, $periodTotals['unique_consignees']);
+        $sheet->getStyle('E'.$dataRow)->getFont()->setBold(true);
+        $sheet->getStyle('A'.$dataRow.':F'.$dataRow)
+            ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('f3f4f6');
+
+        $dataRow++;
+
+        // ── Best / worst month rows ──────────────────────────────────────────
+        $sheet->setCellValue('A'.$dataRow, 'Best Month');
+        $sheet->setCellValue('B'.$dataRow, $periodTotals['best_month'].' ('.$periodTotals['best_month_count'].')');
+        $sheet->getStyle('B'.$dataRow)->getFont()->getColor()->setRGB('15803d');
+        $dataRow++;
+
+        $sheet->setCellValue('A'.$dataRow, 'Worst Month');
+        $sheet->setCellValue('B'.$dataRow, $periodTotals['worst_month'].' ('.$periodTotals['worst_month_count'].')');
+        $sheet->getStyle('B'.$dataRow)->getFont()->getColor()->setRGB('b91c1c');
+
+        // ── Column widths ────────────────────────────────────────────────────
+        $widths = ['A' => 20, 'B' => 14, 'C' => 14, 'D' => 14, 'E' => 20, 'F' => 14];
+        foreach ($widths as $c => $w) {
+            $sheet->getColumnDimension($c)->setWidth($w);
+        }
+
+        // ── Borders + stream ─────────────────────────────────────────────────
+        $this->buildExcelBorders($sheet, 6, $dataRow - 3, 'F');
+        $this->streamExcel(
+            $spreadsheet,
+            'consignment-volume-'.now()->format('Ymd-His').'.xlsx'
+        );
+    }
 }

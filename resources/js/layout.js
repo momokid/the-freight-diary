@@ -60,11 +60,28 @@ function closeSidebar() {
 }
 
 // ── Submenus ──
+// ── Submenus ──
+// Opening a submenu closes all others — only one open at a time.
 function toggleSubmenu(key) {
     const submenu = document.getElementById("submenu-" + key);
     const arrow = document.getElementById("arrow-" + key);
     if (!submenu) return;
+
     const isOpen = submenu.classList.contains("open");
+
+    // Close all other open submenus first
+    document.querySelectorAll(".submenu.open").forEach(function (el) {
+        if (el.id !== "submenu-" + key) {
+            el.classList.remove("open");
+            el.classList.add("closed");
+            // Reset the arrow for the closed submenu
+            const otherKey = el.id.replace("submenu-", "");
+            const otherArrow = document.getElementById("arrow-" + otherKey);
+            if (otherArrow) otherArrow.style.transform = "";
+        }
+    });
+
+    // Toggle the clicked submenu
     submenu.classList.toggle("open", !isOpen);
     submenu.classList.toggle("closed", isOpen);
     if (arrow) arrow.style.transform = isOpen ? "" : "rotate(180deg)";

@@ -480,9 +480,18 @@ Route::middleware('auth')->group(function () {
                 Route::get('/pending-clearance/export', [OperationsReportController::class, 'pendingClearanceExport'])
                     ->name('pending-clearance.export');
 
+                // ── Consignment Volume Report ─────────────────────────────────────────────
+                Route::get('/consignment-volume', [OperationsReportController::class, 'consignmentVolume'])
+                    ->name('consignment-volume');
+                Route::get('/consignment-volume/print', [OperationsReportController::class, 'consignmentVolumePrint'])
+                    ->name('consignment-volume.print');
+                Route::get('/consignment-volume/export', [OperationsReportController::class, 'consignmentVolumeExport'])
+                    ->name('consignment-volume.export');
+
                 // ── Consignment Detail Modal (AJAX) ──────────────────────────────────────
                 Route::get('/consignment-modal/{consignmentId}', [OperationsReportController::class, 'consignmentModal'])
                     ->name('consignment-modal');
+
             });
 
         // Client Reports

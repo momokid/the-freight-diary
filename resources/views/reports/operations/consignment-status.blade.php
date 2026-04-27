@@ -132,6 +132,24 @@
                 </div>
             </div>
 
+            {{-- ── Card 6: Consignment Volume Report ── --}}
+            <div class="card" style="padding:0;">
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                    <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
+                        CONSIGNMENT VOLUME REPORT
+                    </p>
+                </div>
+                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem;">
+                    <input type="date" id="cv_date_from" class="form-input">
+                    <input type="date" id="cv_date_to" class="form-input">
+                    <p id="cv_error" style="display:none; font-size:0.75rem; color:#b91c1c; text-align:center;"></p>
+                    <button onclick="window.viewConsignmentVolume()" class="btn-primary"
+                        style="width:100%; margin-top:0.25rem;">
+                        View Report
+                    </button>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -164,6 +182,11 @@
         window.PendingClearanceReport = {
             printUrl: '{{ route('reports.operations.pending-clearance.print') }}',
             exportUrl: '{{ route('reports.operations.pending-clearance.export') }}',
+        };
+
+        window.ConsignmentVolumeReport = {
+            printUrl: '{{ route('reports.operations.consignment-volume.print') }}',
+            exportUrl: '{{ route('reports.operations.consignment-volume.export') }}',
         };
 
         // ── Card 1: Consignment Status Summary ───────────────────────────────────
@@ -290,6 +313,30 @@
                     date_from: dateFrom,
                     date_to: dateTo,
                     status
+                }),
+                '_blank'
+            );
+        };
+
+        // ── Card 6: Consignment Volume Report ────────────────────────────────────
+        window.viewConsignmentVolume = function() {
+            const dateFrom = document.getElementById('cv_date_from').value;
+            const dateTo = document.getElementById('cv_date_to').value;
+            const cvErr = document.getElementById('cv_error');
+
+            if (!dateFrom || !dateTo) {
+                cvErr.textContent = 'Please select both Date From and Date To.';
+                cvErr.style.display = 'block';
+                return;
+            }
+
+            cvErr.style.display = 'none';
+
+            window.open(
+                window.ConsignmentVolumeReport.printUrl + '?' +
+                new URLSearchParams({
+                    date_from: dateFrom,
+                    date_to: dateTo
                 }),
                 '_blank'
             );
