@@ -173,6 +173,27 @@
                 </div>
             </div>
 
+            {{-- ── Card 8: Clearance Performance Report ── --}}
+            <div class="card" style="padding:0;">
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                    <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
+                        CLEARANCE PERFORMANCE REPORT
+                    </p>
+                </div>
+                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem;">
+                    <input type="date" id="cp_date_from" class="form-input"
+                        onchange="window.loadClearanceCarriers()">
+                    <input type="date" id="cp_date_to" class="form-input" onchange="window.loadClearanceCarriers()">
+                    <select id="cp_carrier" class="form-input">
+                        <option value="">All Carriers</option>
+                    </select>
+                    <p id="cp_error" style="display:none; font-size:0.75rem; color:#b91c1c; text-align:center;"></p>
+                    <button onclick="window.viewClearancePerformance()" class="btn-primary"
+                        style="width:100%; margin-top:0.25rem;">
+                        View Report
+                    </button>
+                </div>
+            </div>
 
         </div>
     </div>
@@ -213,6 +234,16 @@
             exportUrl: '{{ route('reports.operations.consignment-volume.export') }}',
         };
 
+        window.GateOutRegisterReport = {
+            printUrl: '{{ route('reports.operations.gate-out-register.print') }}',
+            exportUrl: '{{ route('reports.operations.gate-out-register.export') }}',
+        };
+
+        window.ClearancePerformanceReport = {
+            printUrl: '{{ route('reports.operations.clearance-performance.print') }}',
+            exportUrl: '{{ route('reports.operations.clearance-performance.export') }}',
+            carriersUrl: '{{ route('reports.operations.consignment-carrier.carriers') }}',
+        };
         // ── Card 1: Consignment Status Summary ───────────────────────────────────
         window.viewConsignmentStatus = function() {
             const dateFrom = document.getElementById('ss_date_from').value;
@@ -391,6 +422,74 @@
                 '_blank'
             );
         };
+
+        // ── Card 8: Clearance Performance Report ──────────────────────────────────
+        window.viewClearancePerformance = function() {
+            const dateFrom = document.getElementById('cp_date_from').value;
+            const dateTo = document.getElementById('cp_date_to').value;
+            const carrierId = document.getElementById('cp_carrier').value;
+            const cpErr = document.getElementById('cp_error');
+
+            if (!dateFrom || !dateTo) {
+                cpErr.textContent = 'Please select both Date From and Date To.';
+                cpErr.style.display = 'block';
+                return;
+            }
+
+            cpErr.style.display = 'none';
+
+            const params = {
+                date_from: dateFrom,
+                date_to: dateTo
+            };
+            if (carrierId) params.carrier_id = carrierId;
+
+            window.open(
+                window.ClearancePerformanceReport.printUrl + '?' +
+                new URLSearchParams(params),
+                '_blank'
+            );
+        };
+
+        // Loads carriers filtered by selected date range — reuses carrierList endpoint
+        window.loadClearanceCarriers = function() {
+            const dateFrom = document.getElementById('cp_date_from').value;
+            const dateTo = document.getElementById('cp_date_to').value;
+            const sel = document.getElementById('cp_carrier');
+
+            if (!dateFrom || !dateTo) return;
+
+            sel.innerHTML = '<option value="">Loading...</option>';
+
+            fetch(window.ClearancePerformanceReport.carriersUrl + '?' +
+                    new URLSearchParams({
+                        date_from: dateFrom,
+                        date_to: dateTo
+                    }), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                .then(res => res.json())
+                .then(data => {
+                    sel.innerHTML = '<option value="">All Carriers</option>';
+                    if (data.length === 0) {
+                        sel.innerHTML = '<option value="">No carriers found</option>';
+                        return;
+                    }
+                    data.forEach(function(c) {
+                        const opt = document.createElement('option');
+                        opt.value = c.CarrierID;
+                        opt.textContent = c.CarrierName;
+                        sel.appendChild(opt);
+                    });
+                })
+                .catch(function() {
+                    sel.innerHTML = '<option value="">All Carriers</option>';
+                });
+        };
+
+
 
         // ── Load carriers based on selected dates ────────────────────────────────
         // Fires when either date changes — only fetches if both dates are filled.

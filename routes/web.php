@@ -496,6 +496,14 @@ Route::middleware('auth')->group(function () {
                 Route::get('/gate-out-register/export', [OperationsReportController::class, 'gateOutRegisterExport'])
                     ->name('gate-out-register.export');
 
+                // ── Clearance Performance Report ──────────────────────────────────────────
+                Route::get('/clearance-performance', [OperationsReportController::class, 'clearancePerformance'])
+                    ->name('clearance-performance');
+                Route::get('/clearance-performance/print', [OperationsReportController::class, 'clearancePerformancePrint'])
+                    ->name('clearance-performance.print');
+                Route::get('/clearance-performance/export', [OperationsReportController::class, 'clearancePerformanceExport'])
+                    ->name('clearance-performance.export');
+
                 // ── Consignment Detail Modal (AJAX) ──────────────────────────────────────
                 Route::get('/consignment-modal/{consignmentId}', [OperationsReportController::class, 'consignmentModal'])
                     ->name('consignment-modal');

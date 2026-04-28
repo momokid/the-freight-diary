@@ -1556,4 +1556,272 @@ class OperationsReportController extends BaseReportController
             'gate-out-register-'.now()->format('Ymd-His').'.xlsx'
         );
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CLEARANCE PERFORMANCE REPORT
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── Shared query builder ─────────────────────────────────────────────────
+    // Returns one row per consignment with DaysToClear computed.
+    // For gated-out/cleared: DATEDIFF(GateOutDate, ETA)
+    // For still pending: DATEDIFF(CURDATE(), ETA)
+
+    private function buildClearancePerformanceQuery(
+        string $dateFrom,
+        string $dateTo,
+        string $branchID,
+        ?int $carrierID = null
+    ) {
+        $query = DB::table('container_main as cm')
+            ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
+            ->leftJoin('ship_carrier as sc', 'cm.CarrierID', '=', 'sc.CarrierID')
+            ->leftJoin('container_details as cd', function ($join) {
+                $join->on('cm.ConsignmentID', '=', 'cd.ConsignmentID')
+                    ->on('cm.BL', '=', 'cd.BL');
+            })
+            ->where('cm.BranchID', $branchID)
+            ->where('cm.Status', '!=', 9)
+            ->whereBetween('cm.ETA', [$dateFrom, $dateTo])
+            ->groupBy(
+                'cm.ConsignmentID',
+                'cm.BL',
+                'cm.ETA',
+                'cm.Date',
+                'cm.Status',
+                'sc.CarrierName',
+                'sc.CarrierID',
+                'co.FullName'
+            )
+            ->select([
+                'cm.ConsignmentID',
+                'cm.BL as MainBL',
+                'cm.ETA',
+                'cm.Date as RegisteredDate',
+                'cm.Status',
+                'sc.CarrierName',
+                'sc.CarrierID',
+                'co.FullName as ConsigneeName',
+                // Days to clear: use GateOutDate if available, else today
+                DB::raw('
+                CASE
+                    WHEN MIN(cd.GateOutDate) IS NOT NULL
+                         AND MIN(cd.GateOutDate) != "0000-00-00"
+                    THEN DATEDIFF(MIN(cd.GateOutDate), cm.ETA)
+                    ELSE DATEDIFF(CURDATE(), cm.ETA)
+                END as DaysToClear
+            '),
+                DB::raw('
+                CASE
+                    WHEN MIN(cd.GateOutDate) IS NOT NULL
+                         AND MIN(cd.GateOutDate) != "0000-00-00"
+                    THEN "cleared"
+                    ELSE "pending"
+                END as ClearanceStatus
+            '),
+            ]);
+
+        if ($carrierID) {
+            $query->where('cm.CarrierID', $carrierID);
+        }
+
+        return $query->orderBy('DaysToClear', 'desc')->get();
+    }
+
+    // ── Carrier performance summary ──────────────────────────────────────────
+    // Groups the consignment rows by carrier and computes avg/min/max.
+
+    private function buildCarrierPerformanceSummary($rows): \Illuminate\Support\Collection
+    {
+        return $rows->groupBy('CarrierName')->map(function ($group, $carrierName) {
+            $days = $group->pluck('DaysToClear')->map(fn ($d) => (int) $d);
+
+            return (object) [
+                'CarrierName' => $carrierName ?? 'Unknown',
+                'Total' => $group->count(),
+                'AvgDays' => round($days->avg(), 1),
+                'FastestDays' => $days->min(),
+                'SlowestDays' => $days->max(),
+                'Cleared' => $group->where('ClearanceStatus', 'cleared')->count(),
+                'Pending' => $group->where('ClearanceStatus', 'pending')->count(),
+            ];
+        })->sortByDesc('AvgDays')->values();
+    }
+
+    // ── Overall summary strip ────────────────────────────────────────────────
+    private function buildClearanceOverallSummary($rows): array
+    {
+        $days = $rows->pluck('DaysToClear')->map(fn ($d) => (int) $d);
+
+        return [
+            'total' => $rows->count(),
+            'avg_days' => round($days->avg() ?? 0, 1),
+            'fastest' => $days->min() ?? 0,
+            'slowest' => $days->max() ?? 0,
+            'cleared' => $rows->where('ClearanceStatus', 'cleared')->count(),
+            'pending' => $rows->where('ClearanceStatus', 'pending')->count(),
+        ];
+    }
+
+    // ── Filter page ──────────────────────────────────────────────────────────
+    public function clearancePerformance()
+    {
+        return view('reports.operations.consignment-status');
+    }
+
+    // ── Print view ───────────────────────────────────────────────────────────
+    public function clearancePerformancePrint(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+            'carrier_id' => ['nullable', 'integer'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+        $carrierID = $request->carrier_id ? (int) $request->carrier_id : null;
+
+        $carrierName = $carrierID
+            ? DB::table('ship_carrier')->where('CarrierID', $carrierID)->value('CarrierName') ?? 'Unknown'
+            : 'All Carriers';
+
+        $rows = $this->buildClearancePerformanceQuery($dateFrom, $dateTo, $user->BranchID, $carrierID);
+        $carrierSummary = $this->buildCarrierPerformanceSummary($rows);
+        $overallSummary = $this->buildClearanceOverallSummary($rows);
+
+        $reportTitle = 'Clearance Performance Report';
+        $dateFrom = \Carbon\Carbon::parse($dateFrom)->format('d M Y');
+        $dateTo = \Carbon\Carbon::parse($dateTo)->format('d M Y');
+
+        // $company is auto-shared by AppServiceProvider — do NOT query it here.
+
+        return view('reports.operations.clearance-performance-print', compact(
+            'rows', 'carrierSummary', 'overallSummary',
+            'reportTitle', 'dateFrom', 'dateTo', 'carrierName'
+        ));
+    }
+
+    // ── Export ───────────────────────────────────────────────────────────────
+    public function clearancePerformanceExport(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+            'carrier_id' => ['nullable', 'integer'],
+        ]);
+
+        $user = Auth::user();
+        $dateFrom = $request->date_from;
+        $dateTo = $request->date_to;
+        $carrierID = $request->carrier_id ? (int) $request->carrier_id : null;
+
+        $carrierName = $carrierID
+            ? DB::table('ship_carrier')->where('CarrierID', $carrierID)->value('CarrierName') ?? 'Unknown'
+            : 'All Carriers';
+
+        $rows = $this->buildClearancePerformanceQuery($dateFrom, $dateTo, $user->BranchID, $carrierID);
+        $carrierSummary = $this->buildCarrierPerformanceSummary($rows);
+        $overallSummary = $this->buildClearanceOverallSummary($rows);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Clearance Performance');
+
+        // ── Header rows ──────────────────────────────────────────────────────
+        $this->buildExcelHeader(
+            $sheet,
+            'Clearance Performance Report — '.$carrierName,
+            \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
+            \Carbon\Carbon::parse($dateTo)->format('d M Y'),
+            'G'
+        );
+
+        // ── Section 1: Carrier Summary ───────────────────────────────────────
+        $sheet->mergeCells('A6:G6');
+        $sheet->setCellValue('A6', 'CARRIER PERFORMANCE SUMMARY');
+        $sheet->getStyle('A6')->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A6:G6')->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('eff6ff');
+
+        $carrierHeaders = ['Carrier', 'Total', 'Avg Days', 'Fastest', 'Slowest', 'Cleared', 'Pending'];
+        $dataRow = $this->buildExcelColumnHeaders($sheet, 7, $carrierHeaders);
+
+        foreach ($carrierSummary as $c) {
+            $sheet->setCellValue('A'.$dataRow, $c->CarrierName);
+            $sheet->setCellValue('B'.$dataRow, $c->Total);
+            $sheet->setCellValue('C'.$dataRow, $c->AvgDays);
+            $sheet->setCellValue('D'.$dataRow, $c->FastestDays);
+            $sheet->setCellValue('E'.$dataRow, $c->SlowestDays);
+            $sheet->setCellValue('F'.$dataRow, $c->Cleared);
+            $sheet->setCellValue('G'.$dataRow, $c->Pending);
+
+            // Colour avg days
+            $hex = $c->AvgDays <= 7 ? '15803d'
+                 : ($c->AvgDays <= 14 ? 'b45309'
+                 : ($c->AvgDays <= 30 ? 'c2410c' : 'b91c1c'));
+            $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB($hex);
+            if ($c->AvgDays > 14) {
+                $sheet->getStyle('C'.$dataRow)->getFont()->setBold(true);
+            }
+
+            $dataRow++;
+        }
+
+        $dataRow++; // spacer row
+
+        // ── Section 2: Individual consignment detail ─────────────────────────
+        $sheet->mergeCells('A'.$dataRow.':G'.$dataRow);
+        $sheet->setCellValue('A'.$dataRow, 'INDIVIDUAL CONSIGNMENT DETAIL');
+        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A'.$dataRow.':G'.$dataRow)->getFill()
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('eff6ff');
+
+        $dataRow++;
+
+        $detailHeaders = ['#', 'Main BL', 'ETA', 'Consignee', 'Carrier', 'Days to Clear', 'Status'];
+        $dataRow = $this->buildExcelColumnHeaders($sheet, $dataRow, $detailHeaders);
+
+        $statusLabels = [0 => 'Cleared', 1 => 'Not Arrived', 2 => 'Pending', 3 => 'Gated Out'];
+
+        foreach ($rows as $i => $r) {
+            $days = (int) $r->DaysToClear;
+            $hex = $days <= 7 ? '15803d'
+                  : ($days <= 14 ? 'b45309'
+                  : ($days <= 30 ? 'c2410c' : 'b91c1c'));
+
+            $sheet->setCellValue('A'.$dataRow, $i + 1);
+            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C'.$dataRow, $r->ETA
+                ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
+            $sheet->setCellValue('D'.$dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('E'.$dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('F'.$dataRow, $days);
+            $sheet->setCellValue('G'.$dataRow, $statusLabels[$r->Status] ?? '-');
+
+            $sheet->getStyle('F'.$dataRow)->getFont()->getColor()->setRGB($hex);
+            if ($days > 14) {
+                $sheet->getStyle('F'.$dataRow)->getFont()->setBold(true);
+            }
+
+            $dataRow++;
+        }
+
+        // ── Column widths ────────────────────────────────────────────────────
+        $widths = ['A' => 5, 'B' => 22, 'C' => 14, 'D' => 28, 'E' => 20, 'F' => 16, 'G' => 14];
+        foreach ($widths as $c => $w) {
+            $sheet->getColumnDimension($c)->setWidth($w);
+        }
+
+        // ── Borders ──────────────────────────────────────────────────────────
+        $this->buildExcelBorders($sheet, 7, $dataRow - 1, 'G');
+
+        // ── Stream ───────────────────────────────────────────────────────────
+        $this->streamExcel(
+            $spreadsheet,
+            'clearance-performance-'.now()->format('Ymd-His').'.xlsx'
+        );
+    }
 }
