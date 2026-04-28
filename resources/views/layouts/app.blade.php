@@ -407,7 +407,7 @@
                     </a>
                 @endif
                 @if (isset($userAuth) && $userAuth->hasPermission('ClientReport'))
-                    <a href="#"
+                    <a href="{{ route('reports.client.index') }}"
                         class="submenu-link {{ request()->routeIs('reports.client.*') ? 'active' : '' }}">
                         Client Reports
                     </a>

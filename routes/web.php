@@ -24,6 +24,7 @@ use App\Http\Controllers\NonManifestInvoiceController;
 use App\Http\Controllers\OtherExpenditureController;
 use App\Http\Controllers\OtherInvoiceController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Reports\ClientReportController;
 use App\Http\Controllers\Reports\OperationsReportController;
 use App\Http\Controllers\Reports\ReportIndexController;
 use App\Http\Controllers\Settings\ActiveAccountController;
@@ -511,12 +512,19 @@ Route::middleware('auth')->group(function () {
             });
 
         // Client Reports
-        Route::middleware('permission:ClientReport')
-            ->prefix('client')
-            ->name('client.')
-            ->group(function () {
-                // reports added here as built
-            });
+        Route::middleware('permission:ClientReport')->prefix('client')->name('client.')->group(function () {
+
+            // ── Client Profile ────────────────────────────────────────────────────
+            Route::get('/', [ClientReportController::class, 'index'])
+                ->name('index');
+            Route::get('/search', [ClientReportController::class, 'search'])
+                ->name('search');
+            Route::get('/profile/{consigneeId}', [ClientReportController::class, 'profile'])
+                ->name('profile');
+            Route::get('/profile/{consigneeId}/print', [ClientReportController::class, 'profilePrint'])
+                ->name('profile.print');
+
+        });
 
         // Disbursement Reports
         Route::middleware('permission:DisbursementReport')
