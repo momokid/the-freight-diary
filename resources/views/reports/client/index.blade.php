@@ -388,6 +388,14 @@
                 trending_down: `<svg style="width:22px;height:22px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"/></svg>`,
             };
 
+            // ── Ranking icon map — top-level so all functions can access it ───────
+            const rankIconMap = {
+                gold: SVG.trophy,
+                silver: SVG.medal,
+                bronze: SVG.medal,
+                standard: SVG.star,
+            };
+
             // ── Helpers ──────────────────────────────────────────────────────────
             function fmt(date) {
                 if (!date || date === '0000-00-00' || date === '1970-01-01') return '—';
@@ -542,7 +550,7 @@
                         document.getElementById('cr_loading').style.display = 'none';
                         document.getElementById('cr_profile_content').style.display = 'block';
                     })
-                    .catch(() => showError('Network error. Please try again.'));
+                    .catch(err => showError('Network error:Please try again.'));
             }
 
             function showError(msg) {
@@ -558,7 +566,7 @@
                 renderCard2(d);
                 renderCard3(d);
                 renderCard4(d);
-                renderChart(d.chartData);
+                renderChart(d.chartData, d.hasInvoiceData);
                 renderConsignmentsTab(d.consignments);
                 renderHblTab(d.hblEntries);
                 renderInvoicesTab(d.invoices);
@@ -638,7 +646,7 @@
             </div>`;
             }
 
-            // ── Card 4: Customer ranking ──────────────────────────────────────────
+            // ── Card 4: Customer ranking ──────────────────────────────────────────────
             function renderCard4(d) {
                 const r = d.ranking;
                 const body = document.getElementById('cr_rank_body');
@@ -649,64 +657,129 @@
                     bronze: ['#fff7ed', '#9a3412'],
                     standard: ['#eff6ff', '#1e40af'],
                 };
-                const iconMap = {
-                    gold: SVG.trophy,
-                    silver: SVG.medal,
-                    bronze: SVG.medal,
-                    standard: SVG.star
-                };
                 const [bg, color] = clsMap[r.badge.cls] ?? ['#f3f4f6', '#374151'];
 
                 body.innerHTML = `
-            <div style="margin-bottom:4px; color:${color};">${iconMap[r.badge.cls] ?? SVG.star}</div>
-            
-            <p style="font-size:18px; font-weight:700; color:#185FA5;">
-                #${r.rank} <span style="font-size:11px; font-weight:400; color:#6b7280;">of ${r.total}</span>
-            </p>
-            <span style="display:inline-block; margin-top:6px; font-size:11px; font-weight:700;
+            <div style="margin-bottom:6px; color:${color};">
+                ${rankIconMap[r.badge.cls] ?? SVG.star}
+            </div>
+            <span style="display:inline-block; margin-bottom:10px; font-size:11px; font-weight:700;
                     padding:3px 12px; border-radius:99px; background:${bg}; color:${color};">
                 ${r.badge.label}
             </span>
-            <p style="font-size:10px; color:#6b7280; margin-top:6px;">
-                Top ${r.percentile}% of all clients
-            </p>`;
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; text-align:left; margin-top:4px;">
+
+                <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; padding:8px 10px;">
+                    <p style="font-size:9px; text-transform:uppercase; letter-spacing:0.05em;
+                               color:#6b7280; margin-bottom:3px;">By Volume</p>
+                    <p style="font-size:16px; font-weight:700; color:#185FA5;">
+                        #${r.volume_rank}
+                        <span style="font-size:10px; font-weight:400; color:#6b7280;">
+                            of ${r.volume_total}
+                        </span>
+                    </p>
+                    <p style="font-size:10px; color:#6b7280; margin-top:2px;">
+                        ${r.volume_count} consignment${r.volume_count != 1 ? 's' : ''}
+                    </p>
+                    <p style="font-size:9px; color:#9ca3af; margin-top:1px;">
+                        Top ${r.volume_percentile}%
+                    </p>
+                </div>
+
+                <div style="background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; padding:8px 10px;">
+                    <p style="font-size:9px; text-transform:uppercase; letter-spacing:0.05em;
+                               color:#6b7280; margin-bottom:3px;">By Value</p>
+                    <p style="font-size:16px; font-weight:700; color:#15803d;">
+                        #${r.value_rank}
+                        <span style="font-size:10px; font-weight:400; color:#6b7280;">
+                            of ${r.value_total}
+                        </span>
+                    </p>
+                    <p style="font-size:10px; color:#6b7280; margin-top:2px;">
+                        GH₵ ${parseFloat(r.client_total_value || 0)
+                            .toLocaleString('en-GH', { minimumFractionDigits: 2 })}
+                    </p>
+                    <p style="font-size:9px; color:#9ca3af; margin-top:1px;">
+                        Top ${r.value_percentile}%
+                    </p>
+                </div>
+
+            </div>`;
             }
 
             // ── Chart ─────────────────────────────────────────────────────────────
-            function renderChart(chartData) {
+            function renderChart(chartData, hasInvoiceData) {
                 const labels = chartData.map(r => r.MonthLabel);
-                const invoiced = chartData.map(r => parseFloat(r.Invoiced || 0));
-                const paid = chartData.map(r => parseFloat(r.Paid || 0));
+                const revenue = chartData.map(r => parseFloat(r.Revenue || 0));
+                const expenditure = chartData.map(r => parseFloat(r.Expenditure || 0));
+                const invoiced = chartData.map(r => r.Invoiced !== null ? parseFloat(r.Invoiced) : null);
+                const paid = chartData.map(r => r.Paid !== null ? parseFloat(r.Paid) : null);
 
-                document.getElementById('cr_chart_label').textContent =
-                    'Monthly invoiced vs payments received';
+                // Label depends on what data is available
+                document.getElementById('cr_chart_label').textContent = hasInvoiceData ?
+                    'Monthly disbursement (primary) + invoice overlay' :
+                    'Monthly disbursement — revenue & expenditure';
 
                 if (chartInstance) chartInstance.destroy();
+
+                // Always show disbursement datasets
+                const datasets = [{
+                        label: 'Revenue (GH₵)',
+                        data: revenue,
+                        borderColor: '#185FA5',
+                        backgroundColor: 'rgba(24,95,165,0.08)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        borderWidth: 2,
+                    },
+                    {
+                        label: 'Expenditure (GH₵)',
+                        data: expenditure,
+                        borderColor: '#b91c1c',
+                        backgroundColor: 'rgba(185,28,28,0.06)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 4,
+                        borderWidth: 2,
+                    },
+                ];
+
+                // Add invoice overlay datasets only if invoice data exists
+                if (hasInvoiceData) {
+                    datasets.push({
+                        label: 'Invoiced (GH₵)',
+                        data: invoiced,
+                        borderColor: '#0f766e',
+                        backgroundColor: 'transparent',
+                        borderDash: [6, 3],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        borderWidth: 2,
+                        spanGaps: true,
+                    });
+                    datasets.push({
+                        label: 'Invoice Paid (GH₵)',
+                        data: paid,
+                        borderColor: '#7c3aed',
+                        backgroundColor: 'transparent',
+                        borderDash: [6, 3],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        borderWidth: 2,
+                        spanGaps: true,
+                    });
+                }
 
                 chartInstance = new Chart(
                     document.getElementById('cr_chart').getContext('2d'), {
                         type: 'line',
                         data: {
                             labels,
-                            datasets: [{
-                                    label: 'Invoiced (GH₵)',
-                                    data: invoiced,
-                                    borderColor: '#185FA5',
-                                    backgroundColor: 'rgba(24,95,165,0.1)',
-                                    fill: true,
-                                    tension: 0.4,
-                                    pointRadius: 4,
-                                },
-                                {
-                                    label: 'Paid (GH₵)',
-                                    data: paid,
-                                    borderColor: '#15803d',
-                                    backgroundColor: 'rgba(21,128,61,0.1)',
-                                    fill: true,
-                                    tension: 0.4,
-                                    pointRadius: 4,
-                                },
-                            ],
+                            datasets
                         },
                         options: {
                             responsive: true,
@@ -718,7 +791,7 @@
                                     callbacks: {
                                         label: ctx =>
                                             ctx.dataset.label + ': GH₵ ' +
-                                            ctx.parsed.y.toLocaleString('en-GH', {
+                                            (ctx.parsed.y ?? 0).toLocaleString('en-GH', {
                                                 minimumFractionDigits: 2
                                             })
                                     }
@@ -942,12 +1015,12 @@
                         ['Gated Out', s.gated_out],
                         ['Cleared', s.cleared],
                     ].map(([label, val]) => `
-                                                                                                <div style="background:#f9fafb; border:1px solid #e5e7eb;
-                                                                                                            border-radius:6px; padding:10px 12px;">
-                                                                                                    <p style="font-size:9px; text-transform:uppercase;
-                                                                                                              color:#6b7280; margin-bottom:4px;">${label}</p>
-                                                                                                    <p style="font-size:20px; font-weight:700; color:#185FA5;">${val}</p>
-                                                                                                </div>`
+                                                                                                                        <div style="background:#f9fafb; border:1px solid #e5e7eb;
+                                                                                                                                    border-radius:6px; padding:10px 12px;">
+                                                                                                                            <p style="font-size:9px; text-transform:uppercase;
+                                                                                                                                      color:#6b7280; margin-bottom:4px;">${label}</p>
+                                                                                                                            <p style="font-size:20px; font-weight:700; color:#185FA5;">${val}</p>
+                                                                                                                        </div>`
                     ).join('')}
                 </div>
                 <p style="margin-top:12px; font-size:12px; color:#6b7280;">
@@ -988,20 +1061,62 @@
                     const r = profileData.ranking;
                     title.textContent = 'Customer Ranking Details';
                     body.innerHTML = `
-                <div style="text-align:center; padding:1rem;">
-                    <div style="margin-bottom:8px; color:#185FA5;">${iconMap[r.badge.cls] ?? SVG.star}</div>
-                    <p style="font-size:24px; font-weight:700; color:#185FA5; margin-bottom:4px;">
-                        Ranked #${r.rank}
-                    </p>
-                    <p style="font-size:13px; color:#6b7280; margin-bottom:12px;">
-                        out of ${r.total} active clients
-                    </p>
-                    <p style="font-size:13px; font-weight:700; margin-bottom:4px;">
-                        ${r.badge.label}
-                    </p>
-                    <p style="font-size:12px; color:#6b7280;">
-                        Top ${r.percentile}% of all clients by consignment volume
-                    </p>
+                <div style="display:flex; flex-direction:column; gap:12px;">
+
+                    <div style="text-align:center; padding:8px 0;">
+                        <div style="margin-bottom:6px;">${rankIconMap[r.badge.cls] ?? SVG.star}</div>
+                        <p style="font-size:13px; font-weight:700; color:#111827;">
+                            ${r.badge.label}
+                        </p>
+                        <p style="font-size:11px; color:#6b7280; margin-top:2px;">
+                            Based on average of volume and value rankings
+                        </p>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+
+                        <div style="background:#eff6ff; border:1px solid #bfdbfe;
+                                    border-radius:8px; padding:12px;">
+                            <p style="font-size:10px; font-weight:700; text-transform:uppercase;
+                                       letter-spacing:0.05em; color:#185FA5; margin-bottom:6px;">
+                                Volume Rank
+                            </p>
+                            <p style="font-size:22px; font-weight:700; color:#185FA5;">
+                                #${r.volume_rank}
+                                <span style="font-size:11px; font-weight:400; color:#6b7280;">
+                                    of ${r.volume_total}
+                                </span>
+                            </p>
+                            <p style="font-size:11px; color:#6b7280; margin-top:4px;">
+                                ${r.volume_count} total consignments
+                            </p>
+                            <p style="font-size:11px; color:#6b7280;">
+                                Top ${r.volume_percentile}% of all clients
+                            </p>
+                        </div>
+
+                        <div style="background:#f0fdf4; border:1px solid #bbf7d0;
+                                    border-radius:8px; padding:12px;">
+                            <p style="font-size:10px; font-weight:700; text-transform:uppercase;
+                                       letter-spacing:0.05em; color:#15803d; margin-bottom:6px;">
+                                Value Rank
+                            </p>
+                            <p style="font-size:22px; font-weight:700; color:#15803d;">
+                                #${r.value_rank}
+                                <span style="font-size:11px; font-weight:400; color:#6b7280;">
+                                    of ${r.value_total}
+                                </span>
+                            </p>
+                            <p style="font-size:11px; color:#6b7280; margin-top:4px;">
+                                GH₵ ${parseFloat(r.client_total_value || 0)
+                                    .toLocaleString('en-GH', { minimumFractionDigits: 2 })}
+                            </p>
+                            <p style="font-size:11px; color:#6b7280;">
+                                Top ${r.value_percentile}% of all clients
+                            </p>
+                        </div>
+
+                    </div>
                 </div>`;
                 }
 

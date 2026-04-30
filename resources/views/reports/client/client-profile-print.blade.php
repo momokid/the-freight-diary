@@ -405,19 +405,35 @@
                     };
                 @endphp
                 {!! $rankSvg !!}
-                <p style="font-size:16px; font-weight:700; color:#185FA5;">
-                    #{{ $r['rank'] }}
-                    <span style="font-size:10px; font-weight:400; color:#6b7280;">
-                        of {{ $r['total'] }}
-                    </span>
-                </p>
                 <span class="rank-badge"
-                    style="background:{{ $rbg }}; color:{{ $rcolor }}; margin-top:5px;">
+                    style="background:{{ $rbg }}; color:{{ $rcolor }}; margin-top:4px; margin-bottom:8px; display:inline-block;">
                     {{ $r['badge']['label'] }}
                 </span>
-                <p style="font-size:10px; color:#6b7280; margin-top:4px;">
-                    Top {{ $r['percentile'] }}% of clients
-                </p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; text-align:left; margin-top:4px;">
+                    <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:6px 8px;">
+                        <p style="font-size:8px; text-transform:uppercase; color:#185FA5; margin-bottom:2px;">By Volume
+                        </p>
+                        <p style="font-size:14px; font-weight:700; color:#185FA5;">
+                            #{{ $r['volume_rank'] }}
+                            <span style="font-size:9px; font-weight:400; color:#6b7280;">of
+                                {{ $r['volume_total'] }}</span>
+                        </p>
+                        <p style="font-size:9px; color:#6b7280;">{{ $r['volume_count'] }} consignments</p>
+                        <p style="font-size:9px; color:#9ca3af;">Top {{ $r['volume_percentile'] }}%</p>
+                    </div>
+                    <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:6px 8px;">
+                        <p style="font-size:8px; text-transform:uppercase; color:#15803d; margin-bottom:2px;">By Value
+                        </p>
+                        <p style="font-size:14px; font-weight:700; color:#15803d;">
+                            #{{ $r['value_rank'] }}
+                            <span style="font-size:9px; font-weight:400; color:#6b7280;">of
+                                {{ $r['value_total'] }}</span>
+                        </p>
+                        <p style="font-size:9px; color:#6b7280;">GH₵ {{ number_format($r['client_total_value'], 2) }}
+                        </p>
+                        <p style="font-size:9px; color:#9ca3af;">Top {{ $r['value_percentile'] }}%</p>
+                    </div>
+                </div>
             </div>
         </div>
 

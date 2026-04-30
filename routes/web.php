@@ -15,6 +15,7 @@ use App\Http\Controllers\EditData\EditWeightController;
 use App\Http\Controllers\EditData\ReverseTransactionController;
 use App\Http\Controllers\GateOutExpenseController;
 use App\Http\Controllers\HblInvoiceController;
+use App\Http\Controllers\HSCodeController;
 use App\Http\Controllers\ManifestController;
 use App\Http\Controllers\MasterData\CarrierController;
 use App\Http\Controllers\MasterData\CommodityController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\OtherExpenditureController;
 use App\Http\Controllers\OtherInvoiceController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Reports\ClientReportController;
+use App\Http\Controllers\Reports\DisbursementReportController;
 use App\Http\Controllers\Reports\OperationsReportController;
 use App\Http\Controllers\Reports\ReportIndexController;
 use App\Http\Controllers\Settings\ActiveAccountController;
@@ -54,6 +56,19 @@ Route::get('/', function () {
 Route::middleware('auth')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    // ── HS Code Prediction ────────────────────────────────────────────────────
+    Route::prefix('hs-code')->name('hs-code.')->group(function () {
+        Route::post('/predict', [HSCodeController::class, 'predict'])->name('predict');
+        Route::post('/accept', [HSCodeController::class, 'accept'])->name('accept');
+        Route::post('/calculate-duty', [HSCodeController::class, 'calculateDuty'])->name('calculate-duty');
+        Route::get('/search', [HSCodeController::class, 'search'])->name('search');
+        Route::get('/history', [HSCodeController::class, 'history'])->name('history');
+        Route::get('/advisor', [HSCodeController::class, 'advisor'])->name('advisor');
+        Route::get('/load-consignment', [HSCodeController::class, 'loadConsignment'])->name('load-consignment');
+        Route::post('/accept-all', [HSCodeController::class, 'acceptAll'])->name('accept-all');
+        Route::get('/print-report', [HSCodeController::class, 'printReport'])->name('print-report');
+    });
 
     // change password routes
     Route::get('/change-password', [AuthController::class, 'showChangePassword'])->name('password.change');
@@ -531,7 +546,63 @@ Route::middleware('auth')->group(function () {
             ->prefix('disbursement')
             ->name('disbursement.')
             ->group(function () {
-                // reports added here as built
+
+                // ── Consignment P&L Report ────────────────────────────────────────
+                Route::get('/', [DisbursementReportController::class, 'index'])
+                    ->name('index');
+                Route::get('/consignment-pnl', [DisbursementReportController::class, 'consignmentPnl'])
+                    ->name('consignment-pnl');
+                Route::get('/consignment-pnl/print', [DisbursementReportController::class, 'consignmentPnlPrint'])
+                    ->name('consignment-pnl.print');
+                Route::get('/consignment-pnl/export', [DisbursementReportController::class, 'consignmentPnlExport'])
+                    ->name('consignment-pnl.export');
+
+                // ── Expenditure by Account ────────────────────────────────────────
+                Route::get('/expenditure-by-account', [DisbursementReportController::class, 'expenditureByAccount'])
+                    ->name('expenditure-by-account');
+                Route::get('/expenditure-by-account/print', [DisbursementReportController::class, 'expenditureByAccountPrint'])
+                    ->name('expenditure-by-account.print');
+                Route::get('/expenditure-by-account/export', [DisbursementReportController::class, 'expenditureByAccountExport'])
+                    ->name('expenditure-by-account.export');
+
+                // ── Comparative Disbursement ──────────────────────────────────────
+                Route::get('/comparative', [DisbursementReportController::class, 'comparative'])
+                    ->name('comparative');
+                Route::get('/comparative/print', [DisbursementReportController::class, 'comparativePrint'])
+                    ->name('comparative.print');
+                Route::get('/comparative/export', [DisbursementReportController::class, 'comparativeExport'])
+                    ->name('comparative.export');
+
+                // ── Disbursement Detail Report ────────────────────────────────────
+                Route::get('/detail', [DisbursementReportController::class, 'detail'])
+                    ->name('detail');
+                Route::get('/detail/print', [DisbursementReportController::class, 'detailPrint'])
+                    ->name('detail.print');
+                Route::get('/detail/export', [DisbursementReportController::class, 'detailExport'])
+                    ->name('detail.export');
+
+                // ── Unapproved Disbursements ──────────────────────────────────────
+                Route::get('/unapproved', [DisbursementReportController::class, 'unapproved'])
+                    ->name('unapproved');
+                Route::get('/unapproved/print', [DisbursementReportController::class, 'unapprovedPrint'])
+                    ->name('unapproved.print');
+                Route::get('/unapproved/export', [DisbursementReportController::class, 'unapprovedExport'])
+                    ->name('unapproved.export');
+
+                // ── Officer Disbursement Summary ──────────────────────────────────
+                Route::get('/officer-summary', [DisbursementReportController::class, 'officerSummary'])
+                    ->name('officer-summary');
+                Route::get('/officer-summary/print', [DisbursementReportController::class, 'officerSummaryPrint'])
+                    ->name('officer-summary.print');
+                Route::get('/officer-summary/export', [DisbursementReportController::class, 'officerSummaryExport'])
+                    ->name('officer-summary.export');
+
+                // ── Comparative filter dropdowns ─────────────────────────────────────────
+                Route::get('/comparative/item-descriptions', [DisbursementReportController::class, 'itemDescriptions'])
+                    ->name('comparative.item-descriptions');
+                Route::get('/comparative/container-sizes', [DisbursementReportController::class, 'containerSizes'])
+                    ->name('comparative.container-sizes');
+
             });
 
         // Accounting Reports

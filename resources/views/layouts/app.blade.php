@@ -413,7 +413,7 @@
                     </a>
                 @endif
                 @if (isset($userAuth) && $userAuth->hasPermission('DisbursementReport'))
-                    <a href="#"
+                    <a href="{{ route('reports.disbursement.index') }}"
                         class="submenu-link {{ request()->routeIs('reports.disbursement.*') ? 'active' : '' }}">
                         Disbursement Reports
                     </a>
@@ -484,6 +484,13 @@
 
             {{-- Right side --}}
             <div style="display: flex; align-items: center; gap: 8px;">
+
+                {{-- HS Code Advisor  --}}
+                <button onclick="window.HSAdvisor.open()"
+                    style="padding:6px 14px; background:#185FA5; color:#fff; border:none;
+                     border-radius:6px; font-size:12px; font-weight:600; cursor:pointer;">
+                    HS Code Advisor
+                </button>
 
                 {{-- Theme toggle --}}
                 <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme"
@@ -571,6 +578,9 @@
     </div>
 
     @stack('scripts')
+
+    {{-- ── HS Code Advisor Modal ── --}}
+    @include('partials.hs-advisor-modal')
 </body>
 
 </html>

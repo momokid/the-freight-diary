@@ -219,7 +219,9 @@ class ClientReportController extends BaseReportController
             ]);
 
         // ── Card 4: Customer ranking ─────────────────────────────────────
-        $rankingData = DB::table('container_main')
+        // ── Card 4: Customer ranking ─────────────────────────────────────────────
+        // Rank 1 — by consignment volume (FCL from container_main + LCL from manifestation_breakdown)
+        $volumeRanking = DB::table('container_main')
             ->where('Status', '!=', 9)
             ->whereNotNull('ConsigneeID')
             ->groupBy('ConsigneeID')
@@ -229,20 +231,84 @@ class ClientReportController extends BaseReportController
                 DB::raw('COUNT(*) as Total'),
             ]);
 
-        $totalClients = $rankingData->count();
-        $consigneeRank = $rankingData->search(fn ($r) => $r->ConsigneeID == $consigneeId);
-        $consigneeRank = $consigneeRank !== false ? $consigneeRank + 1 : $totalClients;
-        $rankPercentile = $totalClients > 0 ? round(($consigneeRank / $totalClients) * 100) : 0;
+        // Include LCL consignees from manifestation_breakdown
+        $lclCounts = DB::table('manifestation_breakdown as mb')
+            ->join('container_main as cm', 'mb.ConsignmentID', '=', 'cm.ConsignmentID')
+            ->where('cm.Status', '!=', 9)
+            ->whereNotNull('mb.ConsigneeID')
+            ->groupBy('mb.ConsigneeID')
+            ->get([
+                'mb.ConsigneeID',
+                DB::raw('COUNT(*) as Total'),
+            ]);
 
-        $rankBadge = $rankPercentile <= 10 ? ['label' => 'Premium Client',    'icon' => '🥇', 'cls' => 'gold']
-                   : ($rankPercentile <= 25 ? ['label' => 'Regular Client',    'icon' => '🥈', 'cls' => 'silver']
-                   : ($rankPercentile <= 50 ? ['label' => 'Occasional Client', 'icon' => '🥉', 'cls' => 'bronze']
-                   : ['label' => 'Infrequent Client', 'icon' => '⭐', 'cls' => 'standard']));
+        // Merge FCL + LCL counts per consignee
+        $mergedVolume = collect();
+        $allConsigneeIds = $volumeRanking->pluck('ConsigneeID')
+            ->merge($lclCounts->pluck('ConsigneeID'))
+            ->unique();
+
+        foreach ($allConsigneeIds as $cid) {
+            $fcl = $volumeRanking->firstWhere('ConsigneeID', $cid)?->Total ?? 0;
+            $lcl = $lclCounts->firstWhere('ConsigneeID', $cid)?->Total ?? 0;
+            $mergedVolume->push((object) [
+                'ConsigneeID' => $cid,
+                'Total' => $fcl + $lcl,
+            ]);
+        }
+
+        $mergedVolume = $mergedVolume->sortByDesc('Total')->values();
+
+        $totalClientsVolume = $mergedVolume->count();
+        $volumeRankPos = $mergedVolume->search(fn ($r) => $r->ConsigneeID == $consigneeId);
+        $volumeRankPos = $volumeRankPos !== false ? $volumeRankPos + 1 : $totalClientsVolume;
+        $volumeConsignments = $mergedVolume->firstWhere('ConsigneeID', $consigneeId)?->Total ?? 0;
+        $volumePercentile = $totalClientsVolume > 0
+            ? round(($volumeRankPos / $totalClientsVolume) * 100) : 0;
+
+        // Rank 2 — by financial value (revenue + expenditure from disbursement_analysis)
+        $valueRanking = DB::table('disbursement_analysis as da')
+            ->join('container_main as cm', 'da.BL', '=', 'cm.BL')
+            ->where('cm.Status', '!=', 9)
+            ->whereNotNull('da.ConsigneeID')
+            ->where('da.InReport', 1)
+            ->groupBy('da.ConsigneeID')
+            ->orderByRaw('SUM(da.Revenue + da.Expenditure) DESC')
+            ->get([
+                'da.ConsigneeID',
+                DB::raw('ROUND(SUM(da.Revenue + da.Expenditure), 2) as TotalValue'),
+                DB::raw('COUNT(DISTINCT da.BL) as ConsignmentCount'),
+            ]);
+
+        $totalClientsValue = $valueRanking->count();
+        $valueRankPos = $valueRanking->search(fn ($r) => $r->ConsigneeID == $consigneeId);
+        $valueRankPos = $valueRankPos !== false ? $valueRankPos + 1 : $totalClientsValue;
+        $clientTotalValue = $valueRanking->firstWhere('ConsigneeID', $consigneeId)?->TotalValue ?? 0;
+        $valuePercentile = $totalClientsValue > 0
+            ? round(($valueRankPos / $totalClientsValue) * 100) : 0;
+
+        // Overall badge — based on average of both percentiles
+        $avgPercentile = round(($volumePercentile + $valuePercentile) / 2);
+        $rankBadge = $avgPercentile <= 10 ? ['label' => 'Premium Client',    'cls' => 'gold']
+                   : ($avgPercentile <= 25 ? ['label' => 'Regular Client',    'cls' => 'silver']
+                   : ($avgPercentile <= 50 ? ['label' => 'Occasional Client', 'cls' => 'bronze']
+                   : ['label' => 'Infrequent Client', 'cls' => 'standard']));
 
         $ranking = [
-            'rank' => $consigneeRank,
-            'total' => $totalClients,
-            'percentile' => $rankPercentile,
+            // Volume rank
+            'volume_rank' => $volumeRankPos,
+            'volume_total' => $totalClientsVolume,
+            'volume_percentile' => $volumePercentile,
+            'volume_count' => $volumeConsignments,
+
+            // Value rank
+            'value_rank' => $valueRankPos,
+            'value_total' => $totalClientsValue,
+            'value_percentile' => $valuePercentile,
+            'client_total_value' => $clientTotalValue,
+
+            // Overall badge
+            'avg_percentile' => $avgPercentile,
             'badge' => $rankBadge,
         ];
 
@@ -278,12 +344,35 @@ class ClientReportController extends BaseReportController
             'revenue' => round($disbursements->sum('Revenue'), 2),
         ];
 
-        // ── Chart data — monthly revenue vs payments ─────────────────────
-        // Last 12 months or within date range
+        // ── Chart data ───────────────────────────────────────────────────
+        // Revenue + Expenditure per month
+        //  Dr/Cr (only if data exists)
         $chartFrom = $dateFrom ?? now()->subMonths(11)->startOfMonth()->toDateString();
         $chartTo = $dateTo ?? now()->toDateString();
 
-        $chartData = DB::table('student_fee')
+        // Primary — disbursement data (universal — exists for all consignees)
+        $disbChartData = DB::table('disbursement_analysis as da')
+            ->join('container_main as cm', 'da.BL', '=', 'cm.BL')
+            ->where('da.ConsigneeID', $consigneeId)
+            ->where('cm.Status', '!=', 9)
+            ->where('da.InReport', 1)
+            ->whereBetween('da.Date', [$chartFrom, $chartTo])
+            ->groupBy(
+                DB::raw('YEAR(da.Date)'),
+                DB::raw('MONTH(da.Date)')
+            )
+            ->orderBy(DB::raw('YEAR(da.Date)'))
+            ->orderBy(DB::raw('MONTH(da.Date)'))
+            ->get([
+                DB::raw('DATE_FORMAT(da.Date, "%b %Y") as MonthLabel'),
+                DB::raw('YEAR(da.Date) as Year'),
+                DB::raw('MONTH(da.Date) as Month'),
+                DB::raw('ROUND(SUM(da.Revenue), 2) as Revenue'),
+                DB::raw('ROUND(SUM(da.Expenditure), 2) as Expenditure'),
+            ]);
+
+        // Overlay — student_fee invoice data (only for clients with invoices)
+        $invoiceChartData = DB::table('student_fee')
             ->where('StudentID', $consigneeId)
             ->where('Status', 1)
             ->whereBetween('Date', [$chartFrom, $chartTo])
@@ -295,9 +384,52 @@ class ClientReportController extends BaseReportController
             ->orderBy(DB::raw('MONTH(Date)'))
             ->get([
                 DB::raw('DATE_FORMAT(Date, "%b %Y") as MonthLabel'),
+                DB::raw('YEAR(Date) as Year'),
+                DB::raw('MONTH(Date) as Month'),
                 DB::raw('ROUND(SUM(Dr), 2) as Invoiced'),
                 DB::raw('ROUND(SUM(Cr), 2) as Paid'),
             ]);
+
+        // Merge — build a unified month list from both sources
+        // disbursement is primary; invoice data is overlaid by matching Year+Month
+        $allMonths = $disbChartData->pluck('MonthLabel', 'MonthLabel')
+            ->merge($invoiceChartData->pluck('MonthLabel', 'MonthLabel'))
+            ->keys()
+            ->unique();
+
+        // Re-sort by actual date
+        $chartData = $disbChartData->map(function ($row) use ($invoiceChartData) {
+            $inv = $invoiceChartData
+                ->firstWhere(fn ($r) => $r->Year == $row->Year && $r->Month == $row->Month);
+
+            return (object) [
+                'MonthLabel' => $row->MonthLabel,
+                'Revenue' => $row->Revenue,
+                'Expenditure' => $row->Expenditure,
+                'Invoiced' => $inv?->Invoiced ?? null,
+                'Paid' => $inv?->Paid ?? null,
+                'hasInvoice' => $inv !== null,
+            ];
+        });
+
+        // Add any invoice-only months not in disbursement data
+        foreach ($invoiceChartData as $inv) {
+            $exists = $chartData->first(
+                fn ($r) => $r->MonthLabel === $inv->MonthLabel
+            );
+            if (! $exists) {
+                $chartData->push((object) [
+                    'MonthLabel' => $inv->MonthLabel,
+                    'Revenue' => 0,
+                    'Expenditure' => 0,
+                    'Invoiced' => $inv->Invoiced,
+                    'Paid' => $inv->Paid,
+                    'hasInvoice' => true,
+                ]);
+            }
+        }
+
+        $hasInvoiceData = $invoiceChartData->isNotEmpty();
 
         return response()->json([
             'success' => true,
@@ -314,6 +446,7 @@ class ClientReportController extends BaseReportController
             'disbursementTotals' => $disbursementTotals,
             'ranking' => $ranking,
             'chartData' => $chartData,
+            'hasInvoiceData' => $hasInvoiceData,
         ]);
     }
 
