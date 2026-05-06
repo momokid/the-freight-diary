@@ -110,4 +110,26 @@ class BaseReportController extends Controller
         $writer->save('php://output');
         exit;
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PERMISSION HELPER — shared across all report controllers
+    // Restricted = 0 always visible
+    // Restricted = 1 only if DisbursementOtherExpense
+    // Restricted = 2 only if DisbursementRevenue
+    // ════════════════════════════════════════════════════════════════════════
+    protected function allowedRestricted(): array
+    {
+        $username = Auth::user()->ID;
+        $userAuth = \App\Models\UserAuth::where('Username', $username)->first();
+        $allowed = [0];
+
+        if ($userAuth?->hasPermission('DisbursementOtherExpense')) {
+            $allowed[] = 1;
+        }
+        if ($userAuth?->hasPermission('DisbursementRevenue')) {
+            $allowed[] = 2;
+        }
+
+        return $allowed;
+    }
 }

@@ -419,7 +419,7 @@
                     </a>
                 @endif
                 @if (isset($userAuth) && $userAuth->hasPermission('AccountingReport'))
-                    <a href="#"
+                    <a href="{{ route('reports.accounting.index') }}"
                         class="submenu-link {{ request()->routeIs('reports.accounting.*') ? 'active' : '' }}">
                         Accounting Reports
                     </a>

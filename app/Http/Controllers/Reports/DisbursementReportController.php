@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Reports;
 
-use App\Models\UserAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -10,27 +9,6 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 
 class DisbursementReportController extends BaseReportController
 {
-    // ════════════════════════════════════════════════════════════════════════
-    // PERMISSION HELPER
-    // Builds a Restricted filter based on the logged-in user's permissions.
-    // Always includes Restricted=0. Adds 1 and/or 2 based on permissions.
-    // ════════════════════════════════════════════════════════════════════════
-
-    private function allowedRestricted(): array
-    {
-        $userAuth = UserAuth::where('Username', Auth::user()->ID)->first();
-        $allowed = [0]; // standard entries always visible
-
-        if ($userAuth?->hasPermission('DisbursementOtherExpense')) {
-            $allowed[] = 1; // admin expenses
-        }
-        if ($userAuth?->hasPermission('DisbursementRevenue')) {
-            $allowed[] = 2; // revenue entries
-        }
-
-        return $allowed;
-    }
-
     // ════════════════════════════════════════════════════════════════════════
     // INDEX
     // ════════════════════════════════════════════════════════════════════════

@@ -25,6 +25,7 @@ use App\Http\Controllers\NonManifestInvoiceController;
 use App\Http\Controllers\OtherExpenditureController;
 use App\Http\Controllers\OtherInvoiceController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Reports\AccountingReportController;
 use App\Http\Controllers\Reports\ClientReportController;
 use App\Http\Controllers\Reports\DisbursementReportController;
 use App\Http\Controllers\Reports\OperationsReportController;
@@ -610,7 +611,57 @@ Route::middleware('auth')->group(function () {
             ->prefix('accounting')
             ->name('accounting.')
             ->group(function () {
-                // reports added here as built
+
+                Route::get('/', [AccountingReportController::class, 'index'])
+                    ->name('index');
+
+                // ── Trial Balance ─────────────────────────────────────────────────
+                Route::get('/trial-balance/print', [AccountingReportController::class, 'trialBalancePrint'])->name('trial-balance.print');
+                Route::get('/trial-balance/export', [AccountingReportController::class, 'trialBalanceExport'])->name('trial-balance.export');
+
+                // ── GL Statement ──────────────────────────────────────────────────
+                Route::get('/gl-statement/print', [AccountingReportController::class, 'glStatementPrint'])->name('gl-statement.print');
+                Route::get('/gl-statement/export', [AccountingReportController::class, 'glStatementExport'])->name('gl-statement.export');
+                Route::get('/gl-statement/accounts', [AccountingReportController::class, 'glAccounts'])->name('gl-statement.accounts');
+
+                // ── Income & Expenditure ──────────────────────────────────────────
+                Route::get('/income-expenditure/print', [AccountingReportController::class, 'incomeExpenditurePrint'])->name('income-expenditure.print');
+                Route::get('/income-expenditure/export', [AccountingReportController::class, 'incomeExpenditureExport'])->name('income-expenditure.export');
+
+                // ── Daily Balancing Sheet ─────────────────────────────────────────
+                Route::get('/daily-balance/print', [AccountingReportController::class, 'dailyBalancePrint'])->name('daily-balance.print');
+                Route::get('/daily-balance/export', [AccountingReportController::class, 'dailyBalanceExport'])->name('daily-balance.export');
+
+                // ── Waste Sheet ───────────────────────────────────────────────────
+                Route::get('/waste-sheet/print', [AccountingReportController::class, 'wasteSheetPrint'])->name('waste-sheet.print');
+                Route::get('/waste-sheet/export', [AccountingReportController::class, 'wasteSheetExport'])->name('waste-sheet.export');
+
+                // ── Receipt Register ──────────────────────────────────────────────
+                Route::get('/receipt-register/print', [AccountingReportController::class, 'receiptRegisterPrint'])->name('receipt-register.print');
+                Route::get('/receipt-register/export', [AccountingReportController::class, 'receiptRegisterExport'])->name('receipt-register.export');
+
+                // ── Account Activity ──────────────────────────────────────────────
+                Route::get('/account-activity/print', [AccountingReportController::class, 'accountActivityPrint'])->name('account-activity.print');
+                Route::get('/account-activity/export', [AccountingReportController::class, 'accountActivityExport'])->name('account-activity.export');
+                Route::get('/account-activity/accounts', [AccountingReportController::class, 'allAccounts'])->name('account-activity.accounts');
+
+                // ── Balance Sheet ─────────────────────────────────────────────────────
+                Route::get('/balance-sheet/print', [AccountingReportController::class, 'balanceSheetPrint'])->name('balance-sheet.print');
+                Route::get('/balance-sheet/export', [AccountingReportController::class, 'balanceSheetExport'])->name('balance-sheet.export');
+
+                // ── Cash Flow Statement ───────────────────────────────────────────────
+                Route::get('/cash-flow/print', [AccountingReportController::class, 'cashFlowPrint'])->name('cash-flow.print');
+                Route::get('/cash-flow/export', [AccountingReportController::class, 'cashFlowExport'])->name('cash-flow.export');
+
+                // ── Income Account Statement ──────────────────────────────────────────
+                Route::get('/income-statement/accounts', [AccountingReportController::class, 'incomeAccounts'])->name('income-statement.accounts');
+                Route::get('/income-statement/print', [AccountingReportController::class, 'incomeStatementPrint'])->name('income-statement.print');
+                Route::get('/income-statement/export', [AccountingReportController::class, 'incomeStatementExport'])->name('income-statement.export');
+
+                // ── Expenditure Account Statement ─────────────────────────────────────
+                Route::get('/expenditure-statement/accounts', [AccountingReportController::class, 'expenditureAccounts'])->name('expenditure-statement.accounts');
+                Route::get('/expenditure-statement/print', [AccountingReportController::class, 'expenditureStatementPrint'])->name('expenditure-statement.print');
+                Route::get('/expenditure-statement/export', [AccountingReportController::class, 'expenditureStatementExport'])->name('expenditure-statement.export');
             });
 
         // Management Reports
