@@ -425,9 +425,9 @@
                     </a>
                 @endif
                 @if (isset($userAuth) && $userAuth->hasPermission('ManagementReport'))
-                    <a href="#"
+                    <a href="{{ route('reports.management.executive-summary') }}"
                         class="submenu-link {{ request()->routeIs('reports.management.*') ? 'active' : '' }}">
-                        Management Reports
+                        Executive Summary
                     </a>
                 @endif
                 <a href="{{ route('reports.index') }}"

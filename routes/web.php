@@ -28,6 +28,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Reports\AccountingReportController;
 use App\Http\Controllers\Reports\ClientReportController;
 use App\Http\Controllers\Reports\DisbursementReportController;
+use App\Http\Controllers\Reports\ManagementReportController;
 use App\Http\Controllers\Reports\OperationsReportController;
 use App\Http\Controllers\Reports\ReportIndexController;
 use App\Http\Controllers\Settings\ActiveAccountController;
@@ -178,7 +179,6 @@ Route::middleware('auth')->group(function () {
             Route::get('/active-accounts', [ActiveAccountController::class, 'index'])->name('active-accounts.index');
             Route::put('/active-accounts/{key}', [ActiveAccountController::class, 'update'])->name('active-accounts.update');
         });
-
     });
 
     // Consignment and Manifest routes — requires ConsignmentRegister permission
@@ -272,7 +272,6 @@ Route::middleware('auth')->group(function () {
             Route::post('/store', [NonManifestInvoiceController::class, 'store'])->name('store');
             Route::get('/report/{receiptNo}', [NonManifestInvoiceController::class, 'report'])->name('report');
         });
-
     });
 
     Route::middleware('auth')->prefix('payment')->name('payment.')->group(function () {
@@ -318,7 +317,6 @@ Route::middleware('auth')->group(function () {
 
         // Handling Charge Expense receipt — auth only, outside permission middleware
         Route::get('/handling-charge-expense/report/{receiptNo}', [PaymentController::class, 'handlingChargeExpenseReport'])->name('handling-charge-expense.report');
-
     });
 
     // Accounting Transaction
@@ -328,7 +326,6 @@ Route::middleware('auth')->group(function () {
             Route::get('/transaction', [AccountingController::class, 'transaction'])->name('transaction.index');
             Route::post('/transaction/store', [AccountingController::class, 'storeTransaction'])->name('transaction.store');
         });
-
     });
 
     // Disbursement routes
@@ -377,7 +374,6 @@ Route::middleware('auth')->group(function () {
             Route::get('/consignment-revenue/search', [ConsignmentRevenueController::class, 'searchBL'])->name('consignment-revenue.search')->middleware('throttle:60,1');
             Route::post('/consignment-revenue/save', [ConsignmentRevenueController::class, 'save'])->name('consignment-revenue.save');
         });
-
     });
 
     // Edit Data
@@ -422,7 +418,6 @@ Route::middleware('auth')->group(function () {
                     Route::get('/load-transaction', [ReverseTransactionController::class, 'loadTransaction'])->name('load-transaction');
                     Route::put('/reverse-transaction', [ReverseTransactionController::class, 'reverseTransaction'])->name('reverse-transaction');
                 });
-
             });
 
             Route::prefix('disbursement')->name('disbursement.')->group(function () {
@@ -435,9 +430,7 @@ Route::middleware('auth')->group(function () {
                     Route::put('/update', [EditDisbursementController::class, 'update'])->name('update');
                 });
             });
-
         });
-
     });
 
     // ── System Reports ──────────────────────────────────────────────────────────
@@ -524,7 +517,6 @@ Route::middleware('auth')->group(function () {
                 // ── Consignment Detail Modal (AJAX) ──────────────────────────────────────
                 Route::get('/consignment-modal/{consignmentId}', [OperationsReportController::class, 'consignmentModal'])
                     ->name('consignment-modal');
-
             });
 
         // Client Reports
@@ -539,7 +531,6 @@ Route::middleware('auth')->group(function () {
                 ->name('profile');
             Route::get('/profile/{consigneeId}/print', [ClientReportController::class, 'profilePrint'])
                 ->name('profile.print');
-
         });
 
         // Disbursement Reports
@@ -603,7 +594,6 @@ Route::middleware('auth')->group(function () {
                     ->name('comparative.item-descriptions');
                 Route::get('/comparative/container-sizes', [DisbursementReportController::class, 'containerSizes'])
                     ->name('comparative.container-sizes');
-
             });
 
         // Accounting Reports
@@ -669,8 +659,10 @@ Route::middleware('auth')->group(function () {
             ->prefix('management')
             ->name('management.')
             ->group(function () {
-                // reports added here as built
+                Route::get('/executive-summary', [ManagementReportController::class, 'executiveSummary'])
+                    ->name('executive-summary');
+                Route::get('/executive-summary/print', [ManagementReportController::class, 'executiveSummaryPrint'])
+                    ->name('executive-summary.print');
             });
     });
-
 });

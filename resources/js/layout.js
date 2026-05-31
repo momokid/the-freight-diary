@@ -5,7 +5,15 @@
  */
 
 // reveal page after CSS loads — prevents FOUC
-document.addEventListener("DOMContentLoaded", function () {});
+document.addEventListener("DOMContentLoaded", function () {
+    // ── Scroll sidebar to active link on every page load ──
+    const activeLink = document.querySelector(
+        "#sidebar nav .submenu-link.active",
+    );
+    if (activeLink) {
+        activeLink.scrollIntoView({ block: "nearest", behavior: "instant" });
+    }
+});
 
 document.body.style.visibility = "visible";
 
@@ -59,10 +67,12 @@ function closeSidebar() {
     overlay.classList.remove("active");
 }
 
-// ── Submenus ──
-// ── Submenus ──
 // Opening a submenu closes all others — only one open at a time.
 function toggleSubmenu(key) {
+    // Save scroll position before any DOM changes
+    const nav = document.querySelector("#sidebar nav");
+    const scrollTop = nav ? nav.scrollTop : 0;
+
     const submenu = document.getElementById("submenu-" + key);
     const arrow = document.getElementById("arrow-" + key);
     if (!submenu) return;
@@ -74,7 +84,6 @@ function toggleSubmenu(key) {
         if (el.id !== "submenu-" + key) {
             el.classList.remove("open");
             el.classList.add("closed");
-            // Reset the arrow for the closed submenu
             const otherKey = el.id.replace("submenu-", "");
             const otherArrow = document.getElementById("arrow-" + otherKey);
             if (otherArrow) otherArrow.style.transform = "";
@@ -85,6 +94,12 @@ function toggleSubmenu(key) {
     submenu.classList.toggle("open", !isOpen);
     submenu.classList.toggle("closed", isOpen);
     if (arrow) arrow.style.transform = isOpen ? "" : "rotate(180deg)";
+
+    // Restore scroll after browser reflow settles
+    if (nav)
+        requestAnimationFrame(() => {
+            nav.scrollTop = scrollTop;
+        });
 }
 
 // ── Auto-open active submenu on page load ──

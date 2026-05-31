@@ -160,7 +160,6 @@ class AccountingController extends Controller
                 'message' => 'Transaction saved successfully.',
                 'ReceiptNo' => $request->ReceiptNo,
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -272,7 +271,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── GL Double Entry ──
+            // ── GL Double Entry ──
             case 'GL_DOUBLE':
                 // Dr line
                 DB::table('journal')->insert([
@@ -308,7 +307,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Dr GL – Cr Income ──
+            // ── Dr GL – Cr Income ──
             case 'DR_GL_CR_INC':
                 // Dr GL line
                 DB::table('journal')->insert([
@@ -361,7 +360,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Dr Expense – Cr GL ──
+            // ── Dr Expense – Cr GL ──
             case 'CR_GL_DR_EXP':
                 // Cr GL line
                 DB::table('journal')->insert([
@@ -414,7 +413,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Cr GL – Dr Income ──
+            // ── Cr GL – Dr Income ──
             case 'CR_GL_DR_INC':
                 // Cr GL line
                 DB::table('journal')->insert([
@@ -467,7 +466,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Dr GL – Cr Expense ──
+            // ── Dr GL – Cr Expense ──
             case 'DR_GL_CR_EXP':
                 // Dr GL line
                 DB::table('journal')->insert([
@@ -520,7 +519,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Single Dr Income ──
+            // ── Single Dr Income ──
             case 'SINGLE_DR_INC':
                 DB::table('journal')->insert([
                     'AccountID' => $ieAccount->AccountID,
@@ -555,7 +554,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Single Cr Income ──
+            // ── Single Cr Income ──
             case 'SINGLE_CR_INC':
                 DB::table('journal')->insert([
                     'AccountID' => $ieAccount->AccountID,
@@ -590,7 +589,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Single Dr Expense ──
+            // ── Single Dr Expense ──
             case 'SINGLE_DR_EXP':
                 DB::table('journal')->insert([
                     'AccountID' => $ieAccount->AccountID,
@@ -625,7 +624,7 @@ class AccountingController extends Controller
                 ]);
                 break;
 
-                // ── Single Cr Expense ──
+            // ── Single Cr Expense ──
             case 'SINGLE_CR_EXP':
                 DB::table('journal')->insert([
                     'AccountID' => $ieAccount->AccountID,
