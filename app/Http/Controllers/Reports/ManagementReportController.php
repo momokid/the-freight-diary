@@ -154,4 +154,75 @@ class ManagementReportController extends Controller
             'user'
         ));
     }
+
+    public function outstandingCollections()
+    {
+        return view('reports.management.outstanding-collections');
+    }
+
+    public function outstandingCollectionsPrint(Request $request)
+    {
+        $request->validate([
+            'as_at' => 'required|date',
+        ]);
+
+        $asAt = $request->as_at;
+        $user = Auth::user();
+
+        // Main rows — one per consignee per BL/invoice reference
+        $rows = DB::select("
+            SELECT
+                sf.StudentID,
+                co.FullName AS ConsigneeName,
+                sf.Stamp,
+                CASE
+                    WHEN sf.Stamp = 'BL'       THEN sf.SubClassID
+                    WHEN sf.Stamp = 'BL_NONBL' THEN sf.CouponID
+                    ELSE sf.CouponID
+                END                                                         AS Reference,
+                MIN(CASE WHEN sf.Dr > 0 THEN sf.Date END)                  AS InvoiceDate,
+                DATEDIFF(?, MIN(CASE WHEN sf.Dr > 0 THEN sf.Date END))     AS DaysOutstanding,
+                COALESCE(SUM(sf.Dr), 0) - COALESCE(SUM(sf.Cr), 0)         AS Outstanding
+            FROM student_fee sf
+            JOIN consignee_main co ON co.ConsigneeID = sf.StudentID
+            WHERE sf.Date <= ?
+            GROUP BY
+                sf.StudentID,
+                co.FullName,
+                sf.SubClassID,
+                sf.CouponID,
+                sf.Stamp
+            HAVING COALESCE(SUM(sf.Dr), 0) - COALESCE(SUM(sf.Cr), 0) > 0
+            ORDER BY co.FullName, InvoiceDate
+        ", [$asAt, $asAt]);
+
+        // Summary strip — totals by aging bucket
+        $summary = DB::selectOne("
+            SELECT
+                COALESCE(SUM(Outstanding), 0)                                                        AS total,
+                COALESCE(SUM(CASE WHEN DaysOutstanding <= 30                   THEN Outstanding END), 0) AS bucket_30,
+                COALESCE(SUM(CASE WHEN DaysOutstanding BETWEEN 31 AND 60      THEN Outstanding END), 0) AS bucket_60,
+                COALESCE(SUM(CASE WHEN DaysOutstanding BETWEEN 61 AND 90      THEN Outstanding END), 0) AS bucket_90,
+                COALESCE(SUM(CASE WHEN DaysOutstanding > 90                   THEN Outstanding END), 0) AS bucket_90plus
+            FROM (
+                SELECT
+                    COALESCE(SUM(sf.Dr), 0) - COALESCE(SUM(sf.Cr), 0)                              AS Outstanding,
+                    DATEDIFF(?, MIN(CASE WHEN sf.Dr > 0 THEN sf.Date END))                          AS DaysOutstanding
+                FROM student_fee sf
+                WHERE sf.Date <= ?
+                GROUP BY sf.StudentID, sf.SubClassID, sf.CouponID, sf.Stamp
+                HAVING COALESCE(SUM(sf.Dr), 0) - COALESCE(SUM(sf.Cr), 0) > 0
+            ) AS aged
+        ", [$asAt, $asAt]);
+
+        $company = CompanyService::get();
+
+        return view('reports.management.outstanding-collections-print', compact(
+            'rows',
+            'summary',
+            'asAt',
+            'company',
+            'user'
+        ));
+    }
 }

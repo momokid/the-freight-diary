@@ -663,6 +663,11 @@ Route::middleware('auth')->group(function () {
                     ->name('executive-summary');
                 Route::get('/executive-summary/print', [ManagementReportController::class, 'executiveSummaryPrint'])
                     ->name('executive-summary.print');
+
+                Route::get('/outstanding-collections', [ManagementReportController::class, 'outstandingCollections'])
+                    ->name('outstanding-collections');
+                Route::get('/outstanding-collections/print', [ManagementReportController::class, 'outstandingCollectionsPrint'])
+                    ->name('outstanding-collections.print');
             });
     });
 });

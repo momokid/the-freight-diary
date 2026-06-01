@@ -13,19 +13,38 @@
             </p>
         </div>
 
-        <div style="display:flex; flex-wrap:wrap; gap:1.25rem; align-items:flex-start;">
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:1.25rem; align-items:stretch;">
 
             {{-- Executive Summary card --}}
-            <div class="card" style="padding:0; width:320px;">
+            <div class="card" style="padding:0; display:flex; flex-direction:column;">
                 <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
                     <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
                         EXECUTIVE SUMMARY
                     </p>
                 </div>
-                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem;">
+                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem; flex:1;">
                     <input type="date" id="date_from" class="form-input">
                     <input type="date" id="date_to" class="form-input">
-                    <button onclick="window.viewReport()" class="btn btn-primary" style="width:100%; margin-top:0.25rem;">
+                    <button onclick="window.viewReport()" class="btn btn-primary" style="width:100%; margin-top:auto;">
+                        View Report
+                    </button>
+                </div>
+            </div>
+
+            {{-- Outstanding Collections card --}}
+            <div class="card" style="padding:0; display:flex; flex-direction:column;">
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                    <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
+                        OUTSTANDING COLLECTIONS
+                    </p>
+                </div>
+                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem; flex:1;">
+                    <p style="font-size:0.75rem; color:var(--text-muted); line-height:1.5;">
+                        Shows all unpaid client charges aged by days outstanding as at a selected date.
+                    </p>
+                    <input type="date" id="oc_as_at" class="form-input">
+                    <button onclick="window.viewOutstandingCollections()" class="btn btn-primary"
+                        style="width:100%; margin-top:auto;">
                         View Report
                     </button>
                 </div>
@@ -63,7 +82,24 @@
             window.open(url, '_blank');
         };
 
+        window.OutstandingCollections = {
+            printUrl: '{{ route('reports.management.outstanding-collections.print') }}'
+        };
+
+        window.viewOutstandingCollections = function() {
+            const asAt = document.getElementById('oc_as_at').value;
+
+            if (!asAt) {
+                alert('Please select an As At date.');
+                return;
+            }
+
+            const url = window.OutstandingCollections.printUrl + '?as_at=' + asAt;
+            window.open(url, '_blank');
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('oc_as_at').value = today;
             const today = new Date().toISOString().split('T')[0];
             const firstDay = new Date(
                 new Date().getFullYear(),
