@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\CompanyService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,38 +10,26 @@ use App\Models\UserAuth;
 
 class DashboardController extends Controller
 {
-    private int $perPage = 10;
+    private int $trackerPageSize = 8;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Main page load — widget data loads via AJAX, not here
-    // ─────────────────────────────────────────────────────────────────────────
+    // 
+    // Main page load — no widget data here, all loads via AJAX
     public function index()
     {
-        $user     = Auth::user();
+        $user = Auth::user();
         return view('dashboard', compact('user'));
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+
     // AJAX refresh — returns rendered Blade partial for one widget
-    // JS injects the HTML directly into the widget container
-    // ─────────────────────────────────────────────────────────────────────────
     public function refresh(Request $request)
     {
         $widget   = $request->input('widget');
         $user     = Auth::user();
-        $userAuth = UserAuth::query()->where('Username', $user->ID)->first();
-        // Admin-0 sees all branches — null means no branch filter
-        $branch = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+        $branch   = $user->Nature === 'Admin-0' ? null : $user->BranchID;
 
         [$view, $data] = match ($widget) {
-
-            'tracker' => $userAuth->hasPermission('ConsignmentRegister')
-                ? ['dashboard._tracker', $this->buildTracker(
-                    $branch,
-                    max(1, (int) $request->input('left_page',  1)),
-                    max(1, (int) $request->input('right_page', 1))
-                )]
-                : [null, null],
 
             'financial' => $userAuth->hasPermission('AccountingReport')
                 ? ['dashboard._financial', array_merge(
@@ -80,10 +67,195 @@ class DashboardController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Chart data — 12-month container registration trend
+    // Returns JSON: { labels: [...], values: [...] }
+    // ─────────────────────────────────────────────────────────────────────────
+    public function chartData(Request $request)
+    {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
+        $branch = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $bf     = $this->branchFilter($branch, 'cd');
+
+        $rows = DB::select("
+            SELECT
+                DATE_FORMAT(cd.Date, '%b %Y') AS label,
+                DATE_FORMAT(cd.Date, '%Y-%m') AS month_key,
+                COUNT(*)                       AS total
+            FROM container_details cd
+            WHERE cd.Date >= DATE_FORMAT(
+                DATE_SUB(CURDATE(), INTERVAL 11 MONTH), '%Y-%m-01'
+            )
+            {$bf['sql']}
+            GROUP BY DATE_FORMAT(cd.Date, '%Y-%m'), DATE_FORMAT(cd.Date, '%b %Y')
+            ORDER BY month_key ASC
+        ", $bf['bindings']);
+
+        // Build a full 12-slot array — fill zero for months with no data
+        $indexed = [];
+        foreach ($rows as $row) {
+            $indexed[$row->month_key] = [
+                'label' => $row->label,
+                'total' => (int) $row->total,
+            ];
+        }
+
+        $labels = [];
+        $values = [];
+
+        for ($i = 11; $i >= 0; $i--) {
+            $key   = Carbon::now()->subMonths($i)->format('Y-m');
+            $label = Carbon::now()->subMonths($i)->format('M Y');
+
+            $labels[] = $label;
+            $values[] = isset($indexed[$key]) ? $indexed[$key]['total'] : 0;
+        }
+
+        return response()->json([
+            'labels' => $labels,
+            'values' => $values,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Tracker data — status cards with Show More pagination
+    // Returns JSON: { html: '...', hasMore: bool, nextOffset: int }
+    // ─────────────────────────────────────────────────────────────────────────
+    public function trackerData(Request $request)
+    {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
+        $branch  = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $offset  = max(0, (int) $request->input('offset', 0));
+        $canEdit = $userAuth->hasPermission('EditData');
+        $bf      = $this->branchFilter($branch, 'cm');
+
+        // ── Classify each consignment into a priority group ──────────────────
+        // Priority 1 (Green)  — Status 2 + IN-HARBOR disbursement exists
+        // Priority 2 (Red)    — Status 2 + no IN-HARBOR disbursement
+        // Priority 3 (Blue)   — Status 1 (Not Arrived)
+        // Priority 4 (Amber)  — Status 3 + zero containers returned
+        // Priority 5 (Purple) — Status 3 + some but not all containers returned
+
+        $rows = DB::select("
+            SELECT
+                cm.ConsignmentID,
+                cm.BL,
+                cm.ETA,
+                cm.Status,
+                cm.Destination,
+                cm.Date                                         AS RegisteredDate,
+                COALESCE(co.FullName, '—')                     AS ConsigneeName,
+                TO_DAYS(cm.ETA) - TO_DAYS(CURDATE())           AS ETADays,
+                -- Gate-out ready flag
+                EXISTS (
+                    SELECT 1 FROM disbursement_analysis da
+                    WHERE da.BL = cm.BL
+                      AND da.Stamp = 'IN-HARBOR'
+                )                                              AS HasDisbursement,
+                -- Container return counts for Status=3 classification
+                (
+                    SELECT COUNT(*) FROM container_details cd
+                    WHERE cd.ConsignmentID = cm.ConsignmentID
+                )                                              AS TotalContainers,
+                (
+                    SELECT COUNT(*) FROM container_details cd
+                    WHERE cd.ConsignmentID = cm.ConsignmentID
+                      AND cd.ReturnDate IS NOT NULL
+                      AND cd.Status = 4
+                )                                              AS ReturnedContainers,
+                -- Priority for ordering
+                CASE
+                    WHEN cm.Status = 2 AND EXISTS (
+                        SELECT 1 FROM disbursement_analysis da
+                        WHERE da.BL = cm.BL AND da.Stamp = 'IN-HARBOR'
+                    ) THEN 1
+                    WHEN cm.Status = 2 THEN 2
+                    WHEN cm.Status = 1 THEN 3
+                    WHEN cm.Status = 3 AND (
+                        SELECT COUNT(*) FROM container_details cd
+                        WHERE cd.ConsignmentID = cm.ConsignmentID
+                          AND cd.ReturnDate IS NOT NULL AND cd.Status = 4
+                    ) = 0 THEN 4
+                    ELSE 5
+                END                                            AS Priority
+            FROM container_main cm
+            LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
+            WHERE cm.Status IN (1, 2, 3)
+              AND cm.Ownership = 1
+            {$bf['sql']}
+            ORDER BY Priority ASC, cm.ETA ASC
+            LIMIT ? OFFSET ?
+        ", array_merge($bf['bindings'], [$this->trackerPageSize + 1, $offset]));
+
+        // Fetch one extra row to know if more exist
+        $hasMore    = count($rows) > $this->trackerPageSize;
+        $rows       = array_slice($rows, 0, $this->trackerPageSize);
+        $nextOffset = $offset + $this->trackerPageSize;
+
+        $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
+
+        return response()->json([
+            'html'       => $html,
+            'hasMore'    => $hasMore,
+            'nextOffset' => $nextOffset,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Tracker containers — accordion content for a single consignment
+    // Returns rendered HTML of container list with Mark Returned buttons
+    // ─────────────────────────────────────────────────────────────────────────
+    public function trackerContainers(Request $request)
+    {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
+        $request->validate([
+            'consignmentId' => 'required|integer',
+            'bl'            => 'required|string|max:100',
+        ]);
+
+        $consignmentId = (int) $request->input('consignmentId');
+        $bl            = $request->input('bl');
+
+        $containers = DB::table('container_details')
+            ->where('ConsignmentID', $consignmentId)
+            ->select('ContainerNo', 'ContainerSize', 'Status', 'GateOutDate', 'ReturnDate')
+            ->orderBy('ContainerNo')
+            ->get();
+
+        $html = view('dashboard._tracker_containers', compact('containers', 'consignmentId', 'bl'))->render();
+
+        return response()->json(['html' => $html]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Gate-out — marks all containers under a consignment as gated out
     // ─────────────────────────────────────────────────────────────────────────
     public function gateOut(Request $request, int $consignmentId, string $bl)
     {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
         $today = Carbon::today()->toDateString();
 
         DB::table('container_details')
@@ -103,10 +275,17 @@ class DashboardController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
     // Container clear — marks one container as returned
-    // If all containers cleared → marks consignment as cleared too
+    // If all containers cleared → marks consignment as cleared (Status 0)
     // ─────────────────────────────────────────────────────────────────────────
     public function containerClear(Request $request, int $consignmentId, string $containerNo)
     {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
         $today = Carbon::today()->toDateString();
 
         DB::table('container_details')
@@ -117,7 +296,6 @@ class DashboardController extends Controller
                 'ReturnDate' => $today,
             ]);
 
-        // Check if all containers under this consignment are now returned
         $pending = DB::table('container_details')
             ->where('ConsignmentID', $consignmentId)
             ->where('Status', '!=', 4)
@@ -133,9 +311,121 @@ class DashboardController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Drawer — pending disbursements
+    // ─────────────────────────────────────────────────────────────────────────
+    public function drawerDisbs(Request $request)
+    {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('DisbursementApproval')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
+        $branch = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $bf     = $this->branchFilter($branch, 'cm');
+
+        $rows = DB::select("
+            SELECT
+                cm.ConsignmentID,
+                cm.BL,
+                cm.Status,
+                cm.ETA,
+                cm.Destination,
+                COALESCE(co.FullName, '—') AS ConsigneeName,
+                DATEDIFF(CURDATE(), cm.ETA) AS DaysOverdue
+            FROM container_main cm
+            LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
+            WHERE cm.Ownership = 1
+              AND cm.Status IN (1, 2)
+              AND DATEDIFF(CURDATE(), cm.ETA) > 0
+              AND COALESCE((
+                  SELECT SUM(da.Expenditure)
+                  FROM disbursement_analysis da
+                  WHERE da.BL = cm.BL
+              ), 0) = 0
+            {$bf['sql']}
+            ORDER BY cm.Status ASC, cm.ETA ASC
+        ", $bf['bindings']);
+
+        return response()->json($rows);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Drawer — pending consignments (ETA editing)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function drawerPendingConsignments(Request $request)
+    {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
+        $branch  = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $bf      = $this->branchFilter($branch, 'ip');
+        $canEdit = $userAuth->hasPermission('EditData');
+
+        $rows = DB::select("
+            SELECT
+                ip.ConsignmentID,
+                ip.BL,
+                ip.ConsigneeName,
+                ip.Destination,
+                ip.ETA,
+                ip.ETADays,
+                EXISTS (
+                    SELECT 1 FROM disbursement_analysis da
+                    WHERE da.BL = ip.BL
+                      AND da.Stamp = 'IN-HARBOR'
+                ) AS DisbursementApproved
+            FROM inharbor_pending_1 ip
+            WHERE 1=1
+            {$bf['sql']}
+            ORDER BY ip.ETADays ASC
+        ", $bf['bindings']);
+
+        return response()->json(['rows' => $rows, 'canEdit' => $canEdit]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ETA update — EditData permission required
+    // ─────────────────────────────────────────────────────────────────────────
+    public function updateEta(Request $request)
+    {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('EditData')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
+        $request->validate([
+            'consignmentId' => 'required|integer',
+            'bl'            => 'required|string',
+            'eta'           => 'required|date',
+        ]);
+
+        DB::table('container_main')
+            ->where('ConsignmentID', $request->consignmentId)
+            ->where('BL', $request->bl)
+            ->update(['ETA' => $request->eta]);
+
+        $result = DB::selectOne(
+            "SELECT TO_DAYS(?) - TO_DAYS(CURDATE()) AS etaDays",
+            [$request->eta]
+        );
+
+        return response()->json([
+            'success' => true,
+            'eta'     => $request->eta,
+            'etaDays' => (int) $result->etaDays,
+        ]);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Branch filter helper
-    // Returns SQL fragment + bindings for raw queries
-    // Returns empty when branch is null (Admin-0 — sees all branches)
     // ─────────────────────────────────────────────────────────────────────────
     private function branchFilter(?int $branch, string $alias = ''): array
     {
@@ -145,96 +435,16 @@ class DashboardController extends Controller
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Widget builders
+    // Widget builders — financial, cash, collections, transactions, vision,
+    // disbursements — all unchanged from previous working version
     // ─────────────────────────────────────────────────────────────────────────
-
-    private function buildTracker(?int $branch, int $leftPage, int $rightPage): array
-    {
-        $bfLeft  = $this->branchFilter($branch, 'ip');
-        $bfRight = $this->branchFilter($branch, 'cm');
-        $offset  = fn(int $page) => ($page - 1) * $this->perPage;
-
-        // ── Left panel — uses inharbor_pending_1 view ─────────────────────────
-        // View already filters: Status = 1, Ownership = 1, ConsigneeName joined,
-        // ETADays pre-calculated as TO_DAYS(ETA) - TO_DAYS(CURDATE())
-
-        $leftTotal = DB::selectOne("
-        SELECT COUNT(*) AS total
-        FROM inharbor_pending_1 ip
-        WHERE 1=1
-        {$bfLeft['sql']}
-    ", $bfLeft['bindings'])->total;
-
-        $leftRows = DB::select("
-        SELECT
-            ip.ConsignmentID,
-            ip.BL,
-            ip.ETA,
-            ip.ETADays,
-            ip.Status,
-            ip.Destination,
-            ip.ConsigneeName,
-            EXISTS (
-                SELECT 1 FROM disbursement_analysis da
-                WHERE da.BL = ip.BL
-                  AND da.Stamp = 'IN-HARBOR'
-            )                           AS DisbursementApproved
-        FROM inharbor_pending_1 ip
-        WHERE 1=1
-        {$bfLeft['sql']}
-        ORDER BY ip.ETADays ASC
-        LIMIT ? OFFSET ?
-    ", array_merge($bfLeft['bindings'], [$this->perPage, $offset($leftPage)]));
-
-        // ── Right panel — gated-out containers awaiting return ────────────────
-
-        $rightTotal = DB::selectOne("
-        SELECT COUNT(*) AS total
-        FROM container_details cd
-        JOIN container_main cm ON cm.ConsignmentID = cd.ConsignmentID
-        WHERE cd.Status = 3
-        AND cm.Ownership = 1
-        {$bfRight['sql']}
-    ", $bfRight['bindings'])->total;
-
-        $rightRows = DB::select("
-        SELECT
-            cd.ContainerNo,
-            cd.ContainerSize,
-            cd.GateOutDate,
-            cm.BL,
-            cm.ConsignmentID,
-            cm.Destination
-        FROM container_details cd
-        JOIN container_main cm ON cm.ConsignmentID = cd.ConsignmentID
-        WHERE cd.Status = 3
-        {$bfRight['sql']}
-        ORDER BY cd.GateOutDate ASC
-        LIMIT ? OFFSET ?
-    ", array_merge($bfRight['bindings'], [$this->perPage, $offset($rightPage)]));
-
-        return [
-            'left'  => [
-                'rows'     => $leftRows,
-                'total'    => (int) $leftTotal,
-                'page'     => $leftPage,
-                'lastPage' => max(1, (int) ceil($leftTotal / $this->perPage)),
-            ],
-            'right' => [
-                'rows'     => $rightRows,
-                'total'    => (int) $rightTotal,
-                'page'     => $rightPage,
-                'lastPage' => max(1, (int) ceil($rightTotal / $this->perPage)),
-            ],
-        ];
-    }
 
     private function buildFinancial(?int $branch): array
     {
         $monthStart = Carbon::now()->startOfMonth()->toDateString();
         $today      = Carbon::today()->toDateString();
+        $ie         = DB::table('active_ie')->first();
 
-        $ie = DB::table('active_ie')->first();
         if (!$ie) {
             return ['revenue' => 0, 'expenditure' => 0, 'net' => 0, 'trend' => [], 'monthLabel' => ''];
         }
@@ -259,16 +469,15 @@ class DashboardController extends Controller
             ->selectRaw('COALESCE(SUM(journal.Dr), 0) - COALESCE(SUM(journal.Cr), 0) AS total')
             ->value('total') ?? 0;
 
-        // Last 6 months trend for bar chart
         $bf    = $this->branchFilter($branch, 'j');
         $trend = DB::select("
             SELECT
-                DATE_FORMAT(j.Date, '%b %Y')                                          AS month_label,
-                DATE_FORMAT(j.Date, '%Y-%m')                                          AS month_key,
+                DATE_FORMAT(j.Date, '%b %Y')  AS month_label,
+                DATE_FORMAT(j.Date, '%Y-%m')  AS month_key,
                 COALESCE(SUM(CASE WHEN la.Type = 'INCOME'
-                    THEN j.Cr - j.Dr ELSE 0 END), 0)                                 AS revenue,
+                    THEN j.Cr - j.Dr ELSE 0 END), 0)      AS revenue,
                 COALESCE(SUM(CASE WHEN la.Type = 'EXPENDITURE'
-                    THEN j.Dr - j.Cr ELSE 0 END), 0)                                 AS expenditure
+                    THEN j.Dr - j.Cr ELSE 0 END), 0)      AS expenditure
             FROM journal j
             JOIN ledger_account la ON la.AccountNo = j.SubAccountID
             JOIN active_ie ai      ON ai.AccountID = j.AccountID
@@ -312,26 +521,25 @@ class DashboardController extends Controller
 
     private function buildCollections(): array
     {
-        // student_fee has no BranchID — all users see all outstanding collections
         $today = Carbon::today()->toDateString();
 
         $summary = DB::selectOne("
             SELECT
-                COALESCE(SUM(Outstanding), 0)                                               AS total,
-                COUNT(DISTINCT StudentID)                                                    AS clientCount,
+                COALESCE(SUM(Outstanding), 0)                       AS total,
+                COUNT(DISTINCT StudentID)                            AS clientCount,
                 COALESCE(SUM(CASE WHEN DaysOutstanding <= 30
-                    THEN Outstanding END), 0)                                               AS bucket_30,
+                    THEN Outstanding END), 0)                       AS bucket_30,
                 COALESCE(SUM(CASE WHEN DaysOutstanding BETWEEN 31 AND 60
-                    THEN Outstanding END), 0)                                               AS bucket_60,
+                    THEN Outstanding END), 0)                       AS bucket_60,
                 COALESCE(SUM(CASE WHEN DaysOutstanding BETWEEN 61 AND 90
-                    THEN Outstanding END), 0)                                               AS bucket_90,
+                    THEN Outstanding END), 0)                       AS bucket_90,
                 COALESCE(SUM(CASE WHEN DaysOutstanding > 90
-                    THEN Outstanding END), 0)                                               AS bucket_90plus
+                    THEN Outstanding END), 0)                       AS bucket_90plus
             FROM (
                 SELECT
                     sf.StudentID,
-                    COALESCE(SUM(sf.Dr), 0) - COALESCE(SUM(sf.Cr), 0)                     AS Outstanding,
-                    DATEDIFF(?, MIN(CASE WHEN sf.Dr > 0 THEN sf.Date END))                 AS DaysOutstanding
+                    COALESCE(SUM(sf.Dr), 0) - COALESCE(SUM(sf.Cr), 0) AS Outstanding,
+                    DATEDIFF(?, MIN(CASE WHEN sf.Dr > 0 THEN sf.Date END)) AS DaysOutstanding
                 FROM student_fee sf
                 WHERE sf.Date <= ?
                 GROUP BY sf.StudentID, sf.SubClassID, sf.CouponID, sf.Stamp
@@ -363,6 +571,49 @@ class DashboardController extends Controller
         ", $bf['bindings']);
 
         return ['rows' => $rows];
+    }
+
+    private function buildDisbursements(?int $branch): array
+    {
+        $bf = $this->branchFilter($branch, 'cm');
+
+        $pendingResult = DB::selectOne("
+            SELECT
+                SUM(CASE WHEN cm.Status = 1 THEN 1 ELSE 0 END) AS arrived,
+                SUM(CASE WHEN cm.Status = 2 THEN 1 ELSE 0 END) AS inHarbor
+            FROM container_main cm
+            WHERE cm.Ownership = 1
+              AND cm.Status IN (1, 2)
+              AND DATEDIFF(CURDATE(), cm.ETA) > 0
+              AND COALESCE((
+                  SELECT SUM(da.Expenditure)
+                  FROM disbursement_analysis da
+                  WHERE da.BL = cm.BL
+              ), 0) = 0
+            {$bf['sql']}
+        ", $bf['bindings']);
+
+        $gatedOutResult = DB::selectOne("
+            SELECT COUNT(*) AS gatedOut
+            FROM container_main cm
+            WHERE cm.Ownership = 1
+              AND cm.Status = 3
+              AND COALESCE((
+                  SELECT SUM(da.Expenditure)
+                  FROM disbursement_analysis da
+                  WHERE da.BL = cm.BL
+              ), 0) > 0
+            {$bf['sql']}
+        ", $bf['bindings']);
+
+        $summary = (object) [
+            'total'    => (int) $pendingResult->arrived + (int) $pendingResult->inHarbor,
+            'arrived'  => (int) $pendingResult->arrived,
+            'inHarbor' => (int) $pendingResult->inHarbor,
+            'gatedOut' => (int) $gatedOutResult->gatedOut,
+        ];
+
+        return ['summary' => $summary, 'overdue' => $summary->total];
     }
 
     private function buildVision(?int $branch): array
@@ -407,162 +658,7 @@ class DashboardController extends Controller
             'cumulative'  => $cumulative,
             'progressPct' => $progressPct,
             'rag'         => $progressPct >= 100 ? 'green'
-                : ($progressPct >= 75  ? 'amber' : 'red'),
+                : ($progressPct >= 75 ? 'amber' : 'red'),
         ];
-    }
-
-    private function buildDisbursements(?int $branch): array
-    {
-        $bf = $this->branchFilter($branch, 'cm');
-
-        // Arrived (Status=1) + In Harbor (Status=2) — ETA overdue, no expenditure
-        $pendingResult = DB::selectOne("
-        SELECT
-            SUM(CASE WHEN cm.Status = 1 THEN 1 ELSE 0 END)   AS arrived,
-            SUM(CASE WHEN cm.Status = 2 THEN 1 ELSE 0 END)   AS inHarbor
-        FROM container_main cm
-        WHERE cm.Ownership = 1
-          AND cm.Status IN (1, 2)
-          AND DATEDIFF(CURDATE(), cm.ETA) > 0
-          AND COALESCE((
-              SELECT SUM(da.Expenditure)
-              FROM disbursement_analysis da
-              WHERE da.BL = cm.BL
-          ), 0) = 0
-        {$bf['sql']}
-    ", $bf['bindings']);
-
-        // Gated Out (Status=3) — has expenditure recorded (compliance monitoring)
-        $gatedOutResult = DB::selectOne("
-        SELECT COUNT(*) AS gatedOut
-        FROM container_main cm
-        WHERE cm.Ownership = 1
-          AND cm.Status = 3
-          AND COALESCE((
-              SELECT SUM(da.Expenditure)
-              FROM disbursement_analysis da
-              WHERE da.BL = cm.BL
-          ), 0) > 0
-        {$bf['sql']}
-    ", $bf['bindings']);
-
-        $summary = (object) [
-            'total'    => (int) $pendingResult->arrived + (int) $pendingResult->inHarbor,
-            'arrived'  => (int) $pendingResult->arrived,
-            'inHarbor' => (int) $pendingResult->inHarbor,
-            'gatedOut' => (int) $gatedOutResult->gatedOut,
-        ];
-
-        return ['summary' => $summary, 'overdue' => $summary->total];
-    }
-
-    public function drawerDisbs(Request $request)
-    {
-        $user     = Auth::user();
-        $userAuth = UserAuth::where('Username', '=', $user->ID)->first();
-
-        if (!$userAuth || !$userAuth->hasPermission('DisbursementApproval')) {
-            return response()->json(['error' => 'Unauthorised'], 403);
-        }
-
-        $branch = $user->Nature === 'Admin-0' ? null : $user->BranchID;
-        $bf     = $this->branchFilter($branch, 'cm');
-
-        $rows = DB::select("
-        SELECT
-            cm.ConsignmentID,
-            cm.BL,
-            cm.Status,
-            cm.ETA,
-            cm.Destination,
-            COALESCE(co.FullName, '—') AS ConsigneeName,
-            DATEDIFF(CURDATE(), cm.ETA)         AS DaysOverdue
-        FROM container_main cm
-        LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
-        WHERE cm.Ownership = 1
-          AND cm.Status IN (1, 2)
-          AND DATEDIFF(CURDATE(), cm.ETA) > 0
-          AND COALESCE((
-              SELECT SUM(da.Expenditure)
-              FROM disbursement_analysis da
-              WHERE da.BL = cm.BL
-          ), 0) = 0
-        {$bf['sql']}
-        ORDER BY cm.Status ASC, cm.ETA ASC
-    ", $bf['bindings']);
-
-        return response()->json($rows);
-    }
-
-
-    public function drawerPendingConsignments(Request $request)
-    {
-        $user     = Auth::user();
-        $userAuth = UserAuth::where('Username', $user->ID)->first();
-
-        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
-            return response()->json(['error' => 'Unauthorised'], 403);
-        }
-
-        $branch  = $user->Nature === 'Admin-0' ? null : $user->BranchID;
-        $bf      = $this->branchFilter($branch, 'ip');
-        $canEdit = $userAuth->hasPermission('EditData');
-
-        $rows = DB::select("
-    SELECT
-        ip.ConsignmentID,
-        ip.BL,
-        ip.ConsigneeName,
-        ip.Destination,
-        ip.ETA,
-        ip.ETADays,
-        EXISTS (
-            SELECT 1 FROM disbursement_analysis da
-            WHERE da.BL = ip.BL
-              AND da.Stamp = 'IN-HARBOR'
-        ) AS DisbursementApproved
-        FROM inharbor_pending_1 ip
-        WHERE 1=1
-        {$bf['sql']}
-        ORDER BY ip.ETADays ASC
-        ", $bf['bindings']);
-
-        return response()->json(['rows' => $rows, 'canEdit' => $canEdit]);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ETA update — EditData permission required
-    // ─────────────────────────────────────────────────────────────────────────
-    public function updateEta(Request $request)
-    {
-        $user     = Auth::user();
-        $userAuth = UserAuth::where('Username', $user->ID)->first();
-
-        if (!$userAuth || !$userAuth->hasPermission('EditData')) {
-            return response()->json(['error' => 'Unauthorised'], 403);
-        }
-
-        $request->validate([
-            'consignmentId' => 'required|integer',
-            'bl'            => 'required|string',
-            'eta'           => 'required|date',
-        ]);
-
-        DB::table('container_main')
-            ->where('ConsignmentID', $request->consignmentId)
-            ->where('BL', $request->bl)
-            ->update(['ETA' => $request->eta]);
-
-        // Recalculate ETADays using same formula as the view
-        $result = DB::selectOne(
-            "SELECT TO_DAYS(?) - TO_DAYS(CURDATE()) AS etaDays",
-            [$request->eta]
-        );
-
-        return response()->json([
-            'success' => true,
-            'eta'     => $request->eta,
-            'etaDays' => (int) $result->etaDays,
-        ]);
     }
 }

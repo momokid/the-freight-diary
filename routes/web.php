@@ -121,6 +121,15 @@ Route::middleware('auth')->group(function () {
             [DashboardController::class, 'updateEta']
         )
             ->name('eta.update');
+
+        Route::get('/chart', [DashboardController::class, 'chartData'])
+            ->name('chart');
+
+        Route::get('/tracker', [DashboardController::class, 'trackerData'])
+            ->name('tracker');
+
+        Route::get('/tracker/containers', [DashboardController::class, 'trackerContainers'])
+            ->name('tracker.containers');
     });
 
     // Consignee management
