@@ -53,7 +53,7 @@ class AppServiceProvider extends ServiceProvider
                 static $company           = null;
 
                 if ($pendingResetCount === null) {
-                    $pendingResetCount = User::where('reset_requested', 1)->count();
+                    $pendingResetCount = User::where('reset_requested', '=', 1)->count();
                 }
 
                 if ($userAuth === null) {

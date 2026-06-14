@@ -87,6 +87,42 @@ Route::middleware('auth')->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    // ── Dashboard AJAX ────────────────────────────────────────────────────────
+    Route::prefix('dashboard')->name('dashboard.')->group(function () {
+        Route::get('/refresh', [DashboardController::class, 'refresh'])
+            ->name('refresh');
+
+        Route::post(
+            '/gate-out/{consignmentId}/{bl}',
+            [DashboardController::class, 'gateOut']
+        )
+            ->name('gate-out');
+
+        Route::post(
+            '/container-clear/{consignmentId}/{containerNo}',
+            [DashboardController::class, 'containerClear']
+        )
+            ->name('container-clear');
+
+        Route::get(
+            '/drawer/disbursements',
+            [DashboardController::class, 'drawerDisbs']
+        )
+            ->name('drawer.disbursements');
+
+        Route::get(
+            '/drawer/pending-consignments',
+            [DashboardController::class, 'drawerPendingConsignments']
+        )
+            ->name('drawer.pending-consignments');
+
+        Route::post(
+            '/eta/update',
+            [DashboardController::class, 'updateEta']
+        )
+            ->name('eta.update');
+    });
+
     // Consignee management
     Route::prefix('master-data')->name('master-data.')->group(function () {
         Route::get('/consignees', [ConsigneeController::class, 'index'])->name('consignees.index');
@@ -668,6 +704,11 @@ Route::middleware('auth')->group(function () {
                     ->name('outstanding-collections');
                 Route::get('/outstanding-collections/print', [ManagementReportController::class, 'outstandingCollectionsPrint'])
                     ->name('outstanding-collections.print');
+
+                Route::get('/financial-performance', [ManagementReportController::class, 'financialPerformance'])
+                    ->name('financial-performance');
+                Route::get('/financial-performance/print', [ManagementReportController::class, 'financialPerformancePrint'])
+                    ->name('financial-performance.print');
             });
     });
 });

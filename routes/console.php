@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Schedule;
 //archive login logs daily at midnight
 Schedule::command('logs:archive')->dailyAt('00:00');
 
+Schedule::command('alerts:eta')->dailyAt('07:00');
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

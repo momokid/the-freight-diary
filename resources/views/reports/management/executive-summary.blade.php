@@ -50,6 +50,30 @@
                 </div>
             </div>
 
+
+            {{-- Financial Performance card  ----- --}}
+            <div class="card" style="padding:0; display:flex; flex-direction:column;">
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);">
+                    <p style="font-size:0.8rem; font-weight:700; color:#185FA5; letter-spacing:0.04em;">
+                        FINANCIAL PERFORMANCE
+                    </p>
+                </div>
+                <div style="padding:1.25rem; display:flex; flex-direction:column; gap:0.75rem; flex:1;">
+                    {{-- Month picker --}}
+                    <input type="month" id="fp_period" class="form-input">
+                    {{-- Comparison type --}}
+                    <select id="fp_compare" class="form-input">
+                        <option value="prev_month">vs Previous Month</option>
+                        <option value="same_month_last_year">vs Same Month Last Year</option>
+                        <option value="year_on_year">Year on Year (YTD)</option>
+                    </select>
+                    <button onclick="window.viewFinancialPerformance()" class="btn btn-primary"
+                        style="width:100%; margin-top:auto;">
+                        View Report
+                    </button>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -98,16 +122,43 @@
             window.open(url, '_blank');
         };
 
+        // ── Financial Performance ──────────────────────────────────────────────
+        window.FinancialPerformance = {
+            printUrl: '{{ route('reports.management.financial-performance.print') }}'
+        };
+
+        window.viewFinancialPerformance = function() {
+            const period = document.getElementById('fp_period').value;
+            const compare = document.getElementById('fp_compare').value;
+
+            if (!period) {
+                alert('Please select a period.');
+                return;
+            }
+
+            const url = window.FinancialPerformance.printUrl +
+                '?period=' + period +
+                '&compare=' + compare;
+
+            window.open(url, '_blank');
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('oc_as_at').value = today;
-            const today = new Date().toISOString().split('T')[0];
+            const nowDate = new Date();
+            const todayStr = nowDate.toISOString().split('T')[0];
             const firstDay = new Date(
-                new Date().getFullYear(),
-                new Date().getMonth(), 1
+                nowDate.getFullYear(),
+                nowDate.getMonth(), 1
             ).toISOString().split('T')[0];
 
             document.getElementById('date_from').value = firstDay;
-            document.getElementById('date_to').value = today;
+            document.getElementById('date_to').value = todayStr;
+            document.getElementById('oc_as_at').value = todayStr;
+
+            // fp_period — current month in YYYY-MM format
+            const yyyy = nowDate.getFullYear();
+            const mm = String(nowDate.getMonth() + 1).padStart(2, '0');
+            document.getElementById('fp_period').value = yyyy + '-' + mm;
         });
     </script>
 @endpush

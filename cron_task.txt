@@ -1,0 +1,1 @@
+* * * * * /usr/local/bin/php /home/YOUR_CPANEL_USER/YOUR_APP_PATH/artisan schedule:run >> /dev/null 2>&1
