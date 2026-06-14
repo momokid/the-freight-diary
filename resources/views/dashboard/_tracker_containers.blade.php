@@ -19,7 +19,7 @@
 
                 // Days since gate-out — colour coding
                 $daysSinceGateOut = $container->GateOutDate
-                    ? \Carbon\Carbon::parse($container->GateOutDate)->diffInDays(now())
+                    ? (int) \Carbon\Carbon::parse($container->GateOutDate)->diffInDays(now())
                     : null;
 
                 if ($daysSinceGateOut === null || $isReturned) {

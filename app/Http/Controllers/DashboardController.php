@@ -121,31 +121,22 @@ class DashboardController extends Controller
             'values' => $values,
         ]);
     }
+public function trackerData(Request $request)
+{
+    $user     = Auth::user();
+    $userAuth = UserAuth::where('Username', $user->ID)->first();
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Tracker data — status cards with Show More pagination
-    // Returns JSON: { html: '...', hasMore: bool, nextOffset: int }
-    // ─────────────────────────────────────────────────────────────────────────
-    public function trackerData(Request $request)
-    {
-        $user     = Auth::user();
-        $userAuth = UserAuth::where('Username', $user->ID)->first();
+    if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+        return response()->json(['error' => 'Unauthorised'], 403);
+    }
 
-        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
-            return response()->json(['error' => 'Unauthorised'], 403);
-        }
+    $branch  = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+    $canEdit = $userAuth->hasPermission('EditData');
+    $search  = trim($request->input('search', ''));
 
-        $branch  = $user->Nature === 'Admin-0' ? null : $user->BranchID;
-        $offset  = max(0, (int) $request->input('offset', 0));
-        $canEdit = $userAuth->hasPermission('EditData');
-        $bf      = $this->branchFilter($branch, 'cm');
-
-        // ── Classify each consignment into a priority group ──────────────────
-        // Priority 1 (Green)  — Status 2 + IN-HARBOR disbursement exists
-        // Priority 2 (Red)    — Status 2 + no IN-HARBOR disbursement
-        // Priority 3 (Blue)   — Status 1 (Not Arrived)
-        // Priority 4 (Amber)  — Status 3 + zero containers returned
-        // Priority 5 (Purple) — Status 3 + some but not all containers returned
+    // ── Search mode — bypasses branch filter, caps at 10 ─────────────────
+    if ($search !== '') {
+        $term = '%' . $search . '%';
 
         $rows = DB::select("
             SELECT
@@ -157,13 +148,11 @@ class DashboardController extends Controller
                 cm.Date                                         AS RegisteredDate,
                 COALESCE(co.FullName, '—')                     AS ConsigneeName,
                 TO_DAYS(cm.ETA) - TO_DAYS(CURDATE())           AS ETADays,
-                -- Gate-out ready flag
                 EXISTS (
                     SELECT 1 FROM disbursement_analysis da
                     WHERE da.BL = cm.BL
                       AND da.Stamp = 'IN-HARBOR'
                 )                                              AS HasDisbursement,
-                -- Container return counts for Status=3 classification
                 (
                     SELECT COUNT(*) FROM container_details cd
                     WHERE cd.ConsignmentID = cm.ConsignmentID
@@ -174,7 +163,6 @@ class DashboardController extends Controller
                       AND cd.ReturnDate IS NOT NULL
                       AND cd.Status = 4
                 )                                              AS ReturnedContainers,
-                -- Priority for ordering
                 CASE
                     WHEN cm.Status = 2 AND EXISTS (
                         SELECT 1 FROM disbursement_analysis da
@@ -193,24 +181,92 @@ class DashboardController extends Controller
             LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
             WHERE cm.Status IN (1, 2, 3)
               AND cm.Ownership = 1
-            {$bf['sql']}
+              AND (
+                  cm.BL          LIKE ?
+                  OR co.FullName LIKE ?
+                  OR cm.Destination LIKE ?
+              )
             ORDER BY Priority ASC, cm.ETA ASC
-            LIMIT ? OFFSET ?
-        ", array_merge($bf['bindings'], [$this->trackerPageSize + 1, $offset]));
-
-        // Fetch one extra row to know if more exist
-        $hasMore    = count($rows) > $this->trackerPageSize;
-        $rows       = array_slice($rows, 0, $this->trackerPageSize);
-        $nextOffset = $offset + $this->trackerPageSize;
+            LIMIT 10
+        ", [$term, $term, $term]);
 
         $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
 
         return response()->json([
             'html'       => $html,
-            'hasMore'    => $hasMore,
-            'nextOffset' => $nextOffset,
+            'hasMore'    => false,
+            'nextOffset' => 0,
+            'isSearch'   => true,
+            'count'      => count($rows),
         ]);
     }
+
+    // ── Normal mode — branch-filtered, offset paginated ───────────────────
+    $offset = max(0, (int) $request->input('offset', 0));
+    $bf     = $this->branchFilter($branch, 'cm');
+
+    $rows = DB::select("
+        SELECT
+            cm.ConsignmentID,
+            cm.BL,
+            cm.ETA,
+            cm.Status,
+            cm.Destination,
+            cm.Date                                         AS RegisteredDate,
+            COALESCE(co.FullName, '—')                     AS ConsigneeName,
+            TO_DAYS(cm.ETA) - TO_DAYS(CURDATE())           AS ETADays,
+            EXISTS (
+                SELECT 1 FROM disbursement_analysis da
+                WHERE da.BL = cm.BL
+                  AND da.Stamp = 'IN-HARBOR'
+            )                                              AS HasDisbursement,
+            (
+                SELECT COUNT(*) FROM container_details cd
+                WHERE cd.ConsignmentID = cm.ConsignmentID
+            )                                              AS TotalContainers,
+            (
+                SELECT COUNT(*) FROM container_details cd
+                WHERE cd.ConsignmentID = cm.ConsignmentID
+                  AND cd.ReturnDate IS NOT NULL
+                  AND cd.Status = 4
+            )                                              AS ReturnedContainers,
+            CASE
+                WHEN cm.Status = 2 AND EXISTS (
+                    SELECT 1 FROM disbursement_analysis da
+                    WHERE da.BL = cm.BL AND da.Stamp = 'IN-HARBOR'
+                ) THEN 1
+                WHEN cm.Status = 2 THEN 2
+                WHEN cm.Status = 1 THEN 3
+                WHEN cm.Status = 3 AND (
+                    SELECT COUNT(*) FROM container_details cd
+                    WHERE cd.ConsignmentID = cm.ConsignmentID
+                      AND cd.ReturnDate IS NOT NULL AND cd.Status = 4
+                ) = 0 THEN 4
+                ELSE 5
+            END                                            AS Priority
+        FROM container_main cm
+        LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
+        WHERE cm.Status IN (1, 2, 3)
+          AND cm.Ownership = 1
+        {$bf['sql']}
+        ORDER BY Priority ASC, cm.ETA ASC
+        LIMIT ? OFFSET ?
+    ", array_merge($bf['bindings'], [$this->trackerPageSize + 1, $offset]));
+
+    $hasMore    = count($rows) > $this->trackerPageSize;
+    $rows       = array_slice($rows, 0, $this->trackerPageSize);
+    $nextOffset = $offset + $this->trackerPageSize;
+
+    $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
+
+    return response()->json([
+        'html'       => $html,
+        'hasMore'    => $hasMore,
+        'nextOffset' => $nextOffset,
+        'isSearch'   => false,
+        'count'      => count($rows),
+    ]);
+}
 
     // ─────────────────────────────────────────────────────────────────────────
     // Tracker containers — accordion content for a single consignment

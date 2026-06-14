@@ -326,9 +326,10 @@
                    background:#185FA5; color:#fff; border:none; border-radius:6px;
                    font-size:var(--db-text-xs); font-weight:600; cursor:pointer;">
                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0
-                                                               004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
-                                                               8.003 0 01-15.357-2m15.357 2H15" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0
+                                                                                           004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
+                                                                                           8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Refresh All
             </button>
@@ -382,8 +383,34 @@
                         </button>
                     </div>
 
+                    {{-- Tracker search --}}
+                    <div style="position:relative; margin-bottom:0.75rem;">
+                        <input id="tracker-search" type="text" placeholder="Search BL, consignee or destination..."
+                            oninput="window.DashboardApp.searchTracker(this.value)"
+                            style="width:100%; padding:7px 32px 7px 10px;
+               border:1px solid var(--border-color);
+               border-radius:8px; font-size:var(--db-text-xs);
+               color:var(--text-primary); background:var(--content-bg);
+               box-sizing:border-box; outline:none;"
+                            onfocus="this.style.borderColor='#185FA5'"
+                            onblur="this.style.borderColor='var(--border-color)'">
+                        <button id="tracker-search-clear" onclick="window.DashboardApp.clearTrackerSearch()"
+                            style="display:none; position:absolute; right:8px; top:50%;
+               transform:translateY(-50%); background:none; border:none;
+               font-size:0.875rem; color:var(--text-muted); cursor:pointer;
+               line-height:1; padding:2px 4px;">
+                            ✕
+                        </button>
+                    </div>
+
+                    {{-- Search result label --}}
+                    <div id="tracker-search-label"
+                        style="display:none; font-size:var(--db-text-xs);
+            color:var(--text-muted); margin-bottom:0.5rem;">
+                    </div>
+
                     {{-- Tracker card list --}}
-                    <div id="widget-tracker" style="max-height:384px; overflow-y:auto; padding-right:2px;">
+                    <div id="widget-tracker" style="max-height:340px; overflow-y:auto; padding-right:2px;">
                         {{-- Skeleton --}}
                         @for ($i = 0; $i < 4; $i++)
                             <div class="db-sk db-sk-card"></div>
@@ -843,6 +870,99 @@
                 }
             },
 
+            // ── Tracker search ────────────────────────────────────────────────────────
+            _searchTimer: null,
+
+            searchTracker(value) {
+                const clearBtn = document.getElementById('tracker-search-clear');
+                const label = document.getElementById('tracker-search-label');
+
+                // Show/hide clear button
+                if (clearBtn) clearBtn.style.display = value.length > 0 ? 'block' : 'none';
+
+                // Clear debounce timer
+                if (this._searchTimer) clearTimeout(this._searchTimer);
+
+                // Minimum 2 characters
+                if (value.length === 0) {
+                    this.clearTrackerSearch();
+                    return;
+                }
+
+                if (value.length < 2) {
+                    if (label) {
+                        label.style.display = 'block';
+                        label.textContent = 'Type at least 2 characters...';
+                    }
+                    return;
+                }
+
+                // Debounce 300ms
+                this._searchTimer = setTimeout(async () => {
+                    const list = document.getElementById('widget-tracker');
+                    const moreBtn = document.getElementById('tracker-show-more');
+                    if (!list) return;
+
+                    // Show loading state
+                    if (label) {
+                        label.style.display = 'block';
+                        label.textContent = 'Searching...';
+                    }
+
+                    try {
+                        const url = new URL(this.urls.tracker, window.location.origin);
+                        url.searchParams.set('search', value);
+
+                        const res = await fetch(url.toString(), {
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            }
+                        });
+                        if (!res.ok) return;
+
+                        const data = await res.json();
+                        list.innerHTML = data.html || this._emptyTracker();
+
+                        // Hide Show More during search
+                        if (moreBtn) moreBtn.style.display = 'none';
+
+                        // Update label
+                        if (label) {
+                            label.style.display = 'block';
+                            label.textContent = data.count === 0 ?
+                                'No results found.' :
+                                `${data.count} result${data.count !== 1 ? 's' : ''} found`;
+                        }
+
+                        // Update badge
+                        const badge = document.getElementById('tracker-count-badge');
+                        if (badge) badge.textContent = data.count > 0 ? data.count : '0';
+
+                    } catch (e) {
+                        console.error('[Dashboard] Tracker search failed:', e);
+                        if (label) {
+                            label.style.display = 'block';
+                            label.textContent = 'Search failed. Try again.';
+                        }
+                    }
+                }, 300);
+            },
+
+            clearTrackerSearch() {
+                const input = document.getElementById('tracker-search');
+                const clearBtn = document.getElementById('tracker-search-clear');
+                const label = document.getElementById('tracker-search-label');
+
+                if (input) input.value = '';
+                if (clearBtn) clearBtn.style.display = 'none';
+                if (label) label.style.display = 'none';
+
+                if (this._searchTimer) clearTimeout(this._searchTimer);
+
+                // Reload normal tracker from offset 0
+                this.loadTracker(0, false);
+            },
+
             // ── Show More tracker cards ───────────────────────────────────────────────
             showMoreTracker() {
                 if (this._trackerHasMore) {
@@ -880,8 +1000,11 @@
 
                     const data = await res.json();
                     const div = document.createElement('div');
-                    div.innerHTML = data.html;
-                    card.appendChild(div.firstElementChild);
+                    div.innerHTML = data.html.trim();
+                    const accordion = div.firstElementChild;
+                    if (accordion) {
+                        card.appendChild(accordion);
+                    }
 
                     btn.disabled = false;
                     btn.textContent = 'Hide Containers';
