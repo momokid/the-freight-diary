@@ -34,8 +34,14 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'groq' => [
+        'key'   => env('GROQ_API_KEY'),
+        'model' => env('GROQ_MODEL', 'llama-3.2-90b-vision-preview'),
+    ],
+
     'google_ai' => [
-        'key' => env('GOOGLE_AI_API_KEY'),
+        'key'   => env('GOOGLE_AI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
     ],
 
     'manifest' => [
@@ -47,5 +53,19 @@ return [
         'sender_id' => env('ARKESEL_SENDER_ID', 'PSIL'),
         'sms_url'   => env('ARKESEL_SMS_URL'),
         'sandbox'   => env('ARKESEL_SANDBOX', false),
+    ],
+
+    'ollama' => [
+        'base_url' => env('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'),
+        'model'    => env('OLLAMA_MODEL', 'moondream'),
+    ],
+
+    'bl_parser' => [
+        'provider' => env('BL_PARSER_PROVIDER', 'claude'),
+    ],
+
+    'anthropic' => [
+        'key'   => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-haiku-4-5'),
     ],
 ];

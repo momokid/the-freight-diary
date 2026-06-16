@@ -347,80 +347,19 @@ class ConsignmentController extends Controller
             'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
         ]);
 
-        $file     = $request->file('file');
-        $mimeType = $file->getMimeType();
-        $base64   = base64_encode(file_get_contents($file->getRealPath()));
+        $result = (new \App\Services\BLParserService())->extract($request->file('file'));
 
-        // Build the content part based on file type
-        if ($mimeType === 'application/pdf') {
-            $part = [
-                'inline_data' => [
-                    'mime_type' => 'application/pdf',
-                    'data'      => $base64,
-                ]
-            ];
-        } else {
-            $part = [
-                'inline_data' => [
-                    'mime_type' => $mimeType,
-                    'data'      => $base64,
-                ]
-            ];
-        }
-
-        $prompt = 'Extract the following fields from this Bill of Lading document and return ONLY a JSON object with no other text or markdown:
-{
-  "BL": "Bill of Lading number",
-  "VesselName": "vessel/ship name",
-  "VoyageNo": "voyage number",
-  "POIS": "place of issue",
-  "DOIS": "date of issue in YYYY-MM-DD format",
-  "SOB": "shipped on board date in YYYY-MM-DD format",
-  "POL": "port of loading name",
-  "POD": "port of discharge name",
-  "Destination": "destination",
-  "ContainerNo": "container number(s) comma separated",
-  "SealNo": "seal number(s) comma separated",
-  "ContainerSize": "container size (20 or 40)",
-  "Weight": "gross weight in KG as number only"
-}
-If a field is not found, use empty string "". Return ONLY the JSON object.';
-
-        $apiKey = config('services.google_ai.key');
-
-        $response = \Illuminate\Support\Facades\Http::withoutVerifying()->withHeaders([
-            'Content-Type' => 'application/json',
-        ])->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}", [
-            'contents' => [[
-                'parts' => [
-                    $part,
-                    ['text' => $prompt],
-                ]
-            ]]
-        ]);
-
-        if ($response->failed()) {
+        if (! $result['success']) {
             return response()->json([
                 'success' => false,
-                'message' => 'OCR extraction failed.',
-                'status'  => $response->status(),
-                'body'    => $response->body(),
+                'message' => $result['message'] ?? 'Extraction failed.',
             ], 500);
         }
 
-        $text = $response->json('candidates.0.content.parts.0.text');
-
-        try {
-            $clean  = preg_replace('/```json|```/', '', $text);
-            $fields = json_decode(trim($clean), true);
-
-            if (!$fields) {
-                return response()->json(['success' => false, 'message' => 'Could not parse extraction result.'], 500);
-            }
-
-            return response()->json(['success' => true, 'fields' => $fields]);
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => 'Could not parse extraction result.'], 500);
-        }
+        return response()->json([
+            'success'  => true,
+            'fields'   => $result['fields'],
+            'provider' => $result['provider'],
+        ]);
     }
 }
