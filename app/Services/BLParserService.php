@@ -223,72 +223,79 @@ class BLParserService
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+
     // Prompt
-    // ─────────────────────────────────────────────────────────────────────────
     private function buildPrompt(): string
     {
         return 'You are a Bill of Lading data extraction assistant. ' .
             'Extract the following fields from this Bill of Lading document. ' .
             'Return ONLY a valid JSON object with no markdown, no code blocks, no explanation. ' .
             'If a field is not found or not applicable, use empty string "". ' .
-            'For multiple values (containers, seals), use comma-separated values in one string.' .
+            'For the Containers array, create one object per container found on the document. ' .
+            'If a container has its own weight stated explicitly on the document, use that exact value. ' .
+            'If only a combined total weight is given for all containers, leave each container Weight as empty string "" ' .
+            'and place the combined figure in TotalGrossWeight instead.' .
             "\n\nReturn exactly this JSON structure:\n" .
             '{
-    "MainBL": "Master Bill of Lading number",
-    "VesselName": "name of the vessel or ship",
-    "VoyageNo": "voyage number",
-    "POIS": "place of issue",
-    "DOIS": "date of issue in YYYY-MM-DD format",
-    "SOB": "shipped on board date in YYYY-MM-DD format",
-    "POL": "port of loading full name",
-    "POD": "port of discharge full name",
-    "Destination": "final destination",
-    "ETA": "estimated time of arrival in YYYY-MM-DD format if stated",
-    "ShipperName": "full name of shipper",
-    "ShipperAddress": "shipper address",
-    "ConsigneeName": "full name of consignee",
-    "ConsigneeAddress": "consignee address",
-    "ConsigneeTel": "consignee telephone number",
-    "NotifyParty": "notify party name and address",
-    "ContainerNo": "container number(s) comma separated",
-    "SealNo": "seal number(s) comma separated",
-    "ContainerSize": "container size e.g. 20, 40, 40HC comma separated if multiple",
-    "ContainerType": "container type e.g. DRY, REEFER, OPEN TOP",
-    "Description": "cargo or commodity description",
-    "HSCode": "HS code if stated",
-    "GrossWeight": "total gross weight as number only in KG",
-    "NetWeight": "net weight as number only in KG if stated",
-    "Volume": "volume in CBM as number only if stated",
-    "Packages": "number of packages as number only",
-    "PackageUnit": "unit e.g. CARTONS, PALLETS, PIECES",
-    "MarksAndNumbers": "marks and numbers on cargo if stated",
-    "FreightTerms": "PREPAID or COLLECT",
-    "ContractNo": "contract or booking reference number if stated"
-}';
+                "MainBL": "Master Bill of Lading number",
+                "VesselName": "name of the vessel or ship",
+                "VoyageNo": "voyage number",
+                "POIS": "place of issue",
+                "DOIS": "date of issue in YYYY-MM-DD format",
+                "SOB": "shipped on board date in YYYY-MM-DD format",
+                "POL": "port of loading full name",
+                "POD": "port of discharge full name",
+                "Destination": "final destination",
+                "ETA": "estimated time of arrival in YYYY-MM-DD format if stated",
+                "ShipperName": "full name of shipper",
+                "ShipperAddress": "shipper address",
+                "ConsigneeName": "full name of consignee",
+                "ConsigneeAddress": "consignee address",
+                "ConsigneeTel": "consignee telephone number",
+                "NotifyParty": "notify party name and address",
+                "Description": "cargo or commodity description",
+                "HSCode": "HS code if stated",
+                "TotalGrossWeight": "combined gross weight as number only in KG, for all containers",
+                "TotalVolume": "combined volume in CBM as number only if stated",
+                "Packages": "number of packages as number only",
+                "PackageUnit": "unit e.g. CARTONS, PALLETS, PIECES",
+                "MarksAndNumbers": "marks and numbers on cargo if stated",
+                "FreightTerms": "PREPAID or COLLECT",
+                "ContractNo": "contract or booking reference number if stated",
+                "Containers": [
+                    {
+                        "ContainerNo": "container number",
+                        "SealNo": "seal number for this container",
+                        "Size": "container size e.g. 20, 40, 40HQ, 40HC",
+                        "Weight": "this specific container weight as number only in KG, or empty string if only a combined total is given"
+                    }
+                ]
+            }';
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Score each extracted field for confidence
-    // ─────────────────────────────────────────────────────────────────────────
     private function scoreFields(array $fields): array
     {
-        $scored   = [];
-        $critical = ['MainBL', 'ConsigneeName', 'POL', 'POD', 'ContainerNo'];
-        $expected = [
+
+        $containers = $fields['Containers'] ?? [];
+        unset($fields['Containers']);
+
+        $scored     = [];
+        $critical   = ['MainBL', 'ConsigneeName', 'POL', 'POD'];
+        $expected   = [
             'MainBL',
             'VesselName',
             'POL',
             'POD',
             'ShipperName',
             'ConsigneeName',
-            'ContainerNo',
-            'SealNo',
-            'GrossWeight',
+            'TotalGrossWeight',
             'Description',
             'FreightTerms',
         ];
 
+        $dateFields = ['DOIS', 'SOB', 'ETA'];
+
+        // ── Score every normal field exactly as before ─────────────────────
         foreach ($fields as $key => $value) {
             $value = trim((string) $value);
 
@@ -296,6 +303,16 @@ class BLParserService
                 $confidence = in_array($key, $expected) ? 0.3 : 0.5;
                 $status     = 'empty';
             } else {
+                if (in_array($key, $dateFields)) {
+                    if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                        try {
+                            $value = \Carbon\Carbon::parse($value)->format('Y-m-d');
+                        } catch (\Exception $e) {
+                            // Unparseable — leave as-is, scoreValue gives low confidence
+                        }
+                    }
+                }
+
                 $confidence = $this->scoreValue($key, $value, $critical);
                 $status     = $confidence >= self::HIGH   ? 'ok'
                     : ($confidence >= self::MEDIUM ? 'review' : 'low');
@@ -308,12 +325,64 @@ class BLParserService
             ];
         }
 
+        // ── Score each container separately ─────────────────────────────────
+        $scored['Containers'] = $this->scoreContainers($containers);
+
         return $scored;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Score an individual field value
-    // ─────────────────────────────────────────────────────────────────────────
+    private function scoreContainers(array $containers): array
+    {
+        $scored = [];
+
+        foreach ($containers as $container) {
+            $scoredContainer = [];
+
+            foreach ($container as $key => $value) {
+                $value = trim((string) $value);
+
+                if ($value === '') {
+                    // Weight empty is expected when BL only gives a combined total
+                    // ContainerNo/SealNo/Size empty is more concerning
+                    $confidence = $key === 'Weight' ? 0.4 : 0.3;
+                    $status     = 'empty';
+                } else {
+                    $confidence = $this->scoreContainerValue($key, $value);
+                    $status     = $confidence >= self::HIGH   ? 'ok'
+                        : ($confidence >= self::MEDIUM ? 'review' : 'low');
+                }
+
+                $scoredContainer[$key] = [
+                    'value'      => $value,
+                    'confidence' => $confidence,
+                    'status'     => $status,
+                ];
+            }
+
+            $scored[] = $scoredContainer;
+        }
+
+        return $scored;
+    }
+
+    private function scoreContainerValue(string $key, string $value): float
+    {
+        if ($key === 'ContainerNo') {
+            return preg_match('/^[A-Z]{4}\d{7}$/', $value) ? 0.95 : 0.60;
+        }
+
+        if ($key === 'Size') {
+            return preg_match('/^\d{2}[A-Z]{0,2}$/', $value) ? 0.90 : 0.60;
+        }
+
+        if ($key === 'Weight') {
+            return is_numeric($value) ? 0.90 : 0.55;
+        }
+
+        // SealNo — no strict format standard, moderate confidence if present
+        return 0.75;
+    }
+
     private function scoreValue(string $key, string $value, array $critical): float
     {
         if (in_array($key, ['DOIS', 'SOB', 'ETA'])) {
@@ -322,14 +391,6 @@ class BLParserService
 
         if (in_array($key, ['GrossWeight', 'NetWeight', 'Volume', 'Packages'])) {
             return is_numeric($value) ? 0.90 : 0.55;
-        }
-
-        if ($key === 'ContainerNo') {
-            $containers = explode(',', $value);
-            $allValid   = collect($containers)->every(
-                fn($c) => preg_match('/^[A-Z]{4}\d{7}$/', trim($c))
-            );
-            return $allValid ? 0.95 : 0.65;
         }
 
         if ($key === 'MainBL') {

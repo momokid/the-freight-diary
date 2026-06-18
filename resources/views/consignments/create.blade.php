@@ -242,6 +242,8 @@
                         Container Details
                     </p>
 
+                    <div id="ocr-container-preview"></div>
+
                     {{-- Container input row --}}
                     <div
                         style="display: grid; grid-template-columns: 1fr 1fr 120px 120px 140px auto; gap: 0.75rem; align-items: end; margin-bottom: 1rem;">
@@ -512,7 +514,7 @@
         });
 
         // ── Add container to staging ──
-        function addContainer() {
+        function addContainer(onSuccess = null) {
             const bl = document.getElementById('bl').value.trim();
             const sealNo = document.getElementById('seal-no').value.trim();
             const contNo = document.getElementById('container-no').value.trim();
@@ -540,6 +542,11 @@
             }
             if (!size) {
                 errorEl.textContent = 'Container Size is required.';
+                errorEl.classList.add('visible');
+                return;
+            }
+            if (!/\d/.test(size)) {
+                errorEl.textContent = 'Container Size must contain a number (e.g. 20, 40).';
                 errorEl.classList.add('visible');
                 return;
             }
@@ -581,6 +588,8 @@
                         // Render staging table
                         renderContainerTable(data.containers);
                         updateSummary(data.containers);
+                        // Fire success callback if provided
+                        if (typeof onSuccess === 'function') onSuccess();
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to add container.';
                         errorEl.classList.add('visible');
@@ -937,7 +946,113 @@
             });
         });
 
-        // ── OCR — Extract from BL document ──
+        // ── Confidence highlighting ──
+        // Applies border colour and badge to a form element based on extraction status
+        // status: 'ok' | 'review' | 'low' | 'empty'
+        function applyConfidence(elementId, status) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            const colors = {
+                'ok': 'var(--border-color)',
+                'review': '#f59e0b',
+                'low': '#ef4444',
+                'empty': '#ef4444',
+            };
+
+            el.style.borderColor = colors[status] ?? 'var(--border-color)';
+
+            // Find or create badge element immediately after the input
+            const parent = el.parentElement;
+            let badge = parent.querySelector('.ocr-badge');
+
+            // ok is the only status with no badge — extraction succeeded cleanly
+            if (status === 'ok') {
+                if (badge) badge.remove();
+                return;
+            }
+
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'ocr-badge';
+                badge.style.cssText = [
+                    'display:inline-block',
+                    'font-size:0.7rem',
+                    'font-weight:600',
+                    'border-radius:4px',
+                    'padding:1px 7px',
+                    'margin-top:3px',
+                ].join(';');
+                el.insertAdjacentElement('afterend', badge);
+            }
+
+            if (status === 'review') {
+                badge.textContent = '⚠ Review';
+                badge.style.background = '#fef3c7';
+                badge.style.color = '#92400e';
+            } else if (status === 'low') {
+                badge.textContent = '✗ Low confidence';
+                badge.style.background = '#fee2e2';
+                badge.style.color = '#b91c1c';
+            } else if (status === 'empty') {
+                badge.textContent = '⛔ Not found — fill manually';
+                badge.style.background = '#fee2e2';
+                badge.style.color = '#b91c1c';
+            }
+        }
+
+        function clearConfidence(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.style.borderColor = 'var(--border-color)';
+            const badge = el.parentElement.querySelector('.ocr-badge');
+            if (badge) badge.remove();
+        }
+
+        // ── Fill a text or date input 
+        function fillField(elementId, field) {
+            if (!field || !field.value) return;
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.value = field.value;
+            applyConfidence(elementId, field.status);
+        }
+
+        function fillField(elementId, field) {
+            if (!field) return;
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            if (field.value) {
+                el.value = field.value;
+            }
+            applyConfidence(elementId, field.status);
+        }
+
+        function matchDropdown(selectId, field) {
+            if (!field || !field.value) return;
+            const select = document.getElementById(selectId);
+            if (!select) return;
+
+            const text = field.value.toLowerCase();
+            let matched = false;
+
+            for (let opt of select.options) {
+                const optText = opt.textContent.toLowerCase();
+                if (optText.includes(text) || text.includes(optText)) {
+                    opt.selected = true;
+                    matched = true;
+                    break;
+                }
+            }
+
+            // No match — officer must select manually
+            if (!matched) {
+                applyConfidence(selectId, 'review');
+            }
+        }
+
+
         function extractFromBL(input) {
             const file = input.files[0];
             if (!file) return;
@@ -946,11 +1061,11 @@
             const statusTextEl = document.getElementById('ocr-status-text');
             const btn = document.getElementById('ocr-btn');
 
+            // Show loading state
             statusEl.style.display = 'flex';
             statusTextEl.textContent = 'Extracting fields with AI...';
             btn.disabled = true;
 
-            // CHANGED: send to our server route — not directly to Anthropic API
             const formData = new FormData();
             formData.append('file', file);
             formData.append('_token', CSRF);
@@ -972,32 +1087,47 @@
                         return;
                     }
 
-                    const fields = data.fields;
+                    const f = data.fields;
 
-                    if (fields.BL) {
-                        document.getElementById('bl').value = fields.BL.toUpperCase();
-                        document.getElementById('summary-bl').textContent = fields.BL.toUpperCase();
+                    // ── Text fields ──────
+                    // MainBL — also updates the summary panel
+                    if (f.MainBL && f.MainBL.value) {
+                        const bl = f.MainBL.value.toUpperCase();
+                        document.getElementById('bl').value = bl;
+                        document.getElementById('summary-bl').textContent = bl;
+                        applyConfidence('bl', f.MainBL.status);
                     }
-                    if (fields.VesselName) document.getElementById('vessel-name').value = fields.VesselName;
-                    if (fields.VoyageNo) document.getElementById('voyage-no').value = fields.VoyageNo;
-                    if (fields.POIS) document.getElementById('pois').value = fields.POIS;
-                    if (fields.DOIS) document.getElementById('dois').value = fields.DOIS;
-                    if (fields.SOB) document.getElementById('sob').value = fields.SOB;
-                    if (fields.Destination) document.getElementById('destination').value = fields.Destination;
-                    if (fields.ContainerNo) document.getElementById('container-no').value = fields.ContainerNo.split(
-                        ',')[0].trim().toUpperCase();
-                    if (fields.SealNo) document.getElementById('seal-no').value = fields.SealNo.split(',')[0].trim()
-                        .toUpperCase();
-                    if (fields.ContainerSize) document.getElementById('container-size').value = fields.ContainerSize;
-                    if (fields.Weight) document.getElementById('container-weight').value = fields.Weight;
 
-                    if (fields.POL) matchDropdown('pol-id', fields.POL);
-                    if (fields.POD) matchDropdown('pod-id', fields.POD);
+                    fillField('vessel-name', f.VesselName);
+                    fillField('voyage-no', f.VoyageNo);
+                    fillField('pois', f.POIS);
+                    fillField('destination', f.Destination);
 
-                    statusTextEl.textContent = '✓ Fields extracted successfully';
+                    // ── Date fields 
+                    fillField('dois', f.DOIS);
+                    fillField('sob', f.SOB);
+                    fillField('eta', f.ETA);
+
+                    renderContainerPreview(f.Containers);
+
+                    // POL and POD — match extracted port name against dropdown options
+                    matchDropdown('pol-id', f.POL);
+                    matchDropdown('pod-id', f.POD);
+
+                    // Carrier — match vessel name against carrier dropdown
+                    // e.g. "MSC MICOL" → matches "MSC Line" if option contains "MSC"
+                    matchDropdown('carrier-id', f.VesselName);
+
+                    // Shipper — match extracted shipper name against shipper dropdown
+                    matchDropdown('shipper-id', f.ShipperName);
+
+                    // ── Success state ────
+                    statusTextEl.textContent = '✓ Fields extracted — review highlighted fields';
+                    statusEl.style.color = '#15803d';
                     setTimeout(() => {
                         statusEl.style.display = 'none';
-                    }, 3000);
+                        statusEl.style.color = '';
+                    }, 4000);
                 })
                 .catch(() => {
                     statusTextEl.textContent = '⚠ Extraction failed. Fill manually.';
@@ -1007,19 +1137,108 @@
                 })
                 .finally(() => {
                     btn.disabled = false;
+                    // Reset file input so same file can be re-uploaded if needed
+                    input.value = '';
                 });
         }
 
-        // Try to match extracted text to a dropdown option
-        function matchDropdown(selectId, text) {
-            const select = document.getElementById(selectId);
-            const lower = text.toLowerCase();
-            for (let opt of select.options) {
-                if (opt.textContent.toLowerCase().includes(lower) || lower.includes(opt.textContent.toLowerCase())) {
-                    opt.selected = true;
-                    break;
-                }
+        function renderContainerPreview(containers) {
+            const wrapper = document.getElementById('ocr-container-preview');
+            if (!wrapper || !containers || containers.length === 0) {
+                if (wrapper) wrapper.innerHTML = '';
+                return;
             }
+
+            let html = `
+            <div style="margin-bottom: 0.75rem;">
+                <p style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">
+                    ${containers.length} container(s) found on document — review and add each
+                </p>
+            </div>
+            `;
+
+            containers.forEach((c, index) => {
+                html += `
+            <div class="card" id="ocr-card-${index}" style="margin-bottom: 0.75rem; padding: 1rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 100px 120px auto; gap: 0.75rem; align-items: end;">
+                    <div>
+                        <label class="form-label">Container No</label>
+                        <input type="text" id="ocr-container-no-${index}" value="${c.ContainerNo.value}" class="form-input" style="text-transform: uppercase;">
+                    </div>
+                    <div>
+                        <label class="form-label">Seal No</label>
+                        <input type="text" id="ocr-seal-no-${index}" value="${c.SealNo.value}" class="form-input" style="text-transform: uppercase;">
+                    </div>
+                    <div>
+                        <label class="form-label">Size</label>
+                        <input type="text" id="ocr-size-${index}" value="${c.Size.value}" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Weight (KG)</label>
+                        <input type="number" id="ocr-weight-${index}" value="${c.Weight.value}" class="form-input" placeholder="Enter weight">
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" onclick="addOcrContainer(${index})"
+                            style="padding: 10px 16px; background: #16a34a; color: white; border: none; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                            Add
+                        </button>
+                        <button type="button" onclick="removeOcrContainer(${index})"
+                            style="padding: 10px 12px; background: transparent; color: #ef4444; border: 1px solid #ef4444; border-radius: 8px; font-size: 0.8rem; cursor: pointer;">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            </div>
+            `;
+            });
+
+            wrapper.innerHTML = html;
+
+            // Apply confidence styling AFTER the HTML is inserted into the page
+            containers.forEach((c, index) => {
+                applyConfidence(`ocr-container-no-${index}`, c.ContainerNo.status);
+                applyConfidence(`ocr-seal-no-${index}`, c.SealNo.status);
+                applyConfidence(`ocr-size-${index}`, c.Size.status);
+                applyConfidence(`ocr-weight-${index}`, c.Weight.status);
+            });
         }
+
+        function addOcrContainer(index) {
+            const containerNo = document.getElementById(`ocr-container-no-${index}`).value.trim();
+            const sealNo = document.getElementById(`ocr-seal-no-${index}`).value.trim();
+            const size = document.getElementById(`ocr-size-${index}`).value.trim();
+            const weight = document.getElementById(`ocr-weight-${index}`).value.trim();
+
+            document.getElementById('container-no').value = containerNo;
+            document.getElementById('seal-no').value = sealNo;
+            document.getElementById('container-size').value = size;
+            document.getElementById('container-weight').value = weight;
+
+            // Only remove the preview card after confirmed server success
+            addContainer(() => removeOcrContainer(index));
+        }
+
+        function removeOcrContainer(index) {
+            const card = document.getElementById(`ocr-card-${index}`);
+            if (card) card.remove();
+        }
+
+        // Text/date/number inputs — clear confidence on keystroke
+        [
+            'bl', 'vessel-name', 'voyage-no', 'pois', 'destination',
+            'dois', 'sob', 'eta', 'container-no', 'seal-no',
+            'container-size', 'container-weight',
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => clearConfidence(id));
+        });
+
+        // Select dropdowns — clear confidence on selection change
+        [
+            'carrier-id', 'shipper-id', 'pol-id', 'pod-id',
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', () => clearConfidence(id));
+        });
     </script>
 @endpush

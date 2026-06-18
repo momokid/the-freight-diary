@@ -86,11 +86,20 @@ class ConsignmentController extends Controller
             ], 409);
         }
 
+        $cleanSize = preg_replace('/[^0-9]/', '', $request->ContainerSize);
+
+        if ($cleanSize === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Container Size must contain a valid number (e.g. 20, 40).',
+            ], 422);
+        }
+
         ContainerTemp::create([
             'BOL'           => strtoupper(trim($request->BOL)),
             'SealNo'        => strtoupper(trim($request->SealNo)),
             'ContainerNo'   => strtoupper(trim($request->ContainerNo)),
-            'ContainerSize' => trim($request->ContainerSize),
+            'ContainerSize' => $cleanSize,
             'Weight'        => $request->Weight,
             'HandlingCost'  => $request->HandlingCost,
             'Username'      => $user->ID,
