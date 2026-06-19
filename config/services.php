@@ -68,4 +68,8 @@ return [
         'key'   => env('ANTHROPIC_API_KEY'),
         'model' => env('ANTHROPIC_MODEL', 'claude-haiku-4-5'),
     ],
+    'hs_advisor' => [
+        'model'          => env('HS_CODE_MODEL', 'claude-sonnet-4-6'),
+        'fallback_model' => env('HS_CODE_FALLBACK_MODEL', 'claude-haiku-4-5'),
+    ],
 ];

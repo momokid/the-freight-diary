@@ -164,7 +164,6 @@ class HSCodeController extends Controller
                 'description' => $hsRecord->HeadingDesc,
                 'duty_rate' => $hsRecord->ImportDutyRate,
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -222,17 +221,20 @@ class HSCodeController extends Controller
         $results = DB::table('hs_codes')
             ->where('IsActive', 1)
             ->where(function ($query) use ($q) {
-                $query->where('HSCode', 'like', $q.'%')
-                    ->orWhere('HeadingDesc', 'like', '%'.$q.'%')
-                    ->orWhere('Keywords', 'like', '%'.$q.'%')
-                    ->orWhere('ChapterDesc', 'like', '%'.$q.'%');
+                $query->where('HSCode', 'like', $q . '%')
+                    ->orWhere('HeadingDesc', 'like', '%' . $q . '%')
+                    ->orWhere('Keywords', 'like', '%' . $q . '%')
+                    ->orWhere('ChapterDesc', 'like', '%' . $q . '%');
             })
-            ->orderByRaw('CASE WHEN HSCode LIKE ? THEN 0 ELSE 1 END', [$q.'%'])
+            ->orderByRaw('CASE WHEN HSCode LIKE ? THEN 0 ELSE 1 END', [$q . '%'])
             ->orderBy('ImportDutyRate', 'asc')
             ->limit(10)
             ->get([
-                'HSCode', 'HeadingDesc', 'Chapter',
-                'ChapterDesc', 'ImportDutyRate',
+                'HSCode',
+                'HeadingDesc',
+                'Chapter',
+                'ChapterDesc',
+                'ImportDutyRate',
             ]);
 
         return response()->json($results);
@@ -267,22 +269,17 @@ class HSCodeController extends Controller
         ]);
     }
 
-    // ════════════════════════════════════════════════════════════════════════
     // HS CODE ADVISOR
-    // ════════════════════════════════════════════════════════════════════════
-
-    // ── Load consignment data for the advisor modal ──────────────────────────
-    // GET /hs-code/load-consignment?bl=MSKU123
     public function loadConsignment(Request $request)
     {
         $request->validate([
             'bl' => ['required', 'string', 'max:50'],
         ]);
 
-        $bl = strtoupper(trim($request->bl));
+        $bl   = strtoupper(trim($request->bl));
         $user = Auth::user();
 
-        // ── Core consignment ─────────────────────────────────────────────────
+        // ── Core consignment ──────────────────────────────────────────────────
         $consignment = DB::table('container_main as cm')
             ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
             ->leftJoin('ship_carrier as sc', 'cm.CarrierID', '=', 'sc.CarrierID')
@@ -303,15 +300,15 @@ class HSCodeController extends Controller
         if (! $consignment) {
             return response()->json([
                 'success' => false,
-                'message' => 'Consignment not found for BL: '.$bl,
+                'message' => 'Consignment not found for BL: ' . $bl,
             ], 404);
         }
 
-        // ── FCL containers with item details ─────────────────────────────────
+        // ── Containers from container_details ─────────────────────────────────
+        // Returns ALL containers — even those with empty ItemDetails
+        // Officer can fill in or edit ItemDetails in the drawer before simulation
         $containers = DB::table('container_details')
             ->where('ConsignmentID', $consignment->ConsignmentID)
-            ->whereNotNull('ItemDetails')
-            ->where('ItemDetails', '!=', '')
             ->get([
                 'ContainerNo',
                 'ContainerSize',
@@ -321,36 +318,19 @@ class HSCodeController extends Controller
                 'EstimatedDutyRate',
             ]);
 
-        // ── LCL HBL entries with descriptions ────────────────────────────────
-        $hblEntries = DB::table('manifestation_breakdown as mb')
-            ->leftJoin('consignee_main as co', 'mb.ConsigneeID', '=', 'co.ConsigneeID')
-            ->where('mb.ConsignmentID', $consignment->ConsignmentID)
-            ->where('mb.Status', '!=', 9)
-            ->whereNotNull('mb.Description')
-            ->where('mb.Description', '!=', '')
-            ->get([
-                'mb.ConsignmentID',
-                'mb.HouseBL',
-                'mb.Description',
-                'mb.ItemType',
-                'mb.HSCode',
-                'mb.HSDescription',
-                'mb.EstimatedDutyRate',
-                'co.FullName as ConsigneeName',
-            ]);
+        $totalItems  = $containers->count();
+        $itemSummary = $containers
+            ->filter(fn($c) => !empty($c->ItemDetails))
+            ->map(fn($c) => ($c->ContainerNo ?? '—') . ': ' .
+                \Illuminate\Support\Str::limit($c->ItemDetails ?? '', 40))
+            ->join(' | ');
 
         return response()->json([
-            'success' => true,
+            'success'     => true,
             'consignment' => $consignment,
-            'containers' => $containers,
-            'hblEntries' => $hblEntries,
-            'type' => $consignment->CmdtTypeID == 1 ? 'LCL' : 'FCL',
-            'totalItems' => $containers->count() + $hblEntries->count(),
-            'itemSummary' => $consignment->CmdtTypeID == 1
-    ? $hblEntries->map(fn ($h) => ($h->HouseBL ?? '—').': '.\Illuminate\Support\Str::limit($h->Description ?? '', 40)
-    )->join(' | ')
-    : $containers->map(fn ($c) => ($c->ContainerNo ?? '—').': '.\Illuminate\Support\Str::limit($c->ItemDetails ?? '', 40)
-    )->join(' | '),
+            'containers'  => $containers,
+            'totalItems'  => $totalItems,
+            'itemSummary' => $itemSummary ?: '—',
         ]);
     }
 
@@ -445,10 +425,9 @@ class HSCodeController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => count($results).' HS codes saved successfully.',
+                'message' => count($results) . ' HS codes saved successfully.',
                 'results' => $results,
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -563,8 +542,12 @@ class HSCodeController extends Controller
         $potentialSavings = max(0, round($totalHighestDuty - $totalAcceptedDuty, 2));
 
         return view('partials.hs-advisor-print', compact(
-            'consignment', 'predictions', 'dutyResults',
-            'cifValue', 'totalAcceptedDuty', 'totalHighestDuty',
+            'consignment',
+            'predictions',
+            'dutyResults',
+            'cifValue',
+            'totalAcceptedDuty',
+            'totalHighestDuty',
             'potentialSavings'
         ));
     }
