@@ -140,8 +140,11 @@ Route::middleware('auth')->group(function () {
         Route::patch('/consignees/{id}/deactivate', [ConsigneeController::class, 'deactivate'])->name('consignees.deactivate');
         Route::patch('/consignees/{id}/restore', [ConsigneeController::class, 'restore'])->name('consignees.restore');
         Route::get('/consignees/search', [ConsigneeController::class, 'search'])->name('consignees.search');
+
         // AJAX table search
         Route::get('/consignees/table', [ConsigneeController::class, 'table'])->name('consignees.table');
+
+        Route::get('/consignees/{id}', [ConsigneeController::class, 'show'])->name('consignees.show');
 
         // Shippers
         Route::get('/shippers', [ShipperController::class, 'index'])->name('shippers.index');
@@ -271,6 +274,9 @@ Route::middleware('auth')->group(function () {
                 return response()->json(['success' => true, 'id' => $id, 'name' => $request->name]);
             })->name('release.store');
         });
+
+        Route::post('/consignments/send-notification', [ConsignmentController::class, 'sendNotification'])
+            ->name('consignments.send-notification');
     });
 
     // Generate Invoice

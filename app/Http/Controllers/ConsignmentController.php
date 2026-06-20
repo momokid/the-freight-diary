@@ -8,6 +8,7 @@ use App\Models\Pod;
 use App\Models\Pol;
 use App\Models\Shipper;
 use App\Services\ReceiptService;
+use App\Models\UserAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -203,6 +204,9 @@ class ConsignmentController extends Controller
         // Get next ConsignmentID
         $consignmentID = (DB::table('container_main')->max('ConsignmentID') ?? 0) + 1;
 
+        // 4-digit client access code for WhatsApp bot authentication
+        $clientCode = str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+
         // Get first container for container_main fields
         $firstContainer = $containers->first();
 
@@ -250,6 +254,7 @@ class ConsignmentController extends Controller
                 'ConsigneeID'   => $request->ConsigneeID ?? 0,
                 'ReleaseType'   => 1, // Default — updated later in Cmdts
                 'Ownership'     => $request->Ownership,
+                'ClientCode'    => $clientCode,
             ]);
 
             // 3. For each container — insert details + journal + pnl
@@ -338,6 +343,9 @@ class ConsignmentController extends Controller
                 'message'       => 'Consignment registered successfully.',
                 'ConsignmentID' => $consignmentID,
                 'ReceiptNo'     => $receipt['receipt_no'],
+                'BL'            => strtoupper(trim($request->BL)),
+                'ClientCode'    => $clientCode,
+                'ConsigneeID'   => $request->ConsigneeID ?? 0,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -369,6 +377,57 @@ class ConsignmentController extends Controller
             'success'  => true,
             'fields'   => $result['fields'],
             'provider' => $result['provider'],
+        ]);
+    }
+
+    public function sendNotification(Request $request)
+    {
+        $request->validate([
+            'bl'          => ['required', 'string', 'max:50'],
+            'client_code' => ['required', 'string', 'size:4'],
+            'phone'       => ['required', 'string', 'max:20'],
+        ]);
+
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
+
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
+
+        // Get WhatsApp number from system settings
+        $whatsappNumber = DB::table('system_settings')
+            ->where('key', 'whatsapp_number')
+            ->value('value');
+
+        $bl   = strtoupper(trim($request->bl));
+        $code = $request->client_code;
+
+        // Build WhatsApp deep link — pre-fills BL and code in the chat
+        $waText = urlencode("BL:{$bl} CODE:{$code}");
+        $waLink = $whatsappNumber
+            ? "https://wa.me/{$whatsappNumber}?text={$waText}"
+            : null;
+
+        $message = "Dear Client, your consignment BL# {$bl} has been registered with PSIL. "
+            . "Your access code is {$code}.";
+
+        if ($waLink) {
+            $message .= "\n\nChat with us on WhatsApp for status updates:\n{$waLink}";
+        }
+
+        $result = app(\App\Services\ArkeselService::class)->sendSms($request->phone, $message);
+
+        if (!$result['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'SMS could not be sent. Please try again or notify the client manually.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Notification sent successfully.',
         ]);
     }
 }

@@ -476,11 +476,165 @@
         </div>
     </div>
 
+    {{-- SMS Notification Popup --}}
+    <div id="sms-modal"
+        style="display:none; position:fixed; inset:0; z-index:50;
+           align-items:center; justify-content:center;
+           background:rgba(0,0,0,0.5);">
+        <div class="card" style="width:100%; max-width:440px; margin:1rem;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem;">
+                <div>
+                    <p class="form-title">Notify Client</p>
+                    <p style="font-size:var(--db-text-xs); color:var(--text-muted); margin-top:2px;">
+                        Send BL registration details via SMS
+                    </p>
+                </div>
+                <button onclick="closeSmsModal()"
+                    style="background:none; border:none; cursor:pointer;
+                       color:var(--text-muted); font-size:1.2rem;">✕</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Consignee</label>
+                <p id="sms-consignee-name"
+                    style="font-size:var(--db-text-sm); font-weight:600;
+                      color:var(--text-primary); padding:8px 0;">
+                    —</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Phone Number <span style="color:#ef4444;">*</span></label>
+                <input type="tel" id="sms-phone" class="form-input" placeholder="e.g. 0244000000" maxlength="15">
+                <p id="sms-phone-error" class="form-error"></p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Message Preview</label>
+                <textarea id="sms-preview" rows="5" class="form-input"
+                    style="resize:none; font-size:var(--db-text-xs);
+                       color:var(--text-muted); background:var(--content-bg);"
+                    readonly></textarea>
+            </div>
+
+            <p id="sms-send-error" class="form-error" style="margin-bottom:8px;"></p>
+
+            <div style="display:flex; gap:0.75rem; margin-top:0.5rem;">
+                <button onclick="closeSmsModal()" class="btn-secondary" style="flex:1;">
+                    Skip
+                </button>
+                <button onclick="sendSmsNotification()" id="sms-send-btn" class="btn-primary" style="flex:1;">
+                    Send SMS
+                </button>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @push('scripts')
     <script>
         const CSRF = '{{ csrf_token() }}';
+
+        // SMS notification popup state
+        let _smsBL = '';
+        let _smsCode = '';
+        let _smsConsigneeId = 0;
+
+        function openSmsModal(bl, clientCode, consigneeId) {
+            _smsBL = bl;
+            _smsCode = clientCode;
+            _smsConsigneeId = consigneeId;
+
+            document.getElementById('sms-modal').style.display = 'flex';
+            document.getElementById('sms-phone').value = '';
+            document.getElementById('sms-consignee-name').textContent = 'Loading...';
+            document.getElementById('sms-preview').value = '';
+            document.getElementById('sms-phone-error').classList.remove('visible');
+            document.getElementById('sms-send-error').classList.remove('visible');
+
+            // Fetch consignee details
+            if (consigneeId && consigneeId > 0) {
+                fetch('{{ route('master-data.consignees.show', ['id' => '__ID__']) }}'.replace('__ID__', consigneeId), {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            document.getElementById('sms-consignee-name').textContent = data.consignee.FullName ?? '—';
+                            document.getElementById('sms-phone').value = data.consignee.TelNo ?? '';
+                            updateSmsPreview();
+                        }
+                    })
+                    .catch(() => {
+                        document.getElementById('sms-consignee-name').textContent = '—';
+                    });
+            } else {
+                document.getElementById('sms-consignee-name').textContent = 'No consignee linked';
+            }
+        }
+
+        function updateSmsPreview() {
+            const preview = document.getElementById('sms-preview');
+            preview.value = `Dear Client, your consignment BL# ${_smsBL} has been registered with PSIL. ` +
+                `Your access code is ${_smsCode}.\n\n` +
+                `Chat with us on WhatsApp for status updates and to track your cargo.`;
+        }
+
+        function closeSmsModal() {
+            document.getElementById('sms-modal').style.display = 'none';
+        }
+
+        function sendSmsNotification() {
+            const phone = document.getElementById('sms-phone').value.trim();
+            const errorEl = document.getElementById('sms-phone-error');
+            const sendErr = document.getElementById('sms-send-error');
+            const btn = document.getElementById('sms-send-btn');
+
+            errorEl.classList.remove('visible');
+            sendErr.classList.remove('visible');
+
+            if (!phone) {
+                errorEl.textContent = 'Phone number is required.';
+                errorEl.classList.add('visible');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+
+            fetch('{{ route('consignments.send-notification') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        bl: _smsBL,
+                        client_code: _smsCode,
+                        phone: phone,
+                    }),
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        closeSmsModal();
+                    } else {
+                        sendErr.textContent = data.message ?? 'Failed to send. Try again.';
+                        sendErr.classList.add('visible');
+                    }
+                })
+                .catch(() => {
+                    sendErr.textContent = 'Something went wrong. Please try again.';
+                    sendErr.classList.add('visible');
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.textContent = 'Send SMS';
+                });
+        }
 
         // ── Commodity type filtering ──
 
@@ -780,13 +934,15 @@
                     if (data.success) {
                         successEl.textContent = `Consignment registered. Receipt: ${data.ReceiptNo}`;
                         successEl.classList.add('visible');
-                        // Reset form after 2 seconds
-                        setTimeout(() => {
-                            document.getElementById('consignment-form').reset();
-                            renderContainerTable([]);
-                            updateSummary([]);
-                            successEl.classList.remove('visible');
-                        }, 3000);
+
+                        // Reset form immediately
+                        document.getElementById('consignment-form').reset();
+                        renderContainerTable([]);
+                        updateSummary([]);
+                        successEl.classList.remove('visible');
+
+                        // Open SMS notification popup
+                        openSmsModal(data.BL, data.ClientCode, data.ConsigneeID);
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to register consignment.';
                         errorEl.classList.add('visible');

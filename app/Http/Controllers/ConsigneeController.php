@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Consignee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ConsigneeController extends Controller
 {
@@ -62,6 +63,20 @@ class ConsigneeController extends Controller
 
         return redirect()->route('consignees.index')
             ->with('success', 'Consignee added successfully.');
+    }
+
+    public function show(int $id)
+    {
+        $consignee = DB::table('consignee_main')
+            ->where('ConsigneeID', $id)
+            ->select('ConsigneeID', 'FullName', 'TelNo')
+            ->first();
+
+        if (!$consignee) {
+            return response()->json(['success' => false, 'message' => 'Consignee not found.'], 404);
+        }
+
+        return response()->json(['success' => true, 'consignee' => $consignee]);
     }
 
     public function update(Request $request, int $id)
