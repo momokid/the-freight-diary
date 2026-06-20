@@ -1,13 +1,6 @@
 @foreach ($rows as $row)
     @php
-        $priority = 1;
-        if ($row->Status == 1) {
-            $priority = 3;
-        } elseif ($row->Status == 2) {
-            $priority = $row->HasDisbursement ? 1 : 2;
-        } elseif ($row->Status == 3) {
-            $priority = $row->ReturnedContainers > 0 ? 5 : 4;
-        }
+        $priority = (int) $row->Priority;
 
         $badgeClass = match ($priority) {
             1 => 'badge-green',
@@ -15,6 +8,8 @@
             3 => 'badge-blue',
             4 => 'badge-amber',
             5 => 'badge-purple',
+            6 => 'badge-teal',
+            default => 'badge-blue',
         };
 
         $badgeLabel = match ($priority) {
@@ -23,32 +18,26 @@
             3 => 'Not Arrived',
             4 => 'Gated Out',
             5 => 'Awaiting Return',
+            6 => 'Arriving Today',
+            default => 'Not Arrived',
         };
 
         $eta = $row->ETA ? \Carbon\Carbon::parse($row->ETA)->format('d M Y') : '—';
         $etaDays = isset($row->ETADays) ? (int) $row->ETADays : null;
 
-        // ETA text and colour
-        if ($row->Status == 1 && $etaDays !== null) {
-            if ($etaDays < 0) {
-                $etaText = abs($etaDays) . 'd overdue';
-                $etaColor = '#b91c1c';
-            } elseif ($etaDays === 0) {
-                $etaText = 'Arriving today';
-                $etaColor = '#15803d';
-            } elseif ($etaDays <= 3) {
-                $etaText = 'In ' . $etaDays . 'd';
-                $etaColor = '#92400e';
-            } else {
-                $etaText = 'In ' . $etaDays . 'd';
-                $etaColor = 'var(--text-muted)';
-            }
+        if ($etaDays !== null && $etaDays < 0) {
+            $etaText = abs($etaDays) . 'd overdue';
+            $etaColor = '#b91c1c';
+        } elseif ($etaDays === 0) {
+            $etaText = 'Arriving today';
+            $etaColor = '#15803d';
+        } elseif ($etaDays !== null && $etaDays <= 3) {
+            $etaText = 'In ' . $etaDays . 'd';
+            $etaColor = '#92400e';
         } else {
             $etaText = $eta;
             $etaColor = 'var(--text-muted)';
         }
-
-        // $registeredDate = $row->RegisteredDate ? \Carbon\Carbon::parse($row->RegisteredDate)->format('d M Y') : '—';
 
         $bl = e($row->BL);
         $consignmentId = (int) $row->ConsignmentID;

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ConsignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -11,17 +12,19 @@ use App\Models\UserAuth;
 class DashboardController extends Controller
 {
     private int $trackerPageSize = 8;
+    private ConsignmentService $consignmentService;
 
-    // 
-    // Main page load — no widget data here, all loads via AJAX
+    public function __construct(ConsignmentService $consignmentService)
+    {
+        $this->consignmentService = $consignmentService;
+    }
+
     public function index()
     {
         $user = Auth::user();
         return view('dashboard', compact('user'));
     }
 
-
-    // AJAX refresh — returns rendered Blade partial for one widget
     public function refresh(Request $request)
     {
         $widget   = $request->input('widget');
@@ -30,7 +33,6 @@ class DashboardController extends Controller
         $branch   = $user->Nature === 'Admin-0' ? null : $user->BranchID;
 
         [$view, $data] = match ($widget) {
-
             'financial' => $userAuth->hasPermission('AccountingReport')
                 ? ['dashboard._financial', array_merge(
                     $this->buildFinancial($branch),
@@ -66,10 +68,6 @@ class DashboardController extends Controller
         return response(view($view, $data)->render());
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Chart data — 12-month container registration trend
-    // Returns JSON: { labels: [...], values: [...] }
-    // ─────────────────────────────────────────────────────────────────────────
     public function chartData(Request $request)
     {
         $user     = Auth::user();
@@ -88,190 +86,122 @@ class DashboardController extends Controller
                 DATE_FORMAT(cd.Date, '%Y-%m') AS month_key,
                 COUNT(*)                       AS total
             FROM container_details cd
-            WHERE cd.Date >= DATE_FORMAT(
-                DATE_SUB(CURDATE(), INTERVAL 11 MONTH), '%Y-%m-01'
-            )
+            WHERE cd.Date >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 11 MONTH), '%Y-%m-01')
             {$bf['sql']}
             GROUP BY DATE_FORMAT(cd.Date, '%Y-%m'), DATE_FORMAT(cd.Date, '%b %Y')
             ORDER BY month_key ASC
         ", $bf['bindings']);
 
-        // Build a full 12-slot array — fill zero for months with no data
         $indexed = [];
         foreach ($rows as $row) {
-            $indexed[$row->month_key] = [
-                'label' => $row->label,
-                'total' => (int) $row->total,
-            ];
+            $indexed[$row->month_key] = ['label' => $row->label, 'total' => (int) $row->total];
         }
 
         $labels = [];
         $values = [];
 
         for ($i = 11; $i >= 0; $i--) {
-            $key   = Carbon::now()->subMonths($i)->format('Y-m');
-            $label = Carbon::now()->subMonths($i)->format('M Y');
-
+            $key      = Carbon::now()->subMonths($i)->format('Y-m');
+            $label    = Carbon::now()->subMonths($i)->format('M Y');
             $labels[] = $label;
             $values[] = isset($indexed[$key]) ? $indexed[$key]['total'] : 0;
         }
 
-        return response()->json([
-            'labels' => $labels,
-            'values' => $values,
-        ]);
-    }
-public function trackerData(Request $request)
-{
-    $user     = Auth::user();
-    $userAuth = UserAuth::where('Username', $user->ID)->first();
-
-    if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
-        return response()->json(['error' => 'Unauthorised'], 403);
+        return response()->json(['labels' => $labels, 'values' => $values]);
     }
 
-    $branch  = $user->Nature === 'Admin-0' ? null : $user->BranchID;
-    $canEdit = $userAuth->hasPermission('EditData');
-    $search  = trim($request->input('search', ''));
+    public function trackerData(Request $request)
+    {
+        $user     = Auth::user();
+        $userAuth = UserAuth::where('Username', $user->ID)->first();
 
-    // ── Search mode — bypasses branch filter, caps at 10 ─────────────────
-    if ($search !== '') {
-        $term = '%' . $search . '%';
+        if (!$userAuth || !$userAuth->hasPermission('ConsignmentRegister')) {
+            return response()->json(['error' => 'Unauthorised'], 403);
+        }
 
-        $rows = DB::select("
-            SELECT
-                cm.ConsignmentID,
-                cm.BL,
-                cm.ETA,
-                cm.Status,
-                cm.Destination,
-                cm.Date                                         AS RegisteredDate,
-                COALESCE(co.FullName, '—')                     AS ConsigneeName,
-                TO_DAYS(cm.ETA) - TO_DAYS(CURDATE())           AS ETADays,
-                EXISTS (
-                    SELECT 1 FROM disbursement_analysis da
-                    WHERE da.BL = cm.BL
-                      AND da.Stamp = 'IN-HARBOR'
-                )                                              AS HasDisbursement,
-                (
-                    SELECT COUNT(*) FROM container_details cd
-                    WHERE cd.ConsignmentID = cm.ConsignmentID
-                )                                              AS TotalContainers,
-                (
-                    SELECT COUNT(*) FROM container_details cd
-                    WHERE cd.ConsignmentID = cm.ConsignmentID
-                      AND cd.ReturnDate IS NOT NULL
-                      AND cd.Status = 4
-                )                                              AS ReturnedContainers,
-                CASE
-                    WHEN cm.Status = 2 AND EXISTS (
-                        SELECT 1 FROM disbursement_analysis da
-                        WHERE da.BL = cm.BL AND da.Stamp = 'IN-HARBOR'
-                    ) THEN 1
-                    WHEN cm.Status = 2 THEN 2
-                    WHEN cm.Status = 1 THEN 3
-                    WHEN cm.Status = 3 AND (
-                        SELECT COUNT(*) FROM container_details cd
-                        WHERE cd.ConsignmentID = cm.ConsignmentID
-                          AND cd.ReturnDate IS NOT NULL AND cd.Status = 4
-                    ) = 0 THEN 4
-                    ELSE 5
-                END                                            AS Priority
-            FROM container_main cm
-            LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
-            WHERE cm.Status IN (1, 2, 3)
-              AND cm.Ownership = 1
-              AND (
-                  cm.BL          LIKE ?
-                  OR co.FullName LIKE ?
-                  OR cm.Destination LIKE ?
-              )
-            ORDER BY Priority ASC, cm.ETA ASC
-            LIMIT 10
-        ", [$term, $term, $term]);
+        $branch   = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $canEdit  = $userAuth->hasPermission('EditData');
+        $search   = trim($request->input('search', ''));
+        $priority = $this->consignmentService->prioritySql();
 
-        $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
-
-        return response()->json([
-            'html'       => $html,
-            'hasMore'    => false,
-            'nextOffset' => 0,
-            'isSearch'   => true,
-            'count'      => count($rows),
-        ]);
-    }
-
-    // ── Normal mode — branch-filtered, offset paginated ───────────────────
-    $offset = max(0, (int) $request->input('offset', 0));
-    $bf     = $this->branchFilter($branch, 'cm');
-
-    $rows = DB::select("
-        SELECT
+        $selectFields = "
             cm.ConsignmentID,
             cm.BL,
             cm.ETA,
             cm.Status,
             cm.Destination,
-            cm.Date                                         AS RegisteredDate,
-            COALESCE(co.FullName, '—')                     AS ConsigneeName,
-            TO_DAYS(cm.ETA) - TO_DAYS(CURDATE())           AS ETADays,
+            cm.Date                               AS RegisteredDate,
+            COALESCE(co.FullName, '—')            AS ConsigneeName,
+            TO_DAYS(cm.ETA) - TO_DAYS(CURDATE())  AS ETADays,
             EXISTS (
                 SELECT 1 FROM disbursement_analysis da
-                WHERE da.BL = cm.BL
-                  AND da.Stamp = 'IN-HARBOR'
-            )                                              AS HasDisbursement,
+                WHERE da.BL = cm.BL AND da.Stamp = 'IN-HARBOR'
+            ) AS HasDisbursement,
             (
                 SELECT COUNT(*) FROM container_details cd
                 WHERE cd.ConsignmentID = cm.ConsignmentID
-            )                                              AS TotalContainers,
+            ) AS TotalContainers,
             (
                 SELECT COUNT(*) FROM container_details cd
                 WHERE cd.ConsignmentID = cm.ConsignmentID
                   AND cd.ReturnDate IS NOT NULL
-                  AND cd.Status = 4
-            )                                              AS ReturnedContainers,
-            CASE
-                WHEN cm.Status = 2 AND EXISTS (
-                    SELECT 1 FROM disbursement_analysis da
-                    WHERE da.BL = cm.BL AND da.Stamp = 'IN-HARBOR'
-                ) THEN 1
-                WHEN cm.Status = 2 THEN 2
-                WHEN cm.Status = 1 THEN 3
-                WHEN cm.Status = 3 AND (
-                    SELECT COUNT(*) FROM container_details cd
-                    WHERE cd.ConsignmentID = cm.ConsignmentID
-                      AND cd.ReturnDate IS NOT NULL AND cd.Status = 4
-                ) = 0 THEN 4
-                ELSE 5
-            END                                            AS Priority
-        FROM container_main cm
-        LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
-        WHERE cm.Status IN (1, 2, 3)
-          AND cm.Ownership = 1
-        {$bf['sql']}
-        ORDER BY Priority ASC, cm.ETA ASC
-        LIMIT ? OFFSET ?
-    ", array_merge($bf['bindings'], [$this->trackerPageSize + 1, $offset]));
+            ) AS ReturnedContainers,
+            ({$priority}) AS Priority";
 
-    $hasMore    = count($rows) > $this->trackerPageSize;
-    $rows       = array_slice($rows, 0, $this->trackerPageSize);
-    $nextOffset = $offset + $this->trackerPageSize;
+        $baseFrom = "
+            FROM container_main cm
+            LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
+            WHERE cm.Status IN (1, 2, 3)
+              AND cm.Ownership = 1";
 
-    $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
+        if ($search !== '') {
+            $term = '%' . $search . '%';
 
-    return response()->json([
-        'html'       => $html,
-        'hasMore'    => $hasMore,
-        'nextOffset' => $nextOffset,
-        'isSearch'   => false,
-        'count'      => count($rows),
-    ]);
-}
+            $rows = DB::select("
+                SELECT {$selectFields}
+                {$baseFrom}
+                  AND (cm.BL LIKE ? OR co.FullName LIKE ? OR cm.Destination LIKE ?)
+                ORDER BY Priority ASC, cm.ETA ASC
+                LIMIT 10
+            ", [$term, $term, $term]);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Tracker containers — accordion content for a single consignment
-    // Returns rendered HTML of container list with Mark Returned buttons
-    // ─────────────────────────────────────────────────────────────────────────
+            $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
+
+            return response()->json([
+                'html'       => $html,
+                'hasMore'    => false,
+                'nextOffset' => 0,
+                'isSearch'   => true,
+                'count'      => count($rows),
+            ]);
+        }
+
+        $offset = max(0, (int) $request->input('offset', 0));
+        $bf     = $this->branchFilter($branch, 'cm');
+
+        $rows = DB::select("
+            SELECT {$selectFields}
+            {$baseFrom}
+            {$bf['sql']}
+            ORDER BY Priority ASC, cm.ETA ASC
+            LIMIT ? OFFSET ?
+        ", array_merge($bf['bindings'], [$this->trackerPageSize + 1, $offset]));
+
+        $hasMore    = count($rows) > $this->trackerPageSize;
+        $rows       = array_slice($rows, 0, $this->trackerPageSize);
+        $nextOffset = $offset + $this->trackerPageSize;
+
+        $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
+
+        return response()->json([
+            'html'       => $html,
+            'hasMore'    => $hasMore,
+            'nextOffset' => $nextOffset,
+            'isSearch'   => false,
+            'count'      => count($rows),
+        ]);
+    }
+
     public function trackerContainers(Request $request)
     {
         $user     = Auth::user();
@@ -300,9 +230,6 @@ public function trackerData(Request $request)
         return response()->json(['html' => $html]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Gate-out — marks all containers under a consignment as gated out
-    // ─────────────────────────────────────────────────────────────────────────
     public function gateOut(Request $request, int $consignmentId, string $bl)
     {
         $user     = Auth::user();
@@ -316,10 +243,7 @@ public function trackerData(Request $request)
 
         DB::table('container_details')
             ->where('ConsignmentID', $consignmentId)
-            ->update([
-                'Status'      => 3,
-                'GateOutDate' => $today,
-            ]);
+            ->update(['Status' => 3, 'GateOutDate' => $today]);
 
         DB::table('container_main')
             ->where('ConsignmentID', $consignmentId)
@@ -329,10 +253,6 @@ public function trackerData(Request $request)
         return response()->json(['success' => true]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Container clear — marks one container as returned
-    // If all containers cleared → marks consignment as cleared (Status 0)
-    // ─────────────────────────────────────────────────────────────────────────
     public function containerClear(Request $request, int $consignmentId, string $containerNo)
     {
         $user     = Auth::user();
@@ -347,10 +267,7 @@ public function trackerData(Request $request)
         DB::table('container_details')
             ->where('ConsignmentID', $consignmentId)
             ->where('ContainerNo', $containerNo)
-            ->update([
-                'Status'     => 4,
-                'ReturnDate' => $today,
-            ]);
+            ->update(['Status' => 4, 'ReturnDate' => $today]);
 
         $pending = DB::table('container_details')
             ->where('ConsignmentID', $consignmentId)
@@ -366,9 +283,6 @@ public function trackerData(Request $request)
         return response()->json(['success' => true, 'allCleared' => $pending === 0]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Drawer — pending disbursements
-    // ─────────────────────────────────────────────────────────────────────────
     public function drawerDisbs(Request $request)
     {
         $user     = Auth::user();
@@ -378,38 +292,35 @@ public function trackerData(Request $request)
             return response()->json(['error' => 'Unauthorised'], 403);
         }
 
-        $branch = $user->Nature === 'Admin-0' ? null : $user->BranchID;
-        $bf     = $this->branchFilter($branch, 'cm');
+        $branch   = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $bf       = $this->branchFilter($branch, 'cm');
+        $priority = $this->consignmentService->prioritySql();
 
         $rows = DB::select("
             SELECT
                 cm.ConsignmentID,
                 cm.BL,
-                cm.Status,
                 cm.ETA,
                 cm.Destination,
-                COALESCE(co.FullName, '—') AS ConsigneeName,
-                DATEDIFF(CURDATE(), cm.ETA) AS DaysOverdue
+                COALESCE(co.FullName, '—')           AS ConsigneeName,
+                DATEDIFF(CURDATE(), cm.ETA)           AS DaysOverdue,
+                ({$priority})                         AS Priority
             FROM container_main cm
             LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
             WHERE cm.Ownership = 1
               AND cm.Status IN (1, 2)
-              AND DATEDIFF(CURDATE(), cm.ETA) > 0
-              AND COALESCE((
-                  SELECT SUM(da.Expenditure)
-                  FROM disbursement_analysis da
-                  WHERE da.BL = cm.BL
-              ), 0) = 0
+              AND cm.ETA < CURDATE()
+              AND NOT EXISTS (
+                  SELECT 1 FROM disbursement_analysis da
+                  WHERE da.BL = cm.BL AND da.Stamp = 'IN-HARBOR'
+              )
             {$bf['sql']}
-            ORDER BY cm.Status ASC, cm.ETA ASC
+            ORDER BY cm.ETA ASC
         ", $bf['bindings']);
 
         return response()->json($rows);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Drawer — pending consignments (ETA editing)
-    // ─────────────────────────────────────────────────────────────────────────
     public function drawerPendingConsignments(Request $request)
     {
         $user     = Auth::user();
@@ -419,35 +330,35 @@ public function trackerData(Request $request)
             return response()->json(['error' => 'Unauthorised'], 403);
         }
 
-        $branch  = $user->Nature === 'Admin-0' ? null : $user->BranchID;
-        $bf      = $this->branchFilter($branch, 'ip');
-        $canEdit = $userAuth->hasPermission('EditData');
+        $branch   = $user->Nature === 'Admin-0' ? null : $user->BranchID;
+        $bf       = $this->branchFilter($branch, 'cm');
+        $canEdit  = $userAuth->hasPermission('EditData');
+        $priority = $this->consignmentService->prioritySql();
 
         $rows = DB::select("
             SELECT
-                ip.ConsignmentID,
-                ip.BL,
-                ip.ConsigneeName,
-                ip.Destination,
-                ip.ETA,
-                ip.ETADays,
+                cm.ConsignmentID,
+                cm.BL,
+                cm.ETA,
+                cm.Destination,
+                COALESCE(co.FullName, '—')            AS ConsigneeName,
+                TO_DAYS(cm.ETA) - TO_DAYS(CURDATE())  AS ETADays,
                 EXISTS (
                     SELECT 1 FROM disbursement_analysis da
-                    WHERE da.BL = ip.BL
-                      AND da.Stamp = 'IN-HARBOR'
-                ) AS DisbursementApproved
-            FROM inharbor_pending_1 ip
-            WHERE 1=1
+                    WHERE da.BL = cm.BL AND da.Stamp = 'IN-HARBOR'
+                )                                     AS DisbursementApproved,
+                ({$priority})                         AS Priority
+            FROM container_main cm
+            LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
+            WHERE cm.Status IN (1, 2, 3)
+              AND cm.Ownership = 1
             {$bf['sql']}
-            ORDER BY ip.ETADays ASC
+            ORDER BY Priority ASC, cm.ETA ASC
         ", $bf['bindings']);
 
         return response()->json(['rows' => $rows, 'canEdit' => $canEdit]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ETA update — EditData permission required
-    // ─────────────────────────────────────────────────────────────────────────
     public function updateEta(Request $request)
     {
         $user     = Auth::user();
@@ -480,20 +391,12 @@ public function trackerData(Request $request)
         ]);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Branch filter helper
-    // ─────────────────────────────────────────────────────────────────────────
     private function branchFilter(?int $branch, string $alias = ''): array
     {
         if ($branch === null) return ['sql' => '', 'bindings' => []];
         $col = $alias ? "{$alias}.BranchID" : 'BranchID';
         return ['sql' => "AND {$col} = ?", 'bindings' => [$branch]];
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Widget builders — financial, cash, collections, transactions, vision,
-    // disbursements — all unchanged from previous working version
-    // ─────────────────────────────────────────────────────────────────────────
 
     private function buildFinancial(?int $branch): array
     {
@@ -528,12 +431,12 @@ public function trackerData(Request $request)
         $bf    = $this->branchFilter($branch, 'j');
         $trend = DB::select("
             SELECT
-                DATE_FORMAT(j.Date, '%b %Y')  AS month_label,
-                DATE_FORMAT(j.Date, '%Y-%m')  AS month_key,
+                DATE_FORMAT(j.Date, '%b %Y') AS month_label,
+                DATE_FORMAT(j.Date, '%Y-%m') AS month_key,
                 COALESCE(SUM(CASE WHEN la.Type = 'INCOME'
-                    THEN j.Cr - j.Dr ELSE 0 END), 0)      AS revenue,
+                    THEN j.Cr - j.Dr ELSE 0 END), 0) AS revenue,
                 COALESCE(SUM(CASE WHEN la.Type = 'EXPENDITURE'
-                    THEN j.Dr - j.Cr ELSE 0 END), 0)      AS expenditure
+                    THEN j.Dr - j.Cr ELSE 0 END), 0) AS expenditure
             FROM journal j
             JOIN ledger_account la ON la.AccountNo = j.SubAccountID
             JOIN active_ie ai      ON ai.AccountID = j.AccountID
@@ -581,16 +484,16 @@ public function trackerData(Request $request)
 
         $summary = DB::selectOne("
             SELECT
-                COALESCE(SUM(Outstanding), 0)                       AS total,
-                COUNT(DISTINCT StudentID)                            AS clientCount,
+                COALESCE(SUM(Outstanding), 0)                    AS total,
+                COUNT(DISTINCT StudentID)                         AS clientCount,
                 COALESCE(SUM(CASE WHEN DaysOutstanding <= 30
-                    THEN Outstanding END), 0)                       AS bucket_30,
+                    THEN Outstanding END), 0)                    AS bucket_30,
                 COALESCE(SUM(CASE WHEN DaysOutstanding BETWEEN 31 AND 60
-                    THEN Outstanding END), 0)                       AS bucket_60,
+                    THEN Outstanding END), 0)                    AS bucket_60,
                 COALESCE(SUM(CASE WHEN DaysOutstanding BETWEEN 61 AND 90
-                    THEN Outstanding END), 0)                       AS bucket_90,
+                    THEN Outstanding END), 0)                    AS bucket_90,
                 COALESCE(SUM(CASE WHEN DaysOutstanding > 90
-                    THEN Outstanding END), 0)                       AS bucket_90plus
+                    THEN Outstanding END), 0)                    AS bucket_90plus
             FROM (
                 SELECT
                     sf.StudentID,

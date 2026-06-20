@@ -578,6 +578,10 @@
 
     </div>
 
+    <script>
+        {!! app(\App\Services\ConsignmentService::class)->priorityBadgeJs() !!}
+    </script>
+
     @stack('scripts')
 
     {{-- ── HS Code Advisor Modal ── --}}

@@ -84,6 +84,15 @@
             margin-bottom: 10px;
         }
 
+        .tracker-card.priority-6 {
+            border-left-color: #0d9488;
+        }
+
+        .badge-teal {
+            background: #ccfbf1;
+            color: #0f766e;
+        }
+
         /* ── Hero grid ──────────────────────────────────────────── */
         .db-hero {
             display: grid;
@@ -328,8 +337,8 @@
                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M4 4v5h.582m15.356 2A8.001 8.001 0
-                                                                                           004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
-                                                                                           8.003 0 01-15.357-2m15.357 2H15" />
+                                                                                                   004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
+                                                                                                   8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Refresh All
             </button>
@@ -1163,6 +1172,7 @@
                 const drawer = document.getElementById('pending-drawer');
                 const overlay = document.getElementById('pending-drawer-overlay');
                 const content = document.getElementById('pending-drawer-content');
+
                 overlay.style.display = 'block';
                 drawer.style.pointerEvents = 'auto';
                 requestAnimationFrame(() => {
@@ -1183,32 +1193,38 @@
                     }) => {
                         if (!rows.length) {
                             content.innerHTML =
-                                '<p style="font-size:var(--db-text-sm); color:var(--text-muted); text-align:center; padding:24px 0;">No pending consignments found.</p>';
+                                '<p style="font-size:var(--db-text-sm); color:var(--text-muted); text-align:center; padding:24px 0;">No active consignments found.</p>';
                             return;
                         }
+
                         let html = `
-                    <table style="width:100%; border-collapse:collapse;">
-                        <thead>
-                            <tr style="background:#185FA5; color:#fff;">
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">BL</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Consignee</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Destination</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">ETA</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Days</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Status</th>
-                                ${canEdit ? '<th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Action</th>' : ''}
-                            </tr>
-                        </thead>
-                        <tbody>`;
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#185FA5; color:#fff;">
+                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">BL</th>
+                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Consignee</th>
+                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Destination</th>
+                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">ETA</th>
+                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Status</th>
+                            ${canEdit ? '<th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Action</th>' : ''}
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
                         rows.forEach(row => {
-                            const days = parseInt(row.ETADays);
+                            const priority = parseInt(row.Priority);
+                            const badge = window.ConsignmentPriority.badge(priority);
+                            const etaLocked = window.ConsignmentPriority.etaLocked(priority);
                             const etaDate = row.ETA ? row.ETA.substring(0, 10) : '';
-                            let daysText = '—',
-                                daysStyle = 'color:var(--text-muted);';
+                            const days = parseInt(row.ETADays);
+
+                            // Days display
+                            let daysText = '—';
+                            let daysStyle = 'color:var(--text-muted);';
                             if (etaDate) {
                                 if (days < 0) {
                                     daysText = `${Math.abs(days)}d overdue`;
-                                    daysStyle = 'color:#A32D2D; font-weight:600;';
+                                    daysStyle = 'color:#b91c1c; font-weight:600;';
                                 } else if (days === 0) {
                                     daysText = 'Today';
                                     daysStyle = 'color:#15803d; font-weight:600;';
@@ -1219,39 +1235,51 @@
                                     daysText = `${days}d`;
                                 }
                             }
-                            const statusBg = days < 0 ? 'background:#E6F1FB; color:#0C447C;' :
-                                'background:#FAEEDA; color:#854F0B;';
-                            const statusLabel = days < 0 ? 'In Harbor' : 'Not Arrived';
-                            const locked = row.DisbursementApproved == 1;
-                            const etaCell = (canEdit && !locked) ?
-                                `<input type="date" value="${etaDate}" style="border:0.5px solid var(--border-color); border-radius:5px; padding:4px 8px; font-size:var(--db-text-sm); width:140px;">` :
+
+                            // ETA cell — disabled when locked
+                            const etaCell = (canEdit && !etaLocked) ?
+                                `<input type="date" value="${etaDate}"
+                           style="border:0.5px solid var(--border-color); border-radius:5px;
+                                  padding:4px 8px; font-size:var(--db-text-sm); width:140px;">` :
                                 `<span style="font-size:var(--db-text-sm); color:var(--text-primary);">${etaDate || '—'}</span>`;
-                            const actionCell = (canEdit && !locked) ?
-                                `<button onclick="window.DashboardApp.saveEta(${row.ConsignmentID}, '${row.BL}', this)" style="background:#185FA5; color:#fff; border:none; border-radius:5px; padding:4px 12px; font-size:var(--db-text-sm); font-weight:600; cursor:pointer;">Save</button>` :
-                                locked ?
-                                `<span style="font-size:var(--db-text-xs); color:var(--text-muted);">🔒 Locked</span>` :
-                                '';
+
+                            // Action cell
+                            const actionCell = (canEdit && !etaLocked) ?
+                                `<button onclick="window.DashboardApp.saveEta(${row.ConsignmentID}, '${row.BL}', this)"
+                           style="background:#185FA5; color:#fff; border:none; border-radius:5px;
+                                  padding:4px 12px; font-size:var(--db-text-sm); font-weight:600; cursor:pointer;">
+                           Save
+                       </button>` :
+                                `<span style="font-size:var(--db-text-xs); color:var(--text-muted);">🔒 Locked</span>`;
+
                             html += `
-                        <tr style="border-bottom:0.5px solid var(--border-color);">
-                            <td style="padding:10px 12px; font-family:monospace; font-size:var(--db-text-base); color:var(--text-primary); white-space:nowrap;">${row.BL}</td>
-                            <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-primary);">${row.ConsigneeName}</td>
-                            <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-muted);">${row.Destination || '—'}</td>
-                            <td style="padding:10px 12px; text-align:center;" data-eta-cell>${etaCell}</td>
-                            <td style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; ${daysStyle}" data-days-cell>${daysText}</td>
-                            <td style="padding:10px 12px; text-align:center;" data-status-cell>
-                                <span style="${statusBg} font-size:var(--db-text-xs); font-weight:600; border-radius:10px; padding:3px 10px;">${statusLabel}</span>
-                            </td>
-                            ${canEdit ? `<td style="padding:10px 12px; text-align:center;">${actionCell}</td>` : ''}
-                        </tr>`;
+                    <tr style="border-bottom:0.5px solid var(--border-color);">
+                        <td style="padding:10px 12px; font-family:monospace; font-size:var(--db-text-base);
+                                   color:var(--text-primary); white-space:nowrap;">${row.BL}</td>
+                        <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-primary);">${row.ConsigneeName}</td>
+                        <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-muted);">${row.Destination || '—'}</td>
+                        <td style="padding:10px 12px; text-align:center;" data-eta-cell>${etaCell}</td>
+                        <td style="padding:10px 12px; text-align:center;">
+                            <span style="background:${badge.bg}; color:${badge.color};
+                                         font-size:var(--db-text-xs); font-weight:600;
+                                         border-radius:10px; padding:3px 10px;">
+                                ${badge.label}
+                            </span>
+                            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">
+                                ${daysText}
+                            </div>
+                        </td>
+                        ${canEdit ? `<td style="padding:10px 12px; text-align:center;">${actionCell}</td>` : ''}
+                    </tr>`;
                         });
+
                         content.innerHTML = html + '</tbody></table>';
                     })
                     .catch(() => {
                         content.innerHTML =
-                            '<p style="font-size:var(--db-text-sm); color:#A32D2D; padding:12px 0;">Failed to load data. Please try again.</p>';
+                            '<p style="font-size:var(--db-text-sm); color:#b91c1c; padding:12px 0;">Failed to load. Please try again.</p>';
                     });
             },
-
             closePendingDrawer() {
                 document.getElementById('pending-drawer').style.transform = 'translateX(100%)';
                 document.getElementById('pending-drawer').style.pointerEvents = 'none';
