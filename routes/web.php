@@ -39,6 +39,7 @@ use App\Http\Controllers\Settings\LedgerCategoryController;
 use App\Http\Controllers\Settings\LedgerControlController;
 use App\Http\Controllers\Settings\UserPrivilegeController;
 use App\Http\Controllers\WaybillController;
+use App\Http\Controllers\WhatsAppController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -53,6 +54,10 @@ Route::middleware('guest')->group(function () {
 Route::get('/', function () {
     return redirect()->route('login');
 });
+
+// WhatsApp webhook — public, no auth, no CSRF
+Route::get('/webhook/whatsapp',  [WhatsAppController::class, 'verify'])->name('whatsapp.verify');
+Route::post('/webhook/whatsapp', [WhatsAppController::class, 'receive'])->name('whatsapp.receive');
 
 // Authenticated Routes — accessible only when logged in
 Route::middleware('auth')->group(function () {

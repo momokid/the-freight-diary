@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \App\Http\Middleware\CheckPermission::class,
         ]);
 
+        $middleware->validateCsrfTokens(except: [
+            'webhook/whatsapp',
+        ]);
+
         //force password change middleware runs on every authenticated request
         $middleware->appendToGroup('web', \App\Http\Middleware\ForcePasswordChange::class);
 

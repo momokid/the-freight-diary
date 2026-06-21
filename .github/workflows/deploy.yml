@@ -1,0 +1,76 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, pdo, pdo_mysql, tokenizer, xml, ctype, json, bcmath
+
+      - name: Install Composer dependencies
+        run: composer install --optimize-autoloader --no-dev --no-interaction --prefer-dist
+
+      - name: Create production .env
+        run: |
+          echo "APP_NAME=\"Freight Diary\"" > .env
+          echo "APP_ENV=production" >> .env
+          echo "APP_KEY=${{ secrets.APP_KEY }}" >> .env
+          echo "APP_DEBUG=false" >> .env
+          echo "APP_URL=${{ secrets.APP_URL }}" >> .env
+          echo "DB_CONNECTION=mysql" >> .env
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
+          echo "DB_PORT=3306" >> .env
+          echo "DB_DATABASE=${{ secrets.DB_DATABASE }}" >> .env
+          echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+          echo "ARKESEL_API_KEY=${{ secrets.ARKESEL_API_KEY }}" >> .env
+          echo "ARKESEL_SENDER_ID=${{ secrets.ARKESEL_SENDER_ID }}" >> .env
+          echo "ARKESEL_SMS_URL=${{ secrets.ARKESEL_SMS_URL }}" >> .env
+          echo "ARKESEL_SANDBOX=false" >> .env
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" >> .env
+          echo "ANTHROPIC_MODEL=claude-haiku-4-5" >> .env
+          echo "BL_PARSER_PROVIDER=claude" >> .env
+          echo "HS_CODE_MODEL=claude-sonnet-4-6" >> .env
+          echo "HS_CODE_FALLBACK_MODEL=claude-haiku-4-5" >> .env
+          echo "META_WHATSAPP_TOKEN=${{ secrets.META_WHATSAPP_TOKEN }}" >> .env
+          echo "META_PHONE_NUMBER_ID=${{ secrets.META_PHONE_NUMBER_ID }}" >> .env
+          echo "META_WABA_ID=${{ secrets.META_WABA_ID }}" >> .env
+          echo "META_VERIFY_TOKEN=${{ secrets.META_VERIFY_TOKEN }}" >> .env
+          echo "META_WHATSAPP_API_URL=https://graph.facebook.com/v19.0" >> .env
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
+          echo "GROQ_MODEL=llama-3.2-90b-vision-preview" >> .env
+          echo "SESSION_DRIVER=file" >> .env
+          echo "SESSION_LIFETIME=120" >> .env
+          echo "CACHE_STORE=file" >> .env
+          echo "QUEUE_CONNECTION=sync" >> .env
+          echo "MAIL_MAILER=log" >> .env
+
+      - name: Cache config and routes
+        run: |
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_PATH }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/tests/**
+            **/storage/logs/**

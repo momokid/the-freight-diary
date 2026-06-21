@@ -72,4 +72,11 @@ return [
         'model'          => env('HS_CODE_MODEL', 'claude-sonnet-4-6'),
         'fallback_model' => env('HS_CODE_FALLBACK_MODEL', 'claude-haiku-4-5'),
     ],
+    'meta' => [
+        'whatsapp_token'    => env('META_WHATSAPP_TOKEN'),
+        'phone_number_id'   => env('META_PHONE_NUMBER_ID'),
+        'waba_id'           => env('META_WABA_ID'),
+        'verify_token'      => env('META_VERIFY_TOKEN'),
+        'api_url'           => env('META_WHATSAPP_API_URL', 'https://graph.facebook.com/v19.0'),
+    ],
 ];
