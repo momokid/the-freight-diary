@@ -391,6 +391,7 @@ Route::middleware('auth')->group(function () {
         Route::middleware('permission:DisbursementAnalysis')->group(function () {
             Route::get('/analysis', [DisbursementAnalysisController::class, 'index'])->name('analysis.index');
             Route::get('/analysis/search', [DisbursementAnalysisController::class, 'searchBL'])->name('analysis.search')->middleware('throttle:60,1');
+            Route::get('/analysis/hbl-list', [DisbursementAnalysisController::class, 'hblList'])->name('analysis.hbl.list');
             Route::post('/analysis/load', [DisbursementAnalysisController::class, 'loadBL'])->name('analysis.load');
             Route::delete('/analysis/temp', [DisbursementAnalysisController::class, 'clearTemp'])->name('analysis.temp.clear');
             Route::post('/analysis/temp', [DisbursementAnalysisController::class, 'saveTempRow'])->name('analysis.temp.save');

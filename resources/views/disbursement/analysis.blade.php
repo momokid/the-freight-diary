@@ -232,10 +232,21 @@
                         <tr id="disbursement-total-row" style="display: none;">
                             <td
                                 style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); padding-top: 0.5rem;">
-                                DISBURSEMENT TOTAL
+                                HBL TOTAL
                             </td>
                             <td style="font-weight: 700; font-size: 0.9rem; color: #dc2626; padding-top: 0.5rem;"
                                 id="disbursement-total">
+                                GH₵ 0.00
+                            </td>
+                            <td></td>
+                        </tr>
+                        <tr id="bl-total-row" style="display: none;">
+                            <td
+                                style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary); padding-top: 0.25rem;">
+                                BL TOTAL
+                            </td>
+                            <td style="font-weight: 700; font-size: 0.95rem; color: #185FA5; padding-top: 0.25rem;"
+                                id="bl-total">
                                 GH₵ 0.00
                             </td>
                             <td></td>
@@ -313,6 +324,7 @@
             deleteTempRow: (accountNo) => `{{ url('disbursement/analysis/temp') }}/${accountNo}`,
             save: '{{ route('disbursement.analysis.save') }}',
             reopen: '{{ route('disbursement.analysis.reopen') }}',
+            hblList: '{{ route('disbursement.analysis.hbl.list') }}',
         };
 
         // ── State ─────────────────────────────────────────────────────────────────────
@@ -326,6 +338,8 @@
             reopenHBL: '',
             reopenType: '',
             savedExpenditure: 0, // total already saved in disbursement_analysis for current BL
+            blTotal: 0,
+            allTempRows: [],
         };
 
         // ── Init ──────────────────────────────────────────────────────────────────────
@@ -506,12 +520,28 @@
 
                     state.hbl = hbl;
                     state.savedExpenditure = data.savedExpenditure ?? 0;
-                    renderAccountRows(data.tempRows);
+
+                    state.allTempRows = data.tempRows;
+                    const hblRows = data.tempRows.filter(r => r.HouseBL === hbl);
+                    renderAccountRows(hblRows);
+                    updateBLTotal(state.allTempRows);
+
                     setSessionInfo(state.bl, hbl, 'LCL');
                     document.getElementById('accounts-hbl-label').textContent =
                         `Entering expenses for HBL# ${hbl}`;
                 })
                 .catch(() => alert('Connection error. Please try again.'));
+        }
+
+        function updateBLTotal(allTempRows) {
+            if (!allTempRows || state.type !== 'LCL') {
+                document.getElementById('bl-total-row').style.display = 'none';
+                return;
+            }
+            state.blTotal = allTempRows.reduce((sum, r) => sum + (parseFloat(r.Amount) || 0), 0);
+            document.getElementById('bl-total').textContent = `GH₵ ${state.blTotal.toFixed(2)}`;
+            document.getElementById('bl-total-row').style.display = '';
+            updateVariance();
         }
 
         // ── Temp Banner Actions ───────────────────────────────────────────────────────
@@ -679,6 +709,15 @@
         }
 
         function updateTempRow(accountNo, amount) {
+            const parsed = parseFloat(amount) || 0;
+
+            // Keep allTempRows in sync so BL total stays accurate
+            const row = state.allTempRows.find(
+                r => r.AccountNo === accountNo && r.HouseBL === state.hbl
+            );
+            if (row) row.Amount = parsed;
+            updateBLTotal(state.allTempRows);
+
             fetch(ROUTES.saveTempRow, {
                 method: 'POST',
                 headers: {
@@ -687,7 +726,9 @@
                 },
                 body: JSON.stringify({
                     AccountNo: accountNo,
-                    Amount: parseFloat(amount) || 0
+                    BL: state.bl,
+                    HBL: state.hbl,
+                    Amount: parsed,
                 }),
             });
         }
@@ -717,7 +758,12 @@
                 total += parseFloat(input.value) || 0;
             });
             document.getElementById('disbursement-total').textContent = `GH₵ ${total.toFixed(2)}`;
-            updateVariance();
+
+            // For FCL, blTotal = screen total. For LCL, updateBLTotal owns variance.
+            if (state.type === 'FCL') {
+                state.blTotal = total;
+                updateVariance();
+            }
         }
 
         // ── Extra Account ─────────────────────────────────────────────────────────────
@@ -891,7 +937,6 @@
         // ── Variance ──────────────────────────────────────────────────────────────────
         function updateVariance() {
             const budgeted = parseFloat(document.getElementById('budgeted-expenses').value) || 0;
-            const total = getTotalExpenditure();
             const row = document.getElementById('variance-row');
 
             if (budgeted <= 0) {
@@ -899,11 +944,8 @@
                 return;
             }
 
-            // Total = all saved entries for this BL + current temp amounts on screen
-            const totalAllExpenses = state.savedExpenditure + getTotalExpenditure();
+            const totalAllExpenses = state.savedExpenditure + state.blTotal;
             const variance = budgeted - totalAllExpenses;
-
-            row.style.display = 'block';
 
             row.style.display = 'block';
             const el = document.getElementById('variance-value');
@@ -938,10 +980,6 @@
                 showError('save-error', 'No BL loaded. Please search and load a consignment first.');
                 return;
             }
-            if (!state.hbl) {
-                showError('save-error', 'No HBL selected. Please select a House BL first.');
-                return;
-            }
 
             const btn = document.getElementById('save-btn');
             btn.textContent = 'Saving...';
@@ -955,7 +993,6 @@
                     },
                     body: JSON.stringify({
                         BL: state.bl,
-                        HBL: state.hbl,
                         Type: state.type,
                         AccountNo: accountNo,
                         PaymentDate: paymentDate,
@@ -979,25 +1016,14 @@
 
                     const savedType = state.type;
                     const savedBL = state.bl;
+                    const savedHBL = state.hbl;
 
                     // Reset HBL only — keep BL for LCL refresh
                     state.hbl = '';
 
                     // Refresh HBL list if LCL
                     if (savedType === 'LCL') {
-                        // Refresh HBL list to show updated status badges
-                        // Re-fetch hblList without reinitialising temp
-                        fetch(ROUTES.loadBL, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': CSRF
-                                },
-                                body: JSON.stringify({
-                                    BL: savedBL,
-                                    Type: 'LCL'
-                                }),
-                            })
+                        fetch(`${ROUTES.hblList}?BL=${encodeURIComponent(savedBL)}`)
                             .then(r => r.json())
                             .then(data => {
                                 if (data.hblList) renderHBLList(data.hblList);
@@ -1037,7 +1063,13 @@
                 renderHBLList(hblList);
             }
 
-            renderAccountRows(tempRows);
+            state.allTempRows = tempRows;
+            const visibleRows = type === 'LCL' ?
+                tempRows.filter(r => r.HouseBL === hbl) :
+                tempRows;
+            renderAccountRows(visibleRows);
+            updateBLTotal(state.allTempRows);
+
             setSessionInfo(bl, hbl, type);
 
             document.getElementById('accounts-hbl-label').textContent =

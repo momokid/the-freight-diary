@@ -8,92 +8,105 @@ use Illuminate\Support\Facades\DB;
 
 class DisbursementApprovalController extends Controller
 {
-    // ──────────────────────────────────────────────────────────────────────────
-    // PAGE LOAD
-    // ──────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Load all pending In-Harbor disbursements grouped by MainBL.
-     * FCL: one card per BL with container details + expenditure rows.
-     * LCL: one card per BL with account totals + View HBLs button per account.
-     */
     public function index()
     {
-        // Get all pending IN-HARBOR entries grouped by BL
-        $pendingBLs = DB::table('disbursement_analysis as da')
-            ->join('ledger_account as la', 'da.AccountID', '=', 'la.AccountNo')
-            ->join('container_main as cm', 'da.BL', '=', 'cm.BL')
-            ->join('consignee_main as c', 'cm.ConsigneeID', '=', 'c.ConsigneeID')
-            ->where('da.Stamp', 'IN-HARBOR')
+        $pendingEntries = DB::table('disbursement_analysis as da')
+            ->leftJoin('container_main as cm', 'da.BL', '=', 'cm.BL')
+            ->leftJoin('consignee_main as c', 'cm.ConsigneeID', '=', 'c.ConsigneeID')
+            ->leftJoin('ledger_account as la', 'da.AccountID', '=', 'la.AccountNo')
             ->where('da.Status', 2)
             ->select(
                 'da.BL',
                 'da.HBL',
-                'da.ContainerNo',
+                'da.ConsigneeID',
                 'da.ReceiptNo',
                 'da.AccountID',
-                'la.AccountName',
                 'da.Expenditure',
                 'da.Date',
                 'da.Username',
                 'da.Type',
+                'da.Stamp',
+                'la.AccountName',
                 'cm.ConsignmentID',
                 'cm.Ownership',
-                'c.FullName as ConsigneeName',
-                'c.ConsigneeID'
+                'c.FullName as ConsigneeName'
             )
             ->orderBy('da.BL')
+            ->orderBy('da.HBL')
             ->orderBy('da.Date')
             ->get();
 
-        // Group by BL
-        $grouped = $pendingBLs->groupBy('BL');
+        $grouped = $pendingEntries->groupBy('BL');
 
-        // Build structured data per BL
         $disbursements = [];
 
         foreach ($grouped as $bl => $entries) {
             $first = $entries->first();
-            $type = $first->Type;
+            $type  = $first->Type;
 
-            // Get containers for this BL
+            // Try container_details first
             $containers = DB::table('container_details')
                 ->where('BL', $bl)
-                ->get(['ContainerNo', 'ContainerSize', 'Weight', 'HandlingCost']);
+                ->get(['ContainerNo', 'ContainerSize', 'Weight', 'HandlingCost', 'ItemDetails as ItemDescription']);
+
+            // Fall back to manifestation_breakdown for LCL if container_details is empty
+            if ($containers->isEmpty() && $type === 'LCL') {
+                $containers = DB::table('manifestation_breakdown as mb')
+                    ->leftJoin('consignee_main as mc', 'mb.ConsigneeID', '=', 'mc.ConsigneeID')
+                    ->where('mb.MainBL', $bl)
+                    ->where('mb.Status', 1)
+                    ->get([
+                        'mb.HouseBL as ContainerNo',
+                        DB::raw("'LCL' as ContainerSize"),
+                        'mb.Weight',
+                        DB::raw('NULL as HandlingCost'),
+                        'mb.Description as ItemDescription',
+                    ]);
+            }
 
             if ($type === 'FCL') {
                 $disbursements[] = [
-                    'BL' => $bl,
-                    'Type' => 'FCL',
-                    'ConsigneeID' => $first->ConsigneeID,
+                    'BL'            => $bl,
+                    'Type'          => 'FCL',
+                    'ConsigneeID'   => $first->ConsigneeID,
                     'ConsigneeName' => $first->ConsigneeName,
                     'ConsignmentID' => $first->ConsignmentID,
-                    'containers' => $containers,
-                    'entries' => $entries,
-                    'receiptNos' => $entries->pluck('ReceiptNo')->unique()->values(),
-                    'total' => round($entries->sum('Expenditure'), 2),
+                    'containers'    => $containers,
+                    'entries'       => $entries,
+                    'receiptNos'    => $entries->pluck('ReceiptNo')->unique()->values(),
+                    'total'         => round($entries->sum('Expenditure'), 2),
                 ];
             } else {
-                // LCL — group entries by AccountID for totals
                 $accountTotals = $entries->groupBy('AccountID')->map(function ($rows) {
                     return [
-                        'AccountID' => $rows->first()->AccountID,
+                        'AccountID'   => $rows->first()->AccountID,
                         'AccountName' => $rows->first()->AccountName,
-                        'Total' => round($rows->sum('Expenditure'), 2),
+                        'Total'       => round($rows->sum('Expenditure'), 2),
+                    ];
+                })->values();
+
+                $hblGroups = $entries->groupBy('HBL')->map(function ($rows) {
+                    return [
+                        'HBL'          => $rows->first()->HBL,
+                        'ConsigneeName' => $rows->first()->ConsigneeName,
+                        'entries'      => $rows,
+                        'total'        => round($rows->sum('Expenditure'), 2),
                     ];
                 })->values();
 
                 $disbursements[] = [
-                    'BL' => $bl,
-                    'Type' => 'LCL',
-                    'ConsigneeID' => $first->ConsigneeID,
+                    'BL'            => $bl,
+                    'Type'          => 'LCL',
+                    'ConsigneeID'   => $first->ConsigneeID,
                     'ConsigneeName' => $first->ConsigneeName,
                     'ConsignmentID' => $first->ConsignmentID,
-                    'containers' => $containers,
+                    'containers'    => $containers,
                     'accountTotals' => $accountTotals,
-                    'entries' => $entries,
-                    'receiptNos' => $entries->pluck('ReceiptNo')->unique()->values(),
-                    'total' => round($entries->sum('Expenditure'), 2),
+                    'hblGroups'     => $hblGroups,
+                    'entries'       => $entries,
+                    'receiptNos'    => $entries->pluck('ReceiptNo')->unique()->values(),
+                    'total'         => round($entries->sum('Expenditure'), 2),
                 ];
             }
         }
@@ -101,14 +114,6 @@ class DisbursementApprovalController extends Controller
         return view('disbursement.approval', compact('disbursements'));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // GET HBLs (LCL Modal)
-    // ──────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Return HBL breakdown for a specific BL + AccountID.
-     * Used to populate the LCL modal.
-     */
     public function getHBLs(Request $request)
     {
         $request->validate([
@@ -135,14 +140,7 @@ class DisbursementApprovalController extends Controller
         return response()->json($rows);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // APPROVE
-    // ──────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Approve all pending entries for a MainBL.
-     * Sets Status = 0 on all matching disbursement_analysis rows.
-     */
     public function approve(Request $request)
     {
         $request->validate([
@@ -150,15 +148,12 @@ class DisbursementApprovalController extends Controller
         ]);
 
         $bl = strtoupper(trim($request->BL));
-        $user = Auth::user();
 
         $affected = DB::table('disbursement_analysis')
             ->where('BL', $bl)
             ->where('Stamp', 'IN-HARBOR')
             ->where('Status', 2)
-            ->update([
-                'Status' => 0,
-            ]);
+            ->count();
 
         if ($affected === 0) {
             return response()->json([
@@ -167,22 +162,49 @@ class DisbursementApprovalController extends Controller
             ], 404);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => "BL# {$bl} approved successfully.",
-            'BL' => $bl,
-        ]);
+        DB::beginTransaction();
+
+        try {
+            DB::table('disbursement_analysis')
+                ->where('BL', $bl)
+                ->where('Stamp', 'IN-HARBOR')
+                ->where('Status', 2)
+                ->update(['Status' => 0]);
+
+            DB::table('pnl_transaction')
+                ->where('MainBL', $bl)
+                ->where('Stamp', 'BL')
+                ->where('Status', 2)
+                ->update(['Status' => 0]);
+
+            DB::table('journal')
+                ->whereIn('ReceiptNo', function ($query) use ($bl) {
+                    $query->select('ReceiptNo')
+                        ->from('disbursement_analysis')
+                        ->where('BL', $bl)
+                        ->where('Stamp', 'IN-HARBOR');
+                })
+                ->where('Status', 1)
+                ->update(['Status' => 0]);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "BL# {$bl} approved successfully.",
+                'BL'      => $bl,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Approval failed. Please try again.',
+                'debug'   => app()->environment('local') ? $e->getMessage() : null,
+            ], 500);
+        }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // DECLINE
-    // ──────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Decline all pending entries for a MainBL.
-     * Reverses all accounting entries and restores to temp table.
-     * Multiple ReceiptNos handled — each may have a different date.
-     */
     public function decline(Request $request)
     {
         $request->validate([
@@ -282,7 +304,6 @@ class DisbursementApprovalController extends Controller
                 'message' => "BL# {$bl} declined and restored to draft.",
                 'BL' => $bl,
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
 

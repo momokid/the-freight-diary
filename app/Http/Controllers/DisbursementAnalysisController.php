@@ -71,10 +71,6 @@ class DisbursementAnalysisController extends Controller
         ));
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // SEARCH
-    // ──────────────────────────────────────────────────────────────────────────
-
     /**
      * Typeahead search — Main BL only.
      * Returns BLs that are not cleared (Status != 0).
@@ -103,9 +99,6 @@ class DisbursementAnalysisController extends Controller
         return response()->json($results);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // LOAD BL
-    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Load a Main BL — runs block checks and returns consignment context.
@@ -203,37 +196,44 @@ class DisbursementAnalysisController extends Controller
         ]);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // LOAD HBL (LCL only)
-    // ──────────────────────────────────────────────────────────────────────────
+    public function hblList(Request $request)
+    {
+        $request->validate(['BL' => ['required', 'string', 'max:50']]);
+        $bl = strtoupper(trim($request->BL));
+
+        return response()->json([
+            'success' => true,
+            'hblList' => $this->getHBLList($bl),
+        ]);
+    }
 
     /**
      * Load a specific House BL for LCL disbursement entry.
-     * Clears any existing temp and initialises fresh accounts for this HBL.
+     * Does NOT clear other HBL rows under the same MainBL.
      */
     public function loadHBL(Request $request)
     {
         $request->validate([
-            'BL' => ['required', 'string', 'max:50'],
+            'BL'  => ['required', 'string', 'max:50'],
             'HBL' => ['required', 'string', 'max:30'],
         ]);
 
         $user = Auth::user();
-        $bl = strtoupper(trim($request->BL));
+        $bl  = strtoupper(trim($request->BL));
         $hbl = strtoupper(trim($request->HBL));
 
-        // ── 1. User lock: has temp for a different HBL? ──────────────────────
+        // ── 1. Lock check: block only if temp belongs to a different MainBL ──
         $existingTemp = DB::table('disbursement_temp_analysis')
             ->where('Username', $user->ID)
             ->first();
 
-        if ($existingTemp && $existingTemp->HouseBL !== $hbl) {
+        if ($existingTemp && $existingTemp->BL !== $bl) {
             return response()->json([
-                'success' => false,
-                'code' => 'HAS_TEMP',
-                'existingBL' => $existingTemp->BL,
+                'success'     => false,
+                'code'        => 'HAS_TEMP',
+                'existingBL'  => $existingTemp->BL,
                 'existingHBL' => $existingTemp->HouseBL,
-                'message' => "You have an unsaved disbursement for HBL# {$existingTemp->HouseBL}. Clear it or continue working on it.",
+                'message'     => "You have an unsaved disbursement for BL# {$existingTemp->BL}. Clear it or continue working on it.",
             ], 409);
         }
 
@@ -248,12 +248,11 @@ class DisbursementAnalysisController extends Controller
                 ], 422);
             }
 
-            // Status=2 — pending, can reopen
             return response()->json([
                 'success' => false,
-                'code' => 'CAN_REOPEN',
-                'BL' => $bl,
-                'HBL' => $hbl,
+                'code'    => 'CAN_REOPEN',
+                'BL'      => $bl,
+                'HBL'     => $hbl,
                 'message' => "Disbursement for HBL# {$hbl} is pending approval.",
             ], 409);
         }
@@ -273,31 +272,31 @@ class DisbursementAnalysisController extends Controller
             ], 404);
         }
 
-        // ── 4. Clear existing temp and init fresh accounts ───────────────────
-        DB::table('disbursement_temp_analysis')
+        // ── 4. Init accounts for this HBL only if not already in temp ────────
+        $alreadyLoaded = DB::table('disbursement_temp_analysis')
             ->where('Username', $user->ID)
-            ->delete();
+            ->where('HouseBL', $hbl)
+            ->exists();
 
-        $this->initTempAccounts(
-            $user->ID,
-            $bl,
-            $hbl,
-            $hblDetails->ContainerNo ?? '',
-            $hblDetails->ConsigneeID,
-            'LCL'
-        );
+        if (! $alreadyLoaded) {
+            $this->initTempAccounts(
+                $user->ID,
+                $bl,
+                $hbl,
+                $hblDetails->ContainerNo ?? '',
+                $hblDetails->ConsigneeID,
+                'LCL'
+            );
+        }
 
         return response()->json([
-            'success' => true,
-            'hblDetails' => $hblDetails,
-            'tempRows' => $this->getTempRows($user->ID),
-            'savedExpenditure' => $this->getSavedExpenditure($bl),  // ADD
+            'success'         => true,
+            'hblDetails'      => $hblDetails,
+            'tempRows'        => $this->getTempRows($user->ID),
+            'savedExpenditure' => $this->getSavedExpenditure($bl),
         ]);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // TEMP MANAGEMENT
-    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Clear all temp rows for the current user.
@@ -319,15 +318,19 @@ class DisbursementAnalysisController extends Controller
     {
         $request->validate([
             'AccountNo' => ['required', 'integer'],
-            'Amount' => ['required', 'numeric', 'min:0'],
+            'BL'        => ['required', 'string', 'max:50'],
+            'HBL'       => ['required', 'string', 'max:30'],
+            'Amount'    => ['required', 'numeric', 'min:0'],
         ]);
 
         DB::table('disbursement_temp_analysis')
             ->where('Username', Auth::user()->ID)
+            ->where('BL', $request->BL)
+            ->where('HouseBL', $request->HBL)
             ->where('AccountNo', $request->AccountNo)
             ->update([
                 'Amount' => $request->Amount,
-                'Time' => now()->toDateTimeString(),
+                'Time'   => now()->toDateTimeString(),
             ]);
 
         return response()->json(['success' => true]);
@@ -407,9 +410,6 @@ class DisbursementAnalysisController extends Controller
         return response()->json(['success' => true]);
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // SAVE TRANSACTION
-    // ──────────────────────────────────────────────────────────────────────────
 
     /**
      * Process and save the disbursement.
@@ -418,19 +418,18 @@ class DisbursementAnalysisController extends Controller
     public function save(Request $request)
     {
         $request->validate([
-            'BL' => ['required', 'string', 'max:50'],
-            'HBL' => ['required', 'string', 'max:30'],
-            'Type' => ['required', 'in:FCL,LCL'],
-            'AccountNo' => ['required', 'integer'],
-            'PaymentDate' => ['required', 'date', 'before_or_equal:today'],
+            'BL'               => ['required', 'string', 'max:50'],
+            'Type'             => ['required', 'in:FCL,LCL'],
+            'AccountNo'        => ['required', 'integer'],
+            'PaymentDate'      => ['required', 'date', 'before_or_equal:today'],
             'BudgetedExpenses' => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        $user = Auth::user();
-        $bl = strtoupper(trim($request->BL));
-        $hbl = strtoupper(trim($request->HBL));
+        $user             = Auth::user();
+        $bl               = strtoupper(trim($request->BL));
+        $type             = $request->Type;
+        $budgetedExpenses = $request->BudgetedExpenses ?? 0;
 
-        // ── 1. Get ready temp rows (Amount > 0, Status = 2) ──────────────────
         $tempRows = DB::table('disbursement_temp_analysis')
             ->where('Username', $user->ID)
             ->where('Status', '2')
@@ -444,7 +443,6 @@ class DisbursementAnalysisController extends Controller
             ], 422);
         }
 
-        // ── 2. Pre-requisite: active IE account ──────────────────────────────
         $ieAccount = DB::table('active_ie')->first();
         if (! $ieAccount) {
             return response()->json([
@@ -453,7 +451,6 @@ class DisbursementAnalysisController extends Controller
             ], 422);
         }
 
-        // ── 3. GL cash account ───────────────────────────────────────────────
         $cashAccount = DB::table('ledger_account')
             ->where('AccountNo', $request->AccountNo)
             ->where('Status', 1)
@@ -466,111 +463,112 @@ class DisbursementAnalysisController extends Controller
             ], 422);
         }
 
-        // ── 4. Re-check block ────────────────────────────────────────────────
-        $alreadyExists = DisbursementAnalysis::where('BL', $bl)->where('HBL', $hbl)->exists();
-        if ($alreadyExists) {
-            return response()->json([
-                'success' => false,
-                'message' => "Disbursement already captured for {$hbl}.",
-            ], 409);
+        // Block check — before transaction begins
+        $grouped = $tempRows->groupBy('HouseBL');
+
+        foreach ($grouped as $hbl => $rows) {
+            $alreadyExists = DisbursementAnalysis::where('BL', $bl)
+                ->where('HBL', $hbl)
+                ->exists();
+
+            if ($alreadyExists) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Disbursement already captured for HBL# {$hbl}.",
+                ], 409);
+            }
         }
 
-        // ── 5. Totals ────────────────────────────────────────────────────────
-        $totalExpenditure = round($tempRows->sum('Amount'), 2);
-        $budgetedExpenses = $request->BudgetedExpenses ?? 0;
-
-        // ── 6. Generate receipt ──────────────────────────────────────────────
-        $receipt = ReceiptService::generate($request->PaymentDate);
+        // Single receipt for all HBLs under this BL
+        $receipt    = ReceiptService::generate($request->PaymentDate);
+        $grandTotal = round($tempRows->sum('Amount'), 2);
 
         DB::beginTransaction();
 
         try {
-            // a. receipt_main
+            // One receipt_main entry for the whole BL save
             DB::table('receipt_main')->insert([
-                'ID' => $receipt['id'],
-                'Date' => $request->PaymentDate,
+                'ID'        => $receipt['id'],
+                'Date'      => $request->PaymentDate,
                 'ReceiptNo' => $receipt['receipt_no'],
-                'Username' => $user->ID,
-                'Time' => now()->toDateTimeString(),
+                'Username'  => $user->ID,
+                'Time'      => now()->toDateTimeString(),
             ]);
 
-            foreach ($tempRows as $row) {
+            foreach ($grouped as $hbl => $rows) {
+                foreach ($rows as $row) {
+                    DB::table('pnl_transaction')->insert([
+                        'AccountID'   => $row->AccountNo,
+                        'Stamp'       => 'BL',
+                        'Mode'        => 'Dr',
+                        'MainBL'      => $bl,
+                        'HouseBL'     => $hbl,
+                        'ReceiptNo'   => $receipt['receipt_no'],
+                        'Description' => "DISBURSEMENT IFO {$row->AccountNo}-{$bl}",
+                        'Dr'          => $row->Amount,
+                        'Cr'          => 0,
+                        'Date'        => $request->PaymentDate,
+                        'Time'        => now()->toDateTimeString(),
+                        'BranchID'    => $user->BranchID,
+                        'Username'    => $user->ID,
+                        'Status'      => 2,
+                    ]);
 
-                // b. pnl_transaction — Dr per expense row
-                DB::table('pnl_transaction')->insert([
-                    'AccountID' => $row->AccountNo,
-                    'Stamp' => 'BL',
-                    'Mode' => 'Dr',
-                    'MainBL' => $bl,
-                    'HouseBL' => $hbl,
-                    'ReceiptNo' => $receipt['receipt_no'],
-                    'Description' => "DISBURSEMENT IFO {$row->AccountNo}-{$bl}",
-                    'Dr' => $row->Amount,
-                    'Cr' => 0,
-                    'Date' => $request->PaymentDate,
-                    'Time' => now()->toDateTimeString(),
-                    'BranchID' => $user->BranchID,
-                    'Username' => $user->ID,
-                    'Status' => 2,
-                ]);
+                    DB::table('journal')->insert([
+                        'AccountID'    => $ieAccount->AccountID,
+                        'SubAccountID' => $row->AccountNo,
+                        'Mode'         => 'Dr',
+                        'TType'        => 'Cash',
+                        'ReceiptNo'    => $receipt['receipt_no'],
+                        'Dr'           => $row->Amount,
+                        'Cr'           => 0,
+                        'Description'  => "EXPENDITURE PAYMENT ON - {$bl}",
+                        'Date'         => $request->PaymentDate,
+                        'Time'         => now()->toDateTimeString(),
+                        'Username'     => $user->ID,
+                        'Authorizer'   => 'N.Auth',
+                        'BranchID'     => $user->BranchID,
+                        'Status'       => 1,
+                    ]);
 
-                // c. journal Dr per row — IE account → expense account
-                DB::table('journal')->insert([
-                    'AccountID' => $ieAccount->AccountID,
-                    'SubAccountID' => $row->AccountNo,
-                    'Mode' => 'Dr',
-                    'TType' => 'Cash',
-                    'ReceiptNo' => $receipt['receipt_no'],
-                    'Dr' => $row->Amount,
-                    'Cr' => 0,
-                    'Description' => "EXPENDITURE PAYMENT ON - {$bl}",
-                    'Date' => $request->PaymentDate,
-                    'Time' => now()->toDateTimeString(),
-                    'Username' => $user->ID,
-                    'Authorizer' => 'N.Auth',
-                    'BranchID' => $user->BranchID,
-                    'Status' => 1,
-                ]);
-
-                // d. disbursement_analysis row
-                DB::table('disbursement_analysis')->insert([
-                    'ConsigneeID' => $row->ConsigneeID,
-                    'BL' => $bl,
-                    'HBL' => $hbl,
-                    'ContainerNo' => $row->ContainerNo,
-                    'TotalCashReceipt' => $budgetedExpenses,
-                    'ReceiptNo' => $receipt['receipt_no'],
-                    'AccountID' => $row->AccountNo,
-                    'Revenue' => 0,
-                    'Expenditure' => $row->Amount,
-                    'Stamp' => 'IN-HARBOR',
-                    'Username' => $user->ID,
-                    'Date' => $request->PaymentDate,
-                    'Time' => now()->toDateTimeString(),
-                    'Status' => 2,
-                    'Type' => $request->Type,
-                ]);
+                    DB::table('disbursement_analysis')->insert([
+                        'ConsigneeID'      => $row->ConsigneeID,
+                        'BL'               => $bl,
+                        'HBL'              => $hbl,
+                        'ContainerNo'      => $row->ContainerNo,
+                        'TotalCashReceipt' => $budgetedExpenses,
+                        'ReceiptNo'        => $receipt['receipt_no'],
+                        'AccountID'        => $row->AccountNo,
+                        'Revenue'          => 0,
+                        'Expenditure'      => $row->Amount,
+                        'Stamp'            => 'IN-HARBOR',
+                        'Username'         => $user->ID,
+                        'Date'             => $request->PaymentDate,
+                        'Time'             => now()->toDateTimeString(),
+                        'Status'           => 2,
+                        'Type'             => $type,
+                    ]);
+                }
             }
 
-            // e. journal Cr — GL cash account, total expenditure
+            // Single Cr entry for the grand total across all HBLs
             DB::table('journal')->insert([
-                'AccountID' => $request->AccountNo,
+                'AccountID'    => $request->AccountNo,
                 'SubAccountID' => $request->AccountNo,
-                'Mode' => 'Cr',
-                'TType' => 'Cash',
-                'ReceiptNo' => $receipt['receipt_no'],
-                'Dr' => 0,
-                'Cr' => $totalExpenditure,
-                'Description' => "TOTAL CASH DISBURSEMENT EXPENDITURE - {$bl}",
-                'Date' => $request->PaymentDate,
-                'Time' => now()->toDateTimeString(),
-                'Username' => $user->ID,
-                'Authorizer' => 'N.Auth',
-                'BranchID' => $user->BranchID,
-                'Status' => 1,
+                'Mode'         => 'Cr',
+                'TType'        => 'Cash',
+                'ReceiptNo'    => $receipt['receipt_no'],
+                'Dr'           => 0,
+                'Cr'           => $grandTotal,
+                'Description'  => "TOTAL CASH DISBURSEMENT EXPENDITURE - {$bl}",
+                'Date'         => $request->PaymentDate,
+                'Time'         => now()->toDateTimeString(),
+                'Username'     => $user->ID,
+                'Authorizer'   => 'N.Auth',
+                'BranchID'     => $user->BranchID,
+                'Status'       => 1,
             ]);
 
-            // f. Clear temp
             DB::table('disbursement_temp_analysis')
                 ->where('Username', $user->ID)
                 ->delete();
@@ -579,16 +577,14 @@ class DisbursementAnalysisController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Disbursement for {$hbl} saved successfully.",
+                'message' => "Disbursement saved successfully for {$grouped->count()} HBL(s).",
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
-
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to save disbursement. Please try again.',
-                'debug' => app()->environment('local') ? $e->getMessage() : null,
+                'debug'   => app()->environment('local') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -623,7 +619,7 @@ class DisbursementAnalysisController extends Controller
         }
 
         // Block if any row is approved
-        if ($entries->contains(fn ($e) => (int) $e->Status === 0)) {
+        if ($entries->contains(fn($e) => (int) $e->Status === 0)) {
             return response()->json([
                 'success' => false,
                 'message' => "Disbursement for {$hbl} has been approved and cannot be reopened.",
@@ -671,7 +667,6 @@ class DisbursementAnalysisController extends Controller
                 'message' => "Disbursement for {$hbl} reopened successfully.",
                 'tempRows' => $this->getTempRows($user->ID),
             ]);
-
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -700,8 +695,11 @@ class DisbursementAnalysisController extends Controller
         string $type
     ): void {
         $accounts = DB::table('disbursement_accounts')->pluck('AccountNo');
+
+        // Scope duplicate check to this HBL only
         $existing = DB::table('disbursement_temp_analysis')
             ->where('Username', $username)
+            ->where('HouseBL', $hbl)
             ->pluck('AccountNo')
             ->toArray();
 
@@ -709,16 +707,16 @@ class DisbursementAnalysisController extends Controller
         foreach ($accounts as $accountNo) {
             if (! in_array($accountNo, $existing)) {
                 $rows[] = [
-                    'AccountNo' => $accountNo,
-                    'BL' => $bl,
-                    'HouseBL' => $hbl,
+                    'AccountNo'   => $accountNo,
+                    'BL'          => $bl,
+                    'HouseBL'     => $hbl,
                     'ContainerNo' => $containerNo,
                     'ConsigneeID' => $consigneeID,
-                    'Amount' => 0,
-                    'Type' => $type,
-                    'Status' => '2',
-                    'Username' => $username,
-                    'Time' => now()->toDateTimeString(),
+                    'Amount'      => 0,
+                    'Type'        => $type,
+                    'Status'      => '2',
+                    'Username'    => $username,
+                    'Time'        => now()->toDateTimeString(),
                 ];
             }
         }
