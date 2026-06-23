@@ -114,7 +114,7 @@ class AuthController extends Controller
 
         if (Auth::attempt($credentials, $remember)) {
 
-            if (Auth::user()->Stats !== 1) {
+            if ((int) Auth::user()->Stats !== 1) {
 
                 $this->logLoginAttempt($request, 'inactive');
 
