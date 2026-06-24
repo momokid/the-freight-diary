@@ -12,6 +12,7 @@ use App\Models\UserAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\ClientNotificationService;
 
 class ConsignmentController extends Controller
 {
@@ -205,7 +206,7 @@ class ConsignmentController extends Controller
         $consignmentID = (DB::table('container_main')->max('ConsignmentID') ?? 0) + 1;
 
         // 4-digit client access code for WhatsApp bot authentication
-        $clientCode = str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+        $clientCode = app(ClientNotificationService::class)->generateClientCode();
 
         // Get first container for container_main fields
         $firstContainer = $containers->first();
@@ -380,12 +381,15 @@ class ConsignmentController extends Controller
         ]);
     }
 
-    public function sendNotification(Request $request)
+    public function sendNotification(Request $request, ClientNotificationService $notification)
     {
         $request->validate([
             'bl'          => ['required', 'string', 'max:50'],
             'client_code' => ['required', 'string', 'size:4'],
             'phone'       => ['required', 'string', 'max:20'],
+            'consignee_id' => ['nullable', 'integer'],
+            'event'        => ['required', 'in:registration,gate_out,invoice_payment,manual'],
+            'message'      => ['required_if:event,manual', 'nullable', 'string'],
         ]);
 
         $user     = Auth::user();
@@ -395,39 +399,38 @@ class ConsignmentController extends Controller
             return response()->json(['error' => 'Unauthorised'], 403);
         }
 
-        // Get WhatsApp number from system settings
-        $whatsappNumber = DB::table('system_settings')
-            ->where('key', 'whatsapp_number')
-            ->value('value');
+        $result = $notification->sendSMS(
+            bl: strtoupper(trim($request->bl)),
+            phone: $request->phone,
+            event: $request->event,
+            params: [
+                'client_code' => $request->client_code,
+                'message'     => $request->message,
+            ],
+            consigneeId: (int) ($request->consignee_id ?? 0),
+            sentBy: $user->ID,
+        );
 
-        $bl   = strtoupper(trim($request->bl));
-        $code = $request->client_code;
+        return response()->json($result, $result['success'] ? 200 : 500);
+    }
 
-        // Build WhatsApp deep link — pre-fills BL and code in the chat
-        $waText = urlencode("BL:{$bl} CODE:{$code}");
-        $waLink = $whatsappNumber
-            ? "https://wa.me/{$whatsappNumber}?text={$waText}"
-            : null;
+    public function getClientCode(string $bl): \Illuminate\Http\JsonResponse
+    {
+        $bl = strtoupper(trim($bl));
 
-        $message = "Dear Client, your consignment BL# {$bl} has been registered with PSIL. "
-            . "Your access code is {$code}.";
+        $consignment = DB::table('container_main')
+            ->where('BL', $bl)
+            ->select('ClientCode', 'ConsigneeID')
+            ->first();
 
-        if ($waLink) {
-            $message .= "\n\nChat with us on WhatsApp for status updates:\n{$waLink}";
-        }
-
-        $result = app(\App\Services\ArkeselService::class)->sendSms($request->phone, $message);
-
-        if (!$result['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => 'SMS could not be sent. Please try again or notify the client manually.',
-            ], 500);
+        if (!$consignment) {
+            return response()->json(['success' => false], 404);
         }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Notification sent successfully.',
+            'success'      => true,
+            'client_code'  => $consignment->ClientCode,
+            'consignee_id' => $consignment->ConsigneeID,
         ]);
     }
 }

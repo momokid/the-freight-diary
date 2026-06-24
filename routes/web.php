@@ -42,6 +42,7 @@ use App\Http\Controllers\WaybillController;
 use App\Http\Controllers\WhatsAppController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\MessagingCenterController;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -282,6 +283,7 @@ Route::middleware('auth')->group(function () {
 
         Route::post('/consignments/send-notification', [ConsignmentController::class, 'sendNotification'])
             ->name('consignments.send-notification');
+        Route::get('/consignments/client-code/{bl}', [ConsignmentController::class, 'getClientCode'])->name('consignments.client-code');
     });
 
     // Generate Invoice
@@ -382,6 +384,13 @@ Route::middleware('auth')->group(function () {
             Route::get('/transaction', [AccountingController::class, 'transaction'])->name('transaction.index');
             Route::post('/transaction/store', [AccountingController::class, 'storeTransaction'])->name('transaction.store');
         });
+    });
+
+    // Messaging Center
+    Route::middleware('permission:MessagingCenter')->prefix('messaging')->name('messaging.')->group(function () {
+        Route::get('/', [MessagingCenterController::class, 'index'])->name('index');
+        Route::post('/send', [MessagingCenterController::class, 'send'])->name('send');
+        Route::get('/history/{bl}', [MessagingCenterController::class, 'history'])->name('history');
     });
 
     // Disbursement routes

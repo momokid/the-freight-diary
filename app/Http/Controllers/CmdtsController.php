@@ -9,6 +9,8 @@ use App\Models\Consignee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\ClientNotificationService;
+
 
 class CmdtsController extends Controller
 {
@@ -119,8 +121,7 @@ class CmdtsController extends Controller
         return response()->json(['success' => true, 'message' => 'Staging cleared.']);
     }
 
-    // Save consignment cmdts
-    public function store(Request $request)
+    public function store(Request $request, ClientNotificationService $notification)
     {
         $request->validate([
             'CmdtCategoryID' => ['required', 'integer', 'exists:commodity_category,ID'],
@@ -133,10 +134,10 @@ class CmdtsController extends Controller
             'Destination'    => ['nullable', 'string'],
         ]);
 
-        $user = Auth::user();
-        $bl   = strtoupper(trim($request->BL));
+        $user       = Auth::user();
+        $bl         = strtoupper(trim($request->BL));
+        $clientCode = $notification->generateClientCode();
 
-        // Check containers exist in staging
         $containers = CmdtsTemp::where('Username', $user->ID)
             ->where('BL', $bl)
             ->get();
@@ -148,16 +149,12 @@ class CmdtsController extends Controller
             ], 422);
         }
 
-        // Get next ConsignmentID
-        $consignmentID = (DB::table('container_main')->max('ConsignmentID') ?? 0) + 1;
-
-        // Get first container for container_main fields
+        $consignmentID  = (DB::table('container_main')->max('ConsignmentID') ?? 0) + 1;
         $firstContainer = $containers->first();
 
         DB::beginTransaction();
 
         try {
-            // Insert container_main
             DB::table('container_main')->insert([
                 'ConsignmentID' => $consignmentID,
                 'CarrierID'     => $request->CarrierID,
@@ -189,9 +186,9 @@ class CmdtsController extends Controller
                 'ConsigneeID'   => $request->ConsigneeID,
                 'ReleaseType'   => $request->ReleaseType,
                 'Ownership'     => 1,
+                'ClientCode'    => $clientCode,
             ]);
 
-            // Insert container_details for each staged container
             foreach ($containers as $container) {
                 DB::table('container_details')->insert([
                     'ConsignmentID' => $consignmentID,
@@ -212,7 +209,6 @@ class CmdtsController extends Controller
                 ]);
             }
 
-            // Clear staging table
             CmdtsTemp::where('Username', $user->ID)->delete();
 
             DB::commit();
@@ -221,6 +217,9 @@ class CmdtsController extends Controller
                 'success'       => true,
                 'message'       => 'Consignment saved successfully.',
                 'ConsignmentID' => $consignmentID,
+                'BL'            => $bl,
+                'ClientCode'    => $clientCode,
+                'ConsigneeID'   => $request->ConsigneeID,
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

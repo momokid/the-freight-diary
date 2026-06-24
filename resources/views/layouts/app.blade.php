@@ -110,6 +110,22 @@
                 </div>
             @endif
 
+            {{-- Messaging Center --}}
+            @if (isset($userAuth) && $userAuth->hasPermission('MessagingCenter'))
+                <div class="nav-item-wrapper">
+                    <a href="{{ route('messaging.index') }}"
+                        class="nav-link {{ request()->routeIs('messaging.*') ? 'active' : '' }}">
+                        <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                        </svg>
+                        <span class="nav-label">Messaging Center</span>
+                    </a>
+                    <div class="tooltip">Messaging Center</div>
+                </div>
+            @endif
+
             {{-- Master Data --}}
             @if (isset($userAuth) && $userAuth->hasPermission('ConsignmentRegister'))
                 <div class="nav-section-label">Master Data</div>
@@ -124,7 +140,8 @@
                         <svg class="nav-arrow" id="arrow-masterdata"
                             style="width: 12px; height: 12px; transition: transform 0.2s;" fill="none"
                             stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 9l-7 7-7-7" />
                         </svg>
                     </button>
 
@@ -586,6 +603,9 @@
 
     {{-- ── HS Code Advisor Modal ── --}}
     @include('partials.hs-advisor-modal')
+
+    {{-- SMS Modal --}}
+    @include('partials.sms-modal-script')
 </body>
 
 </html>

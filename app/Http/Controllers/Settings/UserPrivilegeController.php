@@ -23,6 +23,7 @@ class UserPrivilegeController extends Controller
             'Consignment' => [
                 'ConsignmentRegister' => 'Consignment Register',
                 'AssignConsignmentOfficer' => 'Assign Consignment Officer',
+                'MessagingCenter' => 'Messaging Center',
             ],
             'Transactions' => [
                 'GenerateInvoice' => 'Generate Invoice',
@@ -87,7 +88,7 @@ class UserPrivilegeController extends Controller
 
         // Build permissions array from the model — only the permission columns
         $permissions = collect(UserAuth::PERMISSIONS)
-            ->mapWithKeys(fn ($permission) => [$permission => $userAuth->$permission])
+            ->mapWithKeys(fn($permission) => [$permission => $userAuth->$permission])
             ->toArray();
 
         $user = User::where('ID', $userId)->first();
@@ -132,7 +133,7 @@ class UserPrivilegeController extends Controller
     {
         $request->validate([
             'username' => ['required', 'string', 'exists:user_auth,Username'],
-            'permission' => ['required', 'string', 'in:'.implode(',', UserAuth::PERMISSIONS)],
+            'permission' => ['required', 'string', 'in:' . implode(',', UserAuth::PERMISSIONS)],
         ]);
 
         $userAuth = UserAuth::where('Username', $request->username)->firstOrFail();
