@@ -1010,31 +1010,38 @@
                     document.getElementById('save-success').textContent = data.message;
                     document.getElementById('save-success').classList.add('visible');
 
-                    // Clear only the accounts panel and session — keep consignment context
-                    clearAccountRows();
-                    hideSessionInfo();
-
                     const savedType = state.type;
                     const savedBL = state.bl;
                     const savedHBL = state.hbl;
 
-                    // Reset HBL only — keep BL for LCL refresh
-                    state.hbl = '';
+                    // 1. Clear accounts panel
+                    clearAccountRows();
 
-                    // Refresh HBL list if LCL
-                    if (savedType === 'LCL') {
-                        fetch(`${ROUTES.hblList}?BL=${encodeURIComponent(savedBL)}`)
-                            .then(r => r.json())
-                            .then(data => {
-                                if (data.hblList) renderHBLList(data.hblList);
-                            });
-                    } else {
-                        // FCL — clear BL state but keep consignment meta visible for reference
-                        state.bl = '';
-                        state.hbl = '';
-                        state.savedExpenditure = 0;
-                        clearConsignmentContext();
-                    }
+                    // 2. Clear session info
+                    hideSessionInfo();
+
+                    // 3. Clear search input
+                    document.getElementById('bl-input').value = '';
+                    document.getElementById('bl-value').value = '';
+
+                    // 4. Clear consignment meta and reference panels
+                    clearConsignmentContext();
+
+                    // 5. Clear Transaction Summary inputs
+                    document.getElementById('payment-account').value = '';
+                    document.getElementById('budgeted-expenses').value = '0';
+                    document.getElementById('payment-date').value = '{{ now()->toDateString() }}';
+                    document.getElementById('variance-row').style.display = 'none';
+
+                    // 6. Clear BL total and allTempRows
+                    state.allTempRows = state.allTempRows.filter(r => r.HouseBL !== savedHBL);
+                    state.blTotal = 0;
+                    state.savedExpenditure = 0;
+                    state.hbl = '';
+                    updateBLTotal(state.allTempRows);
+
+                    state.bl = '';
+                    state.hbl = '';
 
                     setTimeout(() => {
                         document.getElementById('save-success').classList.remove('visible');
