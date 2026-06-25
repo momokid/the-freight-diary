@@ -168,16 +168,28 @@ class DashboardController extends Controller
             $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
 
             return response()->json([
-                'html'       => $html,
-                'hasMore'    => false,
-                'nextOffset' => 0,
-                'isSearch'   => true,
-                'count'      => count($rows),
+                'html'        => $html,
+                'currentPage' => 1,
+                'totalPages'  => 1,
+                'total'       => count($rows),
+                'isSearch'    => true,
+                'count'       => count($rows),
             ]);
         }
 
-        $offset = max(0, (int) $request->input('offset', 0));
-        $bf     = $this->branchFilter($branch, 'cm');
+        $page    = max(1, (int) $request->input('page', 1));
+        $perPage = max(1, (int) $request->input('perPage', 10));
+        $offset  = ($page - 1) * $perPage;
+        $bf      = $this->branchFilter($branch, 'cm');
+
+        $total = DB::selectOne("
+            SELECT COUNT(*) as total
+            FROM container_main cm
+            LEFT JOIN consignee_main co ON co.ConsigneeID = cm.ConsigneeID
+            WHERE cm.Status IN (1, 2, 3)
+            AND cm.Ownership = 1
+            {$bf['sql']}
+        ", $bf['bindings'])->total;
 
         $rows = DB::select("
             SELECT {$selectFields}
@@ -185,20 +197,19 @@ class DashboardController extends Controller
             {$bf['sql']}
             ORDER BY Priority ASC, cm.ETA ASC
             LIMIT ? OFFSET ?
-        ", array_merge($bf['bindings'], [$this->trackerPageSize + 1, $offset]));
+        ", array_merge($bf['bindings'], [$perPage, $offset]));
 
-        $hasMore    = count($rows) > $this->trackerPageSize;
-        $rows       = array_slice($rows, 0, $this->trackerPageSize);
-        $nextOffset = $offset + $this->trackerPageSize;
+        $totalPages = max(1, (int) ceil($total / $perPage));
 
         $html = view('dashboard._tracker', compact('rows', 'canEdit'))->render();
 
         return response()->json([
-            'html'       => $html,
-            'hasMore'    => $hasMore,
-            'nextOffset' => $nextOffset,
-            'isSearch'   => false,
-            'count'      => count($rows),
+            'html'        => $html,
+            'currentPage' => $page,
+            'totalPages'  => $totalPages,
+            'total'       => (int) $total,
+            'isSearch'    => false,
+            'count'       => count($rows),
         ]);
     }
 

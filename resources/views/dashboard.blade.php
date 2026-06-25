@@ -84,15 +84,6 @@
             margin-bottom: 10px;
         }
 
-        .tracker-card.priority-6 {
-            border-left-color: #0d9488;
-        }
-
-        .badge-teal {
-            background: #ccfbf1;
-            color: #0f766e;
-        }
-
         /* ── Hero grid ──────────────────────────────────────────── */
         .db-hero {
             display: grid;
@@ -117,7 +108,6 @@
             border: 1px solid var(--border-color);
             background: var(--card-bg);
             padding: 0.875rem 1rem;
-            margin-bottom: 0.625rem;
             border-left-width: 4px;
             border-left-style: solid;
             transition: box-shadow 0.2s;
@@ -127,35 +117,29 @@
             box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
         }
 
-        .tracker-card:last-child {
-            margin-bottom: 0;
-        }
-
         .tracker-card.priority-1 {
             border-left-color: #22c55e;
         }
 
-        /* Green  — Gate-Out Ready      */
         .tracker-card.priority-2 {
             border-left-color: #ef4444;
         }
 
-        /* Red    — Pending Disb.       */
         .tracker-card.priority-3 {
             border-left-color: #3b82f6;
         }
 
-        /* Blue   — Not Arrived         */
         .tracker-card.priority-4 {
             border-left-color: #f59e0b;
         }
 
-        /* Amber  — Gated Out           */
         .tracker-card.priority-5 {
             border-left-color: #a855f7;
         }
 
-        /* Purple — Awaiting Return     */
+        .tracker-card.priority-6 {
+            border-left-color: #0d9488;
+        }
 
         .tracker-bl {
             font-family: monospace;
@@ -208,6 +192,11 @@
         .badge-purple {
             background: #f3e8ff;
             color: #7e22ce;
+        }
+
+        .badge-teal {
+            background: #ccfbf1;
+            color: #0f766e;
         }
 
         .tracker-action-btn {
@@ -321,6 +310,25 @@
                 transform: scale(0.75);
             }
         }
+
+        /* ── Tracker grid ───────────────────────────────────────── */
+        .tracker-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.75rem;
+        }
+
+        @media (max-width: 1200px) {
+            .tracker-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .tracker-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
     </style>
 
     <div style="display:flex; flex-direction:column; gap:1.25rem;">
@@ -332,23 +340,22 @@
             </p>
             <button onclick="window.DashboardApp.refreshAll()"
                 style="display:flex; align-items:center; gap:6px; padding:7px 16px;
-                   background:#185FA5; color:#fff; border:none; border-radius:6px;
-                   font-size:var(--db-text-xs); font-weight:600; cursor:pointer;">
+                       background:#185FA5; color:#fff; border:none; border-radius:6px;
+                       font-size:var(--db-text-xs); font-weight:600; cursor:pointer;">
                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0
-                                                                                                   004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
-                                                                                                   8.003 0 01-15.357-2m15.357 2H15" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0
+                                   004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
+                                   8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Refresh All
             </button>
         </div>
 
-        {{-- ── Hero row: Chart (70%) + Tracker (30%) ── --}}
-        @if (isset($userAuth) && $userAuth->hasPermission('ConsignmentRegister'))
-            <div class="db-hero">
+        {{-- ── Hero row: Chart (70%) + Recent Transactions (30%) ── --}}
+        <div class="db-hero">
 
-                {{-- Chart panel --}}
+            {{-- Chart panel --}}
+            @if (isset($userAuth) && $userAuth->hasPermission('ConsignmentRegister'))
                 <div class="card" style="padding:1.25rem;">
                     <div class="chart-panel-header">
                         <div>
@@ -361,87 +368,116 @@
                         </div>
                     </div>
                     <div id="widget-chart" style="position:relative; height:380px;">
-                        {{-- Skeleton --}}
                         <div class="db-sk" style="height:100%; border-radius:8px;"></div>
                     </div>
                 </div>
+            @endif
 
-                {{-- Tracker panel --}}
-                <div class="card" style="padding:1.25rem;">
-                    <div
-                        style="display:flex; align-items:center;
-                        justify-content:space-between; margin-bottom:1rem;">
-                        <div>
-                            <div
-                                style="font-size:var(--db-text-base); font-weight:700;
-                                color:var(--text-primary);">
-                                Consignment Tracker
-                            </div>
-                            <div
-                                style="font-size:var(--db-text-xs); color:var(--text-muted);
-                                margin-top:2px;">
-                                Active consignments needing action
-                            </div>
+            {{-- Recent Transactions panel --}}
+            @if (isset($userAuth) && $userAuth->hasPermission('PaymentTransaction'))
+                <div id="widget-transactions" style="height:520px; overflow-y:auto;">
+                    <div class="card" style="height:100%;">
+                        <div class="db-sk db-sk-title"></div>
+                        <div class="db-sk db-sk-row" style="margin-bottom:10px;"></div>
+                        @for ($i = 0; $i < 6; $i++)
+                            <div class="db-sk db-sk-row"></div>
+                        @endfor
+                    </div>
+                </div>
+            @endif
+
+        </div>
+
+        {{-- ── Consignment Tracker (full width) ── --}}
+        @if (isset($userAuth) && $userAuth->hasPermission('ConsignmentRegister'))
+            <div class="card" style="padding:1.25rem;">
+                <div
+                    style="display:flex; align-items:center;
+                            justify-content:space-between; margin-bottom:1rem;">
+                    <div>
+                        <div
+                            style="font-size:var(--db-text-base); font-weight:700;
+                                    color:var(--text-primary);">
+                            Consignment Tracker
                         </div>
+                        <div
+                            style="font-size:var(--db-text-xs); color:var(--text-muted);
+                                    margin-top:2px;">
+                            Active consignments needing action
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.75rem;">
+                        {{-- Search --}}
+                        <div style="position:relative;">
+                            <input id="tracker-search" type="text" placeholder="Search BL, consignee or destination..."
+                                oninput="window.DashboardApp.searchTracker(this.value)"
+                                style="width:280px; padding:7px 32px 7px 10px;
+                                       border:1px solid var(--border-color);
+                                       border-radius:8px; font-size:var(--db-text-xs);
+                                       color:var(--text-primary); background:var(--content-bg);
+                                       box-sizing:border-box; outline:none;"
+                                onfocus="this.style.borderColor='#185FA5'"
+                                onblur="this.style.borderColor='var(--border-color)'">
+                            <button id="tracker-search-clear" onclick="window.DashboardApp.clearTrackerSearch()"
+                                style="display:none; position:absolute; right:8px; top:50%;
+                                       transform:translateY(-50%); background:none; border:none;
+                                       font-size:0.875rem; color:var(--text-muted); cursor:pointer;
+                                       line-height:1; padding:2px 4px;">
+                                ✕
+                            </button>
+                        </div>
+                        {{-- Count badge --}}
                         <button id="tracker-count-badge" onclick="window.DashboardApp.openPendingDrawer()"
                             style="font-size:0.72rem; font-weight:700; background:#185FA5;
-                            color:#fff; border:none; border-radius:20px; padding:5px 14px;
-                            cursor:pointer; transition:opacity 0.15s;"
+                                   color:#fff; border:none; border-radius:20px; padding:5px 14px;
+                                   cursor:pointer; transition:opacity 0.15s;"
                             onmouseenter="this.style.opacity='0.85'" onmouseleave="this.style.opacity='1'">
                             ...
                         </button>
                     </div>
-
-                    {{-- Tracker search --}}
-                    <div style="position:relative; margin-bottom:0.75rem;">
-                        <input id="tracker-search" type="text" placeholder="Search BL, consignee or destination..."
-                            oninput="window.DashboardApp.searchTracker(this.value)"
-                            style="width:100%; padding:7px 32px 7px 10px;
-               border:1px solid var(--border-color);
-               border-radius:8px; font-size:var(--db-text-xs);
-               color:var(--text-primary); background:var(--content-bg);
-               box-sizing:border-box; outline:none;"
-                            onfocus="this.style.borderColor='#185FA5'"
-                            onblur="this.style.borderColor='var(--border-color)'">
-                        <button id="tracker-search-clear" onclick="window.DashboardApp.clearTrackerSearch()"
-                            style="display:none; position:absolute; right:8px; top:50%;
-               transform:translateY(-50%); background:none; border:none;
-               font-size:0.875rem; color:var(--text-muted); cursor:pointer;
-               line-height:1; padding:2px 4px;">
-                            ✕
-                        </button>
-                    </div>
-
-                    {{-- Search result label --}}
-                    <div id="tracker-search-label"
-                        style="display:none; font-size:var(--db-text-xs);
-            color:var(--text-muted); margin-bottom:0.5rem;">
-                    </div>
-
-                    {{-- Tracker card list --}}
-                    <div id="widget-tracker" style="max-height:340px; overflow-y:auto; padding-right:2px;">
-                        {{-- Skeleton --}}
-                        @for ($i = 0; $i < 4; $i++)
-                            <div class="db-sk db-sk-card"></div>
-                        @endfor
-                    </div>
-
-                    {{-- Show More --}}
-                    <div id="tracker-show-more" style="display:none; margin-top:0.75rem;">
-                        <button onclick="window.DashboardApp.showMoreTracker()"
-                            style="width:100%; padding:8px; background:transparent;
-                           border:1px dashed var(--border-color); border-radius:8px;
-                           font-size:var(--db-text-xs); font-weight:600;
-                           color:var(--text-muted); cursor:pointer;">
-                            Show More
-                        </button>
-                    </div>
                 </div>
 
+                {{-- Search result label --}}
+                <div id="tracker-search-label"
+                    style="display:none; font-size:var(--db-text-xs);
+                           color:var(--text-muted); margin-bottom:0.75rem;">
+                </div>
+
+                {{-- Tracker cards --}}
+                <div id="widget-tracker" style="display:flex; flex-direction:column; gap:0.625rem;">
+                    @for ($i = 0; $i < 10; $i++)
+                        <div class="db-sk db-sk-card"></div>
+                    @endfor
+                </div>
+
+                {{-- Pagination --}}
+                <div id="tracker-pagination"
+                    style="display:none; margin-top:1rem;
+                           align-items:center; justify-content:center; gap:1rem;">
+                    <button onclick="window.DashboardApp.prevTrackerPage()" id="tracker-prev-btn"
+                        style="padding:6px 16px; border-radius:6px;
+                               border:1px solid var(--border-color);
+                               background:var(--card-bg); color:var(--text-primary);
+                               font-size:var(--db-text-xs); cursor:pointer;">
+                        ◀ Prev
+                    </button>
+                    <span id="tracker-page-label"
+                        style="font-size:var(--db-text-xs);
+                               color:var(--text-muted); font-weight:600;">
+                        Page 1
+                    </span>
+                    <button onclick="window.DashboardApp.nextTrackerPage()" id="tracker-next-btn"
+                        style="padding:6px 16px; border-radius:6px;
+                               border:1px solid var(--border-color);
+                               background:var(--card-bg); color:var(--text-primary);
+                               font-size:var(--db-text-xs); cursor:pointer;">
+                        Next ▶
+                    </button>
+                </div>
             </div>
         @endif
 
-        {{-- ── Widget: Financial Performance + Cash Position ── --}}
+        {{-- ── Widget: Financial Performance ── --}}
         @if (isset($userAuth) && $userAuth->hasPermission('AccountingReport'))
             <div id="widget-financial">
                 <div class="card">
@@ -450,7 +486,7 @@
                         <div>
                             <div
                                 style="display:grid; grid-template-columns:repeat(3,1fr);
-                                gap:8px; margin-bottom:10px;">
+                                        gap:8px; margin-bottom:10px;">
                                 @for ($i = 0; $i < 3; $i++)
                                     <div class="db-sk db-sk-kpi"></div>
                                 @endfor
@@ -502,19 +538,6 @@
             </div>
         @endif
 
-        {{-- ── Widget: Recent Transactions ── --}}
-        @if (isset($userAuth) && $userAuth->hasPermission('PaymentTransaction'))
-            <div id="widget-transactions">
-                <div class="card">
-                    <div class="db-sk db-sk-title"></div>
-                    <div class="db-sk db-sk-row" style="margin-bottom:10px;"></div>
-                    @for ($i = 0; $i < 6; $i++)
-                        <div class="db-sk db-sk-row"></div>
-                    @endfor
-                </div>
-            </div>
-        @endif
-
         {{-- ── Widget: Vision 5:29 ── --}}
         @if (isset($userAuth) && $userAuth->hasPermission('ManagementReport'))
             <div id="widget-vision">
@@ -524,8 +547,8 @@
                         @for ($i = 0; $i < 2; $i++)
                             <div
                                 style="display:grid;
-                                grid-template-columns:150px 1fr 50px;
-                                gap:8px; align-items:center;">
+                                        grid-template-columns:150px 1fr 50px;
+                                        gap:8px; align-items:center;">
                                 <div class="db-sk db-sk-line"></div>
                                 <div class="db-sk db-sk-prog"></div>
                                 <div class="db-sk db-sk-line"></div>
@@ -541,32 +564,33 @@
     {{-- ── Disbursements Drawer ── --}}
     <div id="disb-drawer-overlay" onclick="window.DashboardApp.closeDisbursementsDrawer()"
         style="display:none; position:fixed; inset:0;
-            background:rgba(0,0,0,0.4); z-index:1000;"></div>
+               background:rgba(0,0,0,0.4); z-index:1000;"></div>
 
     <div id="disb-drawer"
         style="position:fixed; top:0; right:0; height:100vh;
-            width:680px; max-width:95vw; background:var(--card-bg);
-            box-shadow:-4px 0 24px rgba(0,0,0,0.15); z-index:1001;
-            display:flex; flex-direction:column;
-            transform:translateX(100%); transition:transform 0.3s ease;
-            pointer-events:none;">
+               width:680px; max-width:95vw; background:var(--card-bg);
+               box-shadow:-4px 0 24px rgba(0,0,0,0.15); z-index:1001;
+               display:flex; flex-direction:column;
+               transform:translateX(100%); transition:transform 0.3s ease;
+               pointer-events:none;">
         <div
             style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);
-                display:flex; align-items:center; justify-content:space-between;
-                flex-shrink:0;">
-            <p style="font-size:var(--db-text-sm); font-weight:700;
-                  color:var(--text-primary); margin:0;">
+                    display:flex; align-items:center; justify-content:space-between;
+                    flex-shrink:0;">
+            <p
+                style="font-size:var(--db-text-sm); font-weight:700;
+                      color:var(--text-primary); margin:0;">
                 Pending Disbursements
                 <span
                     style="font-size:var(--db-text-xs); font-weight:400;
-                         color:var(--text-muted); margin-left:6px;">
+                             color:var(--text-muted); margin-left:6px;">
                     owned consignments with no cost entry
                 </span>
             </p>
             <button onclick="window.DashboardApp.closeDisbursementsDrawer()"
                 style="background:none; border:0.5px solid var(--border-color);
-                   border-radius:6px; padding:4px 12px;
-                   font-size:var(--db-text-xs); color:var(--text-muted); cursor:pointer;">
+                       border-radius:6px; padding:4px 12px;
+                       font-size:var(--db-text-xs); color:var(--text-muted); cursor:pointer;">
                 ✕ Close
             </button>
         </div>
@@ -578,32 +602,33 @@
     {{-- ── Pending Consignments Drawer ── --}}
     <div id="pending-drawer-overlay" onclick="window.DashboardApp.closePendingDrawer()"
         style="display:none; position:fixed; inset:0;
-            background:rgba(0,0,0,0.4); z-index:1000;"></div>
+               background:rgba(0,0,0,0.4); z-index:1000;"></div>
 
     <div id="pending-drawer"
         style="position:fixed; top:0; right:0; height:100vh;
-            width:800px; max-width:95vw; background:var(--card-bg);
-            box-shadow:-4px 0 24px rgba(0,0,0,0.15); z-index:1001;
-            display:flex; flex-direction:column;
-            transform:translateX(100%); transition:transform 0.3s ease;
-            pointer-events:none;">
+               width:800px; max-width:95vw; background:var(--card-bg);
+               box-shadow:-4px 0 24px rgba(0,0,0,0.15); z-index:1001;
+               display:flex; flex-direction:column;
+               transform:translateX(100%); transition:transform 0.3s ease;
+               pointer-events:none;">
         <div
             style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color);
-                display:flex; align-items:center; justify-content:space-between;
-                flex-shrink:0;">
-            <p style="font-size:var(--db-text-sm); font-weight:700;
-          color:var(--text-primary); margin:0;">
+                    display:flex; align-items:center; justify-content:space-between;
+                    flex-shrink:0;">
+            <p
+                style="font-size:var(--db-text-sm); font-weight:700;
+                      color:var(--text-primary); margin:0;">
                 All Active Consignments
                 <span
                     style="font-size:var(--db-text-xs); font-weight:400;
-                 color:var(--text-muted); margin-left:6px;">
+                             color:var(--text-muted); margin-left:6px;">
                     Status 1 &amp; 2 — edit ETA where needed
                 </span>
             </p>
             <button onclick="window.DashboardApp.closePendingDrawer()"
                 style="background:none; border:0.5px solid var(--border-color);
-                   border-radius:6px; padding:4px 12px;
-                   font-size:var(--db-text-xs); color:var(--text-muted); cursor:pointer;">
+                       border-radius:6px; padding:4px 12px;
+                       font-size:var(--db-text-xs); color:var(--text-muted); cursor:pointer;">
                 ✕ Close
             </button>
         </div>
@@ -652,29 +677,30 @@
             hasEditData: {{ isset($userAuth) && $userAuth->hasPermission('EditData') ? 'true' : 'false' }},
 
             // Tracker state
-            _trackerOffset: 0,
-            _trackerHasMore: false,
+            _trackerPage: 1,
+            _trackerTotalPages: 1,
+            _trackerPerPage: 10,
 
             // Chart instance
             _containerChart: null,
             _autoRefreshTimer: null,
 
-            // ── Init ─────────────────────────────────────────────────────────────────
+            // ── Init ──────────────────────────────────────────────────────────────
             init() {
                 this.widgets.forEach(w => this.loadWidget(w));
                 this.loadChart();
-                this.loadTracker(0, false);
+                this.loadTracker(1, false);
                 this._autoRefreshTimer = setInterval(() => this.refreshAll(), 300000);
             },
 
-            // ── Refresh all ───────────────────────────────────────────────────────────
+            // ── Refresh all ───────────────────────────────────────────────────────
             refreshAll() {
                 this.widgets.forEach(w => this.loadWidget(w));
                 this.loadChart();
-                this.loadTracker(0, false);
+                this.loadTracker(1, false);
             },
 
-            // ── Load a standard AJAX widget ───────────────────────────────────────────
+            // ── Load a standard AJAX widget ───────────────────────────────────────
             async loadWidget(name, params = {}) {
                 const el = document.getElementById('widget-' + name);
                 if (!el) return;
@@ -694,7 +720,7 @@
                 }
             },
 
-            // ── Load chart data and render/update ─────────────────────────────────────
+            // ── Load chart data and render/update ─────────────────────────────────
             async loadChart() {
                 try {
                     const res = await fetch(this.urls.chart, {
@@ -711,12 +737,11 @@
                 }
             },
 
-            // ── Render or update the 12-month container chart ─────────────────────────
+            // ── Render or update the 12-month container chart ─────────────────────
             _renderContainerChart(labels, values) {
                 const container = document.getElementById('widget-chart');
                 if (!container) return;
 
-                // First load — replace skeleton with canvas
                 if (!this._containerChart) {
                     container.innerHTML =
                         '<canvas id="container-chart-canvas" style="width:100%;height:100%;"></canvas>';
@@ -725,7 +750,6 @@
                 const canvas = document.getElementById('container-chart-canvas');
                 if (!canvas) return;
 
-                // Destroy old instance if refreshing
                 if (this._containerChart) {
                     this._containerChart.data.labels = labels;
                     this._containerChart.data.datasets[0].data = values;
@@ -734,7 +758,6 @@
                     return;
                 }
 
-                // Gradient fill for area
                 const ctx = canvas.getContext('2d');
                 const gradient = ctx.createLinearGradient(0, 0, 0, 280);
                 gradient.addColorStop(0, 'rgba(24, 95, 165, 0.35)');
@@ -745,7 +768,6 @@
                     data: {
                         labels,
                         datasets: [{
-                                // Area fill — rendered as line with fill
                                 type: 'line',
                                 label: 'Volume',
                                 data: values,
@@ -760,7 +782,6 @@
                                 order: 1,
                             },
                             {
-                                // Bar — rendered behind the line
                                 type: 'bar',
                                 label: 'Containers',
                                 data: values,
@@ -777,11 +798,11 @@
                         maintainAspectRatio: false,
                         animation: {
                             duration: 900,
-                            easing: 'easeInOutQuart',
+                            easing: 'easeInOutQuart'
                         },
                         interaction: {
                             mode: 'index',
-                            intersect: false,
+                            intersect: false
                         },
                         plugins: {
                             legend: {
@@ -803,7 +824,7 @@
                                     font: {
                                         size: 12
                                     },
-                                    color: 'var(--text-muted)',
+                                    color: 'var(--text-muted)'
                                 },
                             },
                             y: {
@@ -825,27 +846,21 @@
                 });
             },
 
-            // ── Load tracker cards ────────────────────────────────────────────────────
-            async loadTracker(offset, append) {
+            // ── Load tracker cards ────────────────────────────────────────────────
+            async loadTracker(page, append) {
                 const list = document.getElementById('widget-tracker');
-                const moreBtn = document.getElementById('tracker-show-more');
+                const pagination = document.getElementById('tracker-pagination');
                 const badge = document.getElementById('tracker-count-badge');
                 if (!list) return;
 
-                if (!append) {
-                    // Reset — show skeleton
-                    list.innerHTML = `
-                <div class="db-sk db-sk-card"></div>
-                <div class="db-sk db-sk-card"></div>
-                <div class="db-sk db-sk-card"></div>
-            `;
-                    moreBtn.style.display = 'none';
-                    this._trackerOffset = 0;
-                }
+                list.innerHTML = Array(10).fill(
+                    '<div class="db-sk db-sk-card"></div>'
+                ).join('');
 
                 try {
                     const url = new URL(this.urls.tracker, window.location.origin);
-                    url.searchParams.set('offset', offset);
+                    url.searchParams.set('page', page);
+                    url.searchParams.set('perPage', this._trackerPerPage);
 
                     const res = await fetch(url.toString(), {
                         headers: {
@@ -855,23 +870,24 @@
                     if (!res.ok) return;
 
                     const data = await res.json();
+                    list.innerHTML = data.html || this._emptyTracker();
 
-                    if (!append) {
-                        list.innerHTML = data.html || this._emptyTracker();
+                    this._trackerPage = data.currentPage;
+                    this._trackerTotalPages = data.totalPages;
+
+                    if (data.totalPages > 1) {
+                        pagination.style.display = 'flex';
+                        document.getElementById('tracker-page-label').textContent =
+                            `Page ${data.currentPage} of ${data.totalPages}`;
+                        document.getElementById('tracker-prev-btn').disabled =
+                            data.currentPage === 1;
+                        document.getElementById('tracker-next-btn').disabled =
+                            data.currentPage === data.totalPages;
                     } else {
-                        // Append new cards before the sentinel div if exists
-                        const tmp = document.createElement('div');
-                        tmp.innerHTML = data.html;
-                        Array.from(tmp.children).forEach(el => list.appendChild(el));
+                        pagination.style.display = 'none';
                     }
 
-                    this._trackerOffset = data.nextOffset;
-                    this._trackerHasMore = data.hasMore;
-                    moreBtn.style.display = data.hasMore ? 'block' : 'none';
-
-                    // Update badge with visible card count
-                    const count = list.querySelectorAll('.tracker-card').length;
-                    if (badge) badge.textContent = count + (data.hasMore ? '+' : '');
+                    if (badge) badge.textContent = data.total ?? '...';
 
                     this._updateTimestamp();
                 } catch (e) {
@@ -879,20 +895,32 @@
                 }
             },
 
-            // ── Tracker search ────────────────────────────────────────────────────────
+            // ── Tracker pagination ────────────────────────────────────────────────
+            prevTrackerPage() {
+                if (this._trackerPage > 1) {
+                    this._trackerPage--;
+                    this.loadTracker(this._trackerPage, false);
+                }
+            },
+
+            nextTrackerPage() {
+                if (this._trackerPage < this._trackerTotalPages) {
+                    this._trackerPage++;
+                    this.loadTracker(this._trackerPage, false);
+                }
+            },
+
+            // ── Tracker search ────────────────────────────────────────────────────
             _searchTimer: null,
 
             searchTracker(value) {
                 const clearBtn = document.getElementById('tracker-search-clear');
                 const label = document.getElementById('tracker-search-label');
 
-                // Show/hide clear button
                 if (clearBtn) clearBtn.style.display = value.length > 0 ? 'block' : 'none';
 
-                // Clear debounce timer
                 if (this._searchTimer) clearTimeout(this._searchTimer);
 
-                // Minimum 2 characters
                 if (value.length === 0) {
                     this.clearTrackerSearch();
                     return;
@@ -906,13 +934,11 @@
                     return;
                 }
 
-                // Debounce 300ms
                 this._searchTimer = setTimeout(async () => {
                     const list = document.getElementById('widget-tracker');
-                    const moreBtn = document.getElementById('tracker-show-more');
+                    const pagination = document.getElementById('tracker-pagination');
                     if (!list) return;
 
-                    // Show loading state
                     if (label) {
                         label.style.display = 'block';
                         label.textContent = 'Searching...';
@@ -932,10 +958,8 @@
                         const data = await res.json();
                         list.innerHTML = data.html || this._emptyTracker();
 
-                        // Hide Show More during search
-                        if (moreBtn) moreBtn.style.display = 'none';
+                        if (pagination) pagination.style.display = 'none';
 
-                        // Update label
                         if (label) {
                             label.style.display = 'block';
                             label.textContent = data.count === 0 ?
@@ -943,7 +967,6 @@
                                 `${data.count} result${data.count !== 1 ? 's' : ''} found`;
                         }
 
-                        // Update badge
                         const badge = document.getElementById('tracker-count-badge');
                         if (badge) badge.textContent = data.count > 0 ? data.count : '0';
 
@@ -968,23 +991,14 @@
 
                 if (this._searchTimer) clearTimeout(this._searchTimer);
 
-                // Reload normal tracker from offset 0
-                this.loadTracker(0, false);
+                this.loadTracker(1, false);
             },
 
-            // ── Show More tracker cards ───────────────────────────────────────────────
-            showMoreTracker() {
-                if (this._trackerHasMore) {
-                    this.loadTracker(this._trackerOffset, true);
-                }
-            },
-
-            // ── Load container accordion for one consignment ──────────────────────────
+            // ── Load container accordion ──────────────────────────────────────────
             async showContainers(consignmentId, bl, btn) {
                 const card = btn.closest('.tracker-card');
                 if (!card) return;
 
-                // Toggle — if accordion already open, close it
                 const existing = card.querySelector('.container-accordion');
                 if (existing) {
                     existing.remove();
@@ -1011,9 +1025,7 @@
                     const div = document.createElement('div');
                     div.innerHTML = data.html.trim();
                     const accordion = div.firstElementChild;
-                    if (accordion) {
-                        card.appendChild(accordion);
-                    }
+                    if (accordion) card.appendChild(accordion);
 
                     btn.disabled = false;
                     btn.textContent = 'Hide Containers';
@@ -1024,7 +1036,7 @@
                 }
             },
 
-            // ── Gate-Out ──────────────────────────────────────────────────────────────
+            // ── Gate-Out ──────────────────────────────────────────────────────────
             async gateOut(consignmentId, bl, btn) {
                 if (!confirm('Confirm gate-out for all containers under BL ' + bl + '?')) return;
                 btn.disabled = true;
@@ -1040,7 +1052,7 @@
                         }
                     );
                     if (res.ok) {
-                        this.loadTracker(0, false);
+                        this.loadTracker(this._trackerPage, false);
                     } else {
                         alert('Gate-out failed. Please try again.');
                         btn.disabled = false;
@@ -1053,15 +1065,15 @@
                 }
             },
 
-            // ── Container Clear ───────────────────────────────────────────────────────
+            // ── Container Clear ───────────────────────────────────────────────────
             async containerClear(consignmentId, containerNo, btn) {
                 if (!confirm('Confirm return of container ' + containerNo + '?')) return;
                 btn.disabled = true;
                 btn.textContent = 'Clearing...';
                 try {
                     const res = await fetch(
-                        this.urls.containerClear + '/' + consignmentId + '/' + encodeURIComponent(
-                            containerNo), {
+                        this.urls.containerClear + '/' + consignmentId + '/' +
+                        encodeURIComponent(containerNo), {
                             method: 'POST',
                             headers: {
                                 'X-CSRF-TOKEN': this.csrfToken,
@@ -1070,7 +1082,7 @@
                         }
                     );
                     if (res.ok) {
-                        this.loadTracker(0, false);
+                        this.loadTracker(this._trackerPage, false);
                     } else {
                         alert('Clear failed. Please try again.');
                         btn.disabled = false;
@@ -1083,7 +1095,7 @@
                 }
             },
 
-            // ── Disbursements Drawer ──────────────────────────────────────────────────
+            // ── Disbursements Drawer ──────────────────────────────────────────────
             openDisbursementsDrawer() {
                 const drawer = document.getElementById('disb-drawer');
                 const overlay = document.getElementById('disb-drawer-overlay');
@@ -1121,18 +1133,18 @@
                             },
                         };
                         let html = `
-                    <table style="width:100%; border-collapse:collapse;">
-                        <thead>
-                            <tr style="background:#185FA5; color:#fff;">
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">BL</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Consignee</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Destination</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Status</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">ETA</th>
-                                <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Overdue</th>
-                            </tr>
-                        </thead>
-                        <tbody>`;
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#185FA5; color:#fff;">
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">BL</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Consignee</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Destination</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Status</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">ETA</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Overdue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
                         rows.forEach(row => {
                             const st = statusMap[row.Status] || {
                                 label: 'Unknown',
@@ -1142,16 +1154,16 @@
                             const days = parseInt(row.DaysOverdue);
                             const etaDate = row.ETA ? row.ETA.substring(0, 10) : '—';
                             html += `
-                        <tr style="border-bottom:0.5px solid var(--border-color);">
-                            <td style="padding:10px 12px; font-family:monospace; font-size:var(--db-text-base); color:var(--text-primary); white-space:nowrap;">${row.BL}</td>
-                            <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-primary);">${row.ConsigneeName}</td>
-                            <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-muted);">${row.Destination || '—'}</td>
-                            <td style="padding:10px 12px; text-align:center;">
-                                <span style="background:${st.bg}; color:${st.color}; font-size:var(--db-text-xs); font-weight:600; border-radius:10px; padding:3px 10px;">${st.label}</span>
-                            </td>
-                            <td style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; color:var(--text-muted);">${etaDate}</td>
-                            <td style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; color:#A32D2D; font-weight:600;">${isNaN(days) ? '—' : days + 'd overdue'}</td>
-                        </tr>`;
+                                <tr style="border-bottom:0.5px solid var(--border-color);">
+                                    <td style="padding:10px 12px; font-family:monospace; font-size:var(--db-text-base); color:var(--text-primary); white-space:nowrap;">${row.BL}</td>
+                                    <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-primary);">${row.ConsigneeName}</td>
+                                    <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-muted);">${row.Destination || '—'}</td>
+                                    <td style="padding:10px 12px; text-align:center;">
+                                        <span style="background:${st.bg}; color:${st.color}; font-size:var(--db-text-xs); font-weight:600; border-radius:10px; padding:3px 10px;">${st.label}</span>
+                                    </td>
+                                    <td style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; color:var(--text-muted);">${etaDate}</td>
+                                    <td style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; color:#A32D2D; font-weight:600;">${isNaN(days) ? '—' : days + 'd overdue'}</td>
+                                </tr>`;
                         });
                         content.innerHTML = html + '</tbody></table>';
                     })
@@ -1167,7 +1179,7 @@
                 document.getElementById('disb-drawer-overlay').style.display = 'none';
             },
 
-            // ── Pending Consignments Drawer ───────────────────────────────────────────
+            // ── Pending Consignments Drawer ───────────────────────────────────────
             openPendingDrawer() {
                 const drawer = document.getElementById('pending-drawer');
                 const overlay = document.getElementById('pending-drawer-overlay');
@@ -1198,18 +1210,18 @@
                         }
 
                         let html = `
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr style="background:#185FA5; color:#fff;">
-                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">BL</th>
-                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Consignee</th>
-                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Destination</th>
-                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">ETA</th>
-                            <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Status</th>
-                            ${canEdit ? '<th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Action</th>' : ''}
-                        </tr>
-                    </thead>
-                    <tbody>`;
+                            <table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#185FA5; color:#fff;">
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">BL</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Consignee</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:left; font-weight:600;">Destination</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">ETA</th>
+                                        <th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Status</th>
+                                        ${canEdit ? '<th style="padding:10px 12px; font-size:var(--db-text-sm); text-align:center; font-weight:600;">Action</th>' : ''}
+                                    </tr>
+                                </thead>
+                                <tbody>`;
 
                         rows.forEach(row => {
                             const priority = parseInt(row.Priority);
@@ -1218,7 +1230,6 @@
                             const etaDate = row.ETA ? row.ETA.substring(0, 10) : '';
                             const days = parseInt(row.ETADays);
 
-                            // Days display
                             let daysText = '—';
                             let daysStyle = 'color:var(--text-muted);';
                             if (etaDate) {
@@ -1236,41 +1247,38 @@
                                 }
                             }
 
-                            // ETA cell — disabled when locked
                             const etaCell = (canEdit && !etaLocked) ?
                                 `<input type="date" value="${etaDate}"
-                           style="border:0.5px solid var(--border-color); border-radius:5px;
-                                  padding:4px 8px; font-size:var(--db-text-sm); width:140px;">` :
+                                   style="border:0.5px solid var(--border-color); border-radius:5px;
+                                          padding:4px 8px; font-size:var(--db-text-sm); width:140px;">` :
                                 `<span style="font-size:var(--db-text-sm); color:var(--text-primary);">${etaDate || '—'}</span>`;
 
-                            // Action cell
                             const actionCell = (canEdit && !etaLocked) ?
                                 `<button onclick="window.DashboardApp.saveEta(${row.ConsignmentID}, '${row.BL}', this)"
-                           style="background:#185FA5; color:#fff; border:none; border-radius:5px;
-                                  padding:4px 12px; font-size:var(--db-text-sm); font-weight:600; cursor:pointer;">
-                           Save
-                       </button>` :
+                                   style="background:#185FA5; color:#fff; border:none; border-radius:5px;
+                                          padding:4px 12px; font-size:var(--db-text-sm); font-weight:600; cursor:pointer;">
+                                   Save
+                               </button>` :
                                 `<span style="font-size:var(--db-text-xs); color:var(--text-muted);">🔒 Locked</span>`;
 
                             html += `
-                    <tr style="border-bottom:0.5px solid var(--border-color);">
-                        <td style="padding:10px 12px; font-family:monospace; font-size:var(--db-text-base);
-                                   color:var(--text-primary); white-space:nowrap;">${row.BL}</td>
-                        <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-primary);">${row.ConsigneeName}</td>
-                        <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-muted);">${row.Destination || '—'}</td>
-                        <td style="padding:10px 12px; text-align:center;" data-eta-cell>${etaCell}</td>
-                        <td style="padding:10px 12px; text-align:center;">
-                            <span style="background:${badge.bg}; color:${badge.color};
-                                         font-size:var(--db-text-xs); font-weight:600;
-                                         border-radius:10px; padding:3px 10px;">
-                                ${badge.label}
-                            </span>
-                            <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">
-                                ${daysText}
-                            </div>
-                        </td>
-                        ${canEdit ? `<td style="padding:10px 12px; text-align:center;">${actionCell}</td>` : ''}
-                    </tr>`;
+                                <tr style="border-bottom:0.5px solid var(--border-color);">
+                                    <td style="padding:10px 12px; font-family:monospace; font-size:var(--db-text-base); color:var(--text-primary); white-space:nowrap;">${row.BL}</td>
+                                    <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-primary);">${row.ConsigneeName}</td>
+                                    <td style="padding:10px 12px; font-size:var(--db-text-sm); color:var(--text-muted);">${row.Destination || '—'}</td>
+                                    <td style="padding:10px 12px; text-align:center;" data-eta-cell>${etaCell}</td>
+                                    <td style="padding:10px 12px; text-align:center;">
+                                        <span style="background:${badge.bg}; color:${badge.color};
+                                                     font-size:var(--db-text-xs); font-weight:600;
+                                                     border-radius:10px; padding:3px 10px;">
+                                            ${badge.label}
+                                        </span>
+                                        <div style="font-size:0.7rem; color:var(--text-muted); margin-top:2px;">
+                                            ${daysText}
+                                        </div>
+                                    </td>
+                                    ${canEdit ? `<td style="padding:10px 12px; text-align:center;">${actionCell}</td>` : ''}
+                                </tr>`;
                         });
 
                         content.innerHTML = html + '</tbody></table>';
@@ -1280,13 +1288,14 @@
                             '<p style="font-size:var(--db-text-sm); color:#b91c1c; padding:12px 0;">Failed to load. Please try again.</p>';
                     });
             },
+
             closePendingDrawer() {
                 document.getElementById('pending-drawer').style.transform = 'translateX(100%)';
                 document.getElementById('pending-drawer').style.pointerEvents = 'none';
                 document.getElementById('pending-drawer-overlay').style.display = 'none';
             },
 
-            // ── Save ETA from drawer ──────────────────────────────────────────────────
+            // ── Save ETA from drawer ──────────────────────────────────────────────
             saveEta(consignmentId, bl, btn) {
                 const row = btn.closest('tr');
                 const input = row.querySelector('input[type="date"]');
@@ -1313,33 +1322,6 @@
                     .then(r => r.json())
                     .then(data => {
                         if (data.success) {
-                            const days = data.etaDays;
-                            const daysCell = row.querySelector('[data-days-cell]');
-                            const statusCell = row.querySelector('[data-status-cell]');
-                            if (daysCell) {
-                                let daysText = `${days}d`,
-                                    daysStyle = 'color:var(--text-muted); font-weight:normal;';
-                                if (days < 0) {
-                                    daysText = `${Math.abs(days)}d overdue`;
-                                    daysStyle = 'color:#A32D2D; font-weight:600;';
-                                } else if (days === 0) {
-                                    daysText = 'Today';
-                                    daysStyle = 'color:#15803d; font-weight:600;';
-                                } else if (days <= 3) {
-                                    daysStyle = 'color:#92400e; font-weight:600;';
-                                }
-                                daysCell.textContent = daysText;
-                                daysCell.setAttribute('style',
-                                    `padding:10px 12px; font-size:var(--db-text-sm); text-align:center; ${daysStyle}`
-                                );
-                            }
-                            if (statusCell) {
-                                const bg = days >= 0 ? 'background:#FAEEDA; color:#854F0B;' :
-                                    'background:#E6F1FB; color:#0C447C;';
-                                const label = days >= 0 ? 'Not Arrived' : 'In Harbor';
-                                statusCell.innerHTML =
-                                    `<span style="${bg} font-size:var(--db-text-xs); font-weight:600; border-radius:10px; padding:3px 10px;">${label}</span>`;
-                            }
                             btn.disabled = false;
                             btn.textContent = '✓ Saved';
                             btn.style.background = '#15803d';
@@ -1347,7 +1329,7 @@
                                 btn.textContent = 'Save';
                                 btn.style.background = '#185FA5';
                             }, 2000);
-                            this.loadTracker(0, false);
+                            this.loadTracker(this._trackerPage, false);
                         } else {
                             btn.disabled = false;
                             btn.textContent = 'Save';
@@ -1361,7 +1343,7 @@
                     });
             },
 
-            // ── Chart.js init for financial/donut/bar widgets ─────────────────────────
+            // ── Chart.js init for financial/donut/bar widgets ─────────────────────
             _initCharts(container) {
                 if (typeof Chart === 'undefined') return;
 
@@ -1479,8 +1461,8 @@
                                             font: {
                                                 size: 12
                                             },
-                                            callback: val => val >= 1000 ? (val / 1000).toFixed(0) +
-                                                'k' : val
+                                            callback: val => val >= 1000 ?
+                                                (val / 1000).toFixed(0) + 'k' : val
                                         }
                                     }
                                 }
@@ -1492,7 +1474,7 @@
                 });
             },
 
-            // ── Helpers ───────────────────────────────────────────────────────────────
+            // ── Helpers ───────────────────────────────────────────────────────────
             _buildRefreshUrl(widget, params) {
                 const url = new URL(this.urls.refresh, window.location.origin);
                 url.searchParams.set('widget', widget);
@@ -1502,9 +1484,9 @@
 
             _emptyTracker() {
                 return `<p style="font-size:var(--db-text-sm); color:var(--text-muted);
-                           text-align:center; padding:2rem 0;">
-                    No active consignments requiring action.
-                </p>`;
+                                   text-align:center; padding:2rem 0; grid-column:1/-1;">
+                            No active consignments requiring action.
+                        </p>`;
             },
 
             _updateTimestamp() {

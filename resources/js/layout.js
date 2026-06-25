@@ -395,3 +395,55 @@ window.SearchDropdown = class {
         if (this.hiddenEl) this.hiddenEl.value = value;
     }
 };
+
+// ── Collapsed sidebar flyout submenus ─────────────────────────────────────
+function initCollapsedFlyouts() {
+    const sidebar = document.getElementById("sidebar");
+    if (!sidebar) return;
+
+    document.querySelectorAll(".nav-item-wrapper").forEach((wrapper) => {
+        const submenu = wrapper.querySelector(".submenu");
+        if (!submenu) return;
+
+        let hideTimer = null;
+
+        wrapper.addEventListener("mouseenter", () => {
+            if (!sidebar.classList.contains("collapsed")) return;
+            clearTimeout(hideTimer);
+
+            const rect = wrapper.getBoundingClientRect();
+            submenu.style.cssText = `
+                display: block !important;
+                position: fixed;
+                left: 64px;
+                top: ${rect.top}px;
+                min-width: 200px;
+                background: var(--tooltip-bg);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 8px;
+                padding: 6px 0;
+                box-shadow: 4px 4px 16px rgba(0,0,0,0.3);
+                z-index: 9999;
+            `;
+        });
+
+        wrapper.addEventListener("mouseleave", () => {
+            if (!sidebar.classList.contains("collapsed")) return;
+            hideTimer = setTimeout(() => {
+                submenu.style.cssText = "";
+            }, 100);
+        });
+
+        submenu.addEventListener("mouseenter", () => {
+            clearTimeout(hideTimer);
+        });
+
+        submenu.addEventListener("mouseleave", () => {
+            hideTimer = setTimeout(() => {
+                submenu.style.cssText = "";
+            }, 100);
+        });
+    });
+}
+
+document.addEventListener("DOMContentLoaded", initCollapsedFlyouts);
