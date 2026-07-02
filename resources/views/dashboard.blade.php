@@ -344,8 +344,8 @@
                        font-size:var(--db-text-xs); font-weight:600; cursor:pointer;">
                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0
-                                   004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
-                                   8.003 0 01-15.357-2m15.357 2H15" />
+                                                       004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003
+                                                       8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Refresh All
             </button>
@@ -656,6 +656,7 @@
                 drawerDisbs: '{{ route('dashboard.drawer.disbursements') }}',
                 drawerPending: '{{ route('dashboard.drawer.pending-consignments') }}',
                 updateEta: '{{ route('dashboard.eta.update') }}',
+                sendNotification: '{{ route('consignments.send-notification') }}',
             },
 
             widgets: [
@@ -1330,6 +1331,20 @@
                                 btn.style.background = '#185FA5';
                             }, 2000);
                             this.loadTracker(this._trackerPage, false);
+
+                            if (data.eta_changed) {
+                                openSmsModal(
+                                    bl,
+                                    '',
+                                    0,
+                                    this.urls.sendNotification,
+                                    'eta_change', {
+                                        phone: data.phone ?? '',
+                                        consignee: data.consignee ?? '—'
+                                    }
+                                );
+                            }
+
                         } else {
                             btn.disabled = false;
                             btn.textContent = 'Save';

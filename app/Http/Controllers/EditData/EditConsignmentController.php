@@ -70,7 +70,7 @@ class EditConsignmentController extends Controller
         if (! $consignment) {
             return response()->json([
                 'success' => false,
-                'message' => 'Consignment not found for BL# '.$bl,
+                'message' => 'Consignment not found for BL# ' . $bl,
             ], 404);
         }
 
@@ -125,9 +125,11 @@ class EditConsignmentController extends Controller
         if ($blTaken) {
             return response()->json([
                 'success' => false,
-                'message' => 'Bill of Lading# '.$request->BL.' is already used by another consignment.',
+                'message' => 'Bill of Lading# ' . $request->BL . ' is already used by another consignment.',
             ], 409);
         }
+
+        $oldEta = $consignment->ETA;
 
         $consignment->update([
             'ETA' => $request->ETA,
@@ -151,9 +153,27 @@ class EditConsignmentController extends Controller
             'Charges' => $request->Charges ?? 0,
         ]);
 
+        $etaChanged = $oldEta !== $request->ETA;
+        $phone      = null;
+        $consignee  = null;
+
+        if ($etaChanged) {
+            $cee = DB::table('consignee_main')
+                ->where('ConsigneeID', $consignment->ConsigneeID)
+                ->select('TelNo', 'FullName')
+                ->first();
+            $phone     = $cee->TelNo ?? '';
+            $consignee = $cee->FullName ?? '';
+        }
+
         return response()->json([
-            'success' => true,
-            'message' => 'Consignment updated successfully.',
+            'success'     => true,
+            'message'     => 'Consignment updated successfully.',
+            'eta_changed' => $etaChanged,
+            'bl'          => strtoupper(trim($request->BL)),
+            'eta'         => $request->ETA,
+            'phone'       => $phone,
+            'consignee'   => $consignee,
         ]);
     }
 
@@ -232,7 +252,7 @@ class EditConsignmentController extends Controller
             ])
             // Build display label for the dropdown
             ->map(function ($row) {
-                $row->label = $row->ConsigneeName.' ['.$row->HouseBL.'] '.$row->ItemType;
+                $row->label = $row->ConsigneeName . ' [' . $row->HouseBL . '] ' . $row->ItemType;
 
                 return $row;
             });
@@ -275,7 +295,7 @@ class EditConsignmentController extends Controller
         if (! $entry) {
             return response()->json([
                 'success' => false,
-                'message' => 'House BL not found: '.$hbl,
+                'message' => 'House BL not found: ' . $hbl,
             ], 404);
         }
 

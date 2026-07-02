@@ -605,7 +605,9 @@
     @include('partials.hs-advisor-modal')
 
     {{-- SMS Modal --}}
+    <x-sms-modal />
     @include('partials.sms-modal-script')
+
 </body>
 
 </html>

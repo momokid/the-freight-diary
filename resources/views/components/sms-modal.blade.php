@@ -2,7 +2,7 @@
 {{-- Usage: <x-sms-modal :route="route('consignments.send-notification')" /> --}}
 
 <div id="sms-modal"
-    style="display:none; position:fixed; inset:0; z-index:50;
+    style="display:none; position:fixed; inset:0; z-index:2000;
        align-items:center; justify-content:center;
        background:rgba(0,0,0,0.5);">
     <div class="card" style="width:100%; max-width:440px; margin:1rem;">
@@ -30,6 +30,7 @@
             <label class="form-label">Message Type <span style="color:#ef4444;">*</span></label>
             <select id="sms-event" class="form-input" onchange="onSmsEventChange()">
                 <option value="registration">Consignment Registration</option>
+                <option value="eta_change">ETA Updated</option>
                 <option value="gate_out">Gate-Out Release</option>
                 <option value="invoice_payment">Payment Received</option>
                 <option value="manual">Custom Message</option>

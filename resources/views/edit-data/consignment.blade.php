@@ -634,6 +634,20 @@
                 .then(data => {
                     if (data.success) {
                         showSuccess('cns-submit-success', data.message);
+
+                        if (data.eta_changed) {
+                            openSmsModal(
+                                data.bl,
+                                '',
+                                0,
+                                '{{ route('consignments.send-notification') }}',
+                                'eta_change', {
+                                    phone: data.phone ?? '',
+                                    consignee: data.consignee ?? '—'
+                                }
+                            );
+                        }
+
                         setTimeout(() => {
                             currentConsignmentId = null;
                             currentIsLCL = true;

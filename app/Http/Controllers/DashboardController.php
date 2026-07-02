@@ -372,7 +372,7 @@ class DashboardController extends Controller
 
     public function updateEta(Request $request)
     {
-        $user     = Auth::user();
+        $user = Auth::user();
         $userAuth = UserAuth::where('Username', $user->ID)->first();
 
         if (!$userAuth || !$userAuth->hasPermission('EditData')) {
@@ -385,6 +385,16 @@ class DashboardController extends Controller
             'eta'           => 'required|date',
         ]);
 
+        // Capture current ETA + consignee details before the update
+        $current = DB::table('container_main as cm')
+            ->leftJoin('consignee_main as co', 'co.ConsigneeID', '=', 'cm.ConsigneeID')
+            ->where('cm.ConsignmentID', $request->consignmentId)
+            ->where('cm.BL', $request->bl)
+            ->select('cm.ETA as OldETA', 'co.TelNo', 'co.FullName')
+            ->first();
+
+        $etaChanged = $current && substr($current->OldETA, 0, 10) !== $request->eta;
+
         DB::table('container_main')
             ->where('ConsignmentID', $request->consignmentId)
             ->where('BL', $request->bl)
@@ -396,9 +406,12 @@ class DashboardController extends Controller
         );
 
         return response()->json([
-            'success' => true,
-            'eta'     => $request->eta,
-            'etaDays' => (int) $result->etaDays,
+            'success'     => true,
+            'eta'         => $request->eta,
+            'etaDays'     => (int) $result->etaDays,
+            'eta_changed' => $etaChanged,
+            'phone'       => $etaChanged ? ($current->TelNo ?? '') : null,
+            'consignee'   => $etaChanged ? ($current->FullName ?? '') : null,
         ]);
     }
 

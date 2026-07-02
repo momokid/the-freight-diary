@@ -7,7 +7,7 @@
     let _smsManualEdit = false;
 
     // ── Open modal ────────────────────────────────────────────────────────
-    function openSmsModal(bl, clientCode, consigneeId, route, event = 'registration') {
+    function openSmsModal(bl, clientCode, consigneeId, route, event = 'registration', prefill = null) {
         _smsBL = bl;
         _smsCode = clientCode;
         _smsConsigneeId = consigneeId;
@@ -27,7 +27,11 @@
         document.getElementById('sms-phone-error').classList.remove('visible');
         document.getElementById('sms-send-error').classList.remove('visible');
 
-        if (consigneeId && consigneeId > 0) {
+        if (prefill) {
+            document.getElementById('sms-consignee-name').textContent = prefill.consignee ?? '—';
+            document.getElementById('sms-phone').value = prefill.phone ?? '';
+            updateSmsPreview();
+        } else if (consigneeId && consigneeId > 0) {
             fetch(`/master-data/consignees/${consigneeId}`, {
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
@@ -49,7 +53,6 @@
             updateSmsPreview();
         }
     }
-
     // ── Build preview from event type ─────────────────────────────────────
     function updateSmsPreview() {
         if (_smsManualEdit) return;
@@ -61,6 +64,7 @@
             registration: `Dear Client, your consignment BL# ${_smsBL} has been registered with PSIL. Your access code is ${_smsCode}.`,
             gate_out: `Dear Client, your consignment BL# ${_smsBL} has been released for gate-out by PSIL. Please arrange collection at your earliest convenience.`,
             invoice_payment: `Dear Client, your payment for consignment BL# ${_smsBL} has been recorded by PSIL. Thank you for your payment.`,
+            eta_change: `Dear Client, the ETA for your consignment BL# ${_smsBL} has been updated. Please contact PSIL for further details.`,
             manual: '',
         };
 

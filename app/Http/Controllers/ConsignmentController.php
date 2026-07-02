@@ -384,11 +384,11 @@ class ConsignmentController extends Controller
     public function sendNotification(Request $request, ClientNotificationService $notification)
     {
         $request->validate([
-            'bl'          => ['required', 'string', 'max:50'],
-            'client_code' => ['required', 'string', 'size:4'],
-            'phone'       => ['required', 'string', 'max:20'],
+            'bl'           => ['required', 'string', 'max:50'],
+            'client_code'  => ['nullable', 'string', 'size:4'],
+            'phone'        => ['required', 'string', 'max:20'],
             'consignee_id' => ['nullable', 'integer'],
-            'event'        => ['required', 'in:registration,gate_out,invoice_payment,manual'],
+            'event'        => ['required', 'in:registration,gate_out,invoice_payment,eta_change,manual'],
             'message'      => ['required_if:event,manual', 'nullable', 'string'],
         ]);
 

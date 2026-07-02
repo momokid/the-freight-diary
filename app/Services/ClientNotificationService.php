@@ -31,6 +31,9 @@ class ClientNotificationService
             "Dear Client, your payment for consignment BL# {$bl} "
                 . "has been recorded by PSIL. Thank you for your payment.",
 
+            'eta_change' =>
+            $params['message'] ?? "Dear Client, the ETA for your consignment BL# {$bl} has been updated. Please contact PSIL for further details.",
+
             'manual' => $params['message'] ?? '',
 
             default => '',
