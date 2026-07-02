@@ -36,7 +36,7 @@ class EtaAlertService
 
             // Populate digest from the full active set regardless of log state
             if ($etaDays === 0) {
-                $digest['arriving_today'][] = $consignment;
+                $this->queueArrival($consignment);
             } elseif ($etaDays <= 3) {
                 $digest['upcoming'][] = $consignment;
             }
@@ -54,19 +54,10 @@ class EtaAlertService
                 $this->sendEtaChange($consignment);
                 $digest['eta_changed'][] = $consignment;
             }
-
-            // Arrival SMS — fires only on the exact ETA date, never for overdue consignments
-            if ($etaDays === 0) {
-                $this->sendArrival($consignment);
-            }
         }
 
         return $digest;
     }
-
-    // -------------------------------------------------------------------------
-    // Queries
-    // -------------------------------------------------------------------------
 
     private function getActiveConsignments()
     {
@@ -129,20 +120,33 @@ class EtaAlertService
         );
     }
 
-    private function sendArrival(object $consignment): void
+    private function queueArrival(object $consignment): void
     {
-        $message = $this->buildArrivalMessage($consignment->FullName, $consignment->BL);
-        $result  = $this->arkesel->sendSms($consignment->TelNo, $message);
+        $already = DB::table('arrival_sms_queue')
+            ->where('BL', $consignment->BL)
+            ->where('QueueDate', now()->toDateString())
+            ->exists();
 
-        $this->logAlert(
-            $consignment,
-            EtaAlertLog::TYPE_ARRIVAL,
-            EtaAlertLog::CHANNEL_SMS,
-            $consignment->TelNo,
-            $consignment->ETA,
-            $result,
-            $message
-        );
+        if ($already) {
+            return;
+        }
+
+        $message = $this->buildArrivalMessage($consignment->FullName, $consignment->BL);
+
+        DB::table('arrival_sms_queue')->insert([
+            'ConsignmentID' => $consignment->ConsignmentID,
+            'BL'            => $consignment->BL,
+            'ConsigneeID'   => $consignment->ConsigneeID,
+            'ConsigneeName' => $consignment->FullName,
+            'Phone'         => $consignment->TelNo,
+            'ETA'           => $consignment->ETA,
+            'ContainerCount' => (int) $consignment->ContainerCount,
+            'Message'       => $message,
+            'Status'        => 0,
+            'SentBy'        => null,
+            'SentAt'        => null,
+            'QueueDate'     => now()->toDateString(),
+        ]);
     }
 
     private function recordBaseline(object $consignment): void

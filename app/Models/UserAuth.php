@@ -43,6 +43,7 @@ class UserAuth extends Model
         'DisbursementReport',
         'ManagementReport',
         'MessagingCenter',
+        'SendArrivalSms',
     ];
 
     protected $table = 'user_auth';

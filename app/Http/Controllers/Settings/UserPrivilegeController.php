@@ -14,8 +14,6 @@ class UserPrivilegeController extends Controller
         // Load all users from kaina, ordered by name
         $users = User::orderBy('FullName')->get();
 
-        // ADDED: permission groups for the UI
-        // Defines how permissions are grouped and labelled in the view
         $permissionGroups = [
             'Setup & Config' => [
                 'BasicConfig' => 'Basic Config',
@@ -24,6 +22,7 @@ class UserPrivilegeController extends Controller
                 'ConsignmentRegister' => 'Consignment Register',
                 'AssignConsignmentOfficer' => 'Assign Consignment Officer',
                 'MessagingCenter' => 'Messaging Center',
+                'SendArrivalSms' => 'Send Arrival SMS',
             ],
             'Transactions' => [
                 'GenerateInvoice' => 'Generate Invoice',

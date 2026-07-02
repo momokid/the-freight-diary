@@ -607,6 +607,7 @@
     {{-- SMS Modal --}}
     <x-sms-modal />
     @include('partials.sms-modal-script')
+    @include('partials.arrival-sms-modal')
 
 </body>
 

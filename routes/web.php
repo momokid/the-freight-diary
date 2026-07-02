@@ -43,6 +43,7 @@ use App\Http\Controllers\WhatsAppController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MessagingCenterController;
+use App\Http\Controllers\ArrivalSmsController;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -391,6 +392,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [MessagingCenterController::class, 'index'])->name('index');
         Route::post('/send', [MessagingCenterController::class, 'send'])->name('send');
         Route::get('/history/{bl}', [MessagingCenterController::class, 'history'])->name('history');
+    });
+
+    // Arrival SMS Queue
+    Route::prefix('arrival-sms')->name('arrival-sms.')->group(function () {
+        Route::get('/pending', [ArrivalSmsController::class, 'pending'])->name('pending');
+        Route::post('/send', [ArrivalSmsController::class, 'send'])->name('send');
+        Route::post('/send-all', [ArrivalSmsController::class, 'sendAll'])->name('send-all');
     });
 
     // Disbursement routes
