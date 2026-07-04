@@ -29,6 +29,34 @@
 
     <div style="display: flex; flex-direction: column; gap: 1.25rem;">
 
+        {{-- OCR Upload Section --}}
+        <div class="card" style="margin-bottom: 0;">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="form-title">📄 Auto-fill from BL Document</p>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                        Upload a BL image or PDF to automatically extract BL, ETA, Shipping Line and container details
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="file" id="bl-file-input-cmdts" accept="image/*,.pdf" style="display: none;"
+                        onchange="extractFromBLCmdts(this)">
+                    <button type="button" onclick="document.getElementById('bl-file-input-cmdts').click()"
+                        id="ocr-btn-cmdts"
+                        style="display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; border: 1.5px solid #16a34a; background: rgba(22,163,74,0.06); color: #16a34a; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.15s;">
+                        <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Upload BL Document
+                    </button>
+                    <div id="ocr-status-cmdts" style="font-size: 0.75rem; color: var(--text-muted); display: none;">
+                        <span id="ocr-status-text-cmdts">Extracting data...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- ── Section 1: Consignment Category ── --}}
         <div class="card">
             <p class="form-title">Consignment Category</p>
@@ -160,6 +188,8 @@
                         Add Container
                     </button>
                 </div>
+
+                <div id="ocr-container-preview-cmdts" style="margin-bottom: 1rem;"></div>
 
                 <div id="containers-table">
                     <div
@@ -368,6 +398,271 @@
             if (e.target === this) closeContainerModal();
         });
 
+        function applyConfidenceCmdts(elementId, status) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            el.style.borderColor = status === 'review' ? '#f59e0b' :
+                status === 'low' || status === 'empty' ? '#ef4444' :
+                'var(--border-color)';
+
+            const parent = el.parentElement;
+            let badge = parent.querySelector('.ocr-badge');
+
+            if (status === 'ok') {
+                if (badge) badge.remove();
+                return;
+            }
+
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'ocr-badge';
+                badge.style.cssText = [
+                    'display:inline-block',
+                    'font-size:0.7rem',
+                    'font-weight:600',
+                    'border-radius:4px',
+                    'padding:1px 7px',
+                    'margin-top:3px',
+                ].join(';');
+                el.insertAdjacentElement('afterend', badge);
+            }
+
+            if (status === 'review') {
+                badge.textContent = '⚠ Review';
+                badge.style.background = '#fef3c7';
+                badge.style.color = '#92400e';
+            } else if (status === 'low') {
+                badge.textContent = '✗ Low confidence';
+                badge.style.background = '#fee2e2';
+                badge.style.color = '#b91c1c';
+            } else if (status === 'empty') {
+                badge.textContent = '⛔ Not found — fill manually';
+                badge.style.background = '#fee2e2';
+                badge.style.color = '#b91c1c';
+            }
+        }
+
+        function clearConfidenceCmdts(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.style.borderColor = 'var(--border-color)';
+            const badge = el.parentElement.querySelector('.ocr-badge');
+            if (badge) badge.remove();
+        }
+
+        function fillFieldCmdts(elementId, field) {
+            if (!field) return;
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            if (field.value) el.value = field.value;
+            applyConfidenceCmdts(elementId, field.status);
+        }
+
+        function matchDropdownCmdts(selectId, field) {
+            if (!field || !field.value) return;
+            const select = document.getElementById(selectId);
+            if (!select) return;
+
+            const text = field.value.toLowerCase();
+            let matched = false;
+
+            for (let opt of select.options) {
+                const optText = opt.textContent.toLowerCase();
+                if (optText.includes(text) || text.includes(optText)) {
+                    opt.selected = true;
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched) applyConfidenceCmdts(selectId, 'review');
+        }
+
+        function extractFromBLCmdts(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const statusEl = document.getElementById('ocr-status-cmdts');
+            const statusTextEl = document.getElementById('ocr-status-text-cmdts');
+            const btn = document.getElementById('ocr-btn-cmdts');
+
+            statusEl.style.display = 'flex';
+            statusTextEl.textContent = 'Extracting fields with AI...';
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('_token', CSRF);
+
+            fetch('{{ route('consignments.ocr') }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData,
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) {
+                        statusTextEl.textContent = '⚠ ' + (data.message ?? 'Extraction failed.');
+                        setTimeout(() => {
+                            statusEl.style.display = 'none';
+                        }, 4000);
+                        return;
+                    }
+
+                    const f = data.fields;
+
+                    if (f.MainBL && f.MainBL.value) {
+                        document.getElementById('bl').value = f.MainBL.value.toUpperCase();
+                        applyConfidenceCmdts('bl', f.MainBL.status);
+                    }
+
+                    fillFieldCmdts('eta', f.ETA);
+                    matchDropdownCmdts('carrier-id', f.VesselName);
+
+                    renderContainerPreviewCmdts(f.Containers);
+
+                    statusTextEl.textContent = '✓ Fields extracted — review highlighted fields';
+                    statusEl.style.color = '#15803d';
+                    setTimeout(() => {
+                        statusEl.style.display = 'none';
+                        statusEl.style.color = '';
+                    }, 4000);
+                })
+                .catch(() => {
+                    statusTextEl.textContent = '⚠ Extraction failed. Fill manually.';
+                    setTimeout(() => {
+                        statusEl.style.display = 'none';
+                    }, 4000);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    input.value = '';
+                });
+        }
+
+        function renderContainerPreviewCmdts(containers) {
+            const wrapper = document.getElementById('ocr-container-preview-cmdts');
+            if (!wrapper || !containers || containers.length === 0) {
+                if (wrapper) wrapper.innerHTML = '';
+                return;
+            }
+
+            let html = `
+            <div style="margin-bottom: 0.75rem;">
+                <p style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">
+                    ${containers.length} container(s) found on document — review and add each
+                </p>
+            </div>
+            `;
+
+            containers.forEach((c, index) => {
+                html += `
+            <div class="card" id="ocr-card-cmdts-${index}" style="margin-bottom: 0.75rem; padding: 1rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 100px 2fr auto; gap: 0.75rem; align-items: end;">
+                    <div>
+                        <label class="form-label">Container No</label>
+                        <input type="text" id="ocr-cno-${index}" value="${c.ContainerNo.value}" class="form-input" style="text-transform: uppercase;">
+                    </div>
+                    <div>
+                        <label class="form-label">Seal No</label>
+                        <input type="text" id="ocr-seal-${index}" value="${c.SealNo.value}" class="form-input" style="text-transform: uppercase;">
+                    </div>
+                    <div>
+                        <label class="form-label">Size</label>
+                        <input type="text" id="ocr-size-${index}" value="${c.Size.value}" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">Item Details</label>
+                        <input type="text" id="ocr-item-${index}" value="${c.ItemDetails.value}" class="form-input">
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" onclick="addOcrContainerCmdts(${index})"
+                            style="padding: 10px 16px; background: #16a34a; color: white; border: none; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                            Add
+                        </button>
+                        <button type="button" onclick="removeOcrContainerCmdts(${index})"
+                            style="padding: 10px 12px; background: transparent; color: #ef4444; border: 1px solid #ef4444; border-radius: 8px; font-size: 0.8rem; cursor: pointer;">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <p id="ocr-error-${index}" class="form-error" style="margin-top: 8px; margin-bottom: 0;"></p>
+            </div>
+            `;
+            });
+
+            wrapper.innerHTML = html;
+
+            containers.forEach((c, index) => {
+                applyConfidenceCmdts(`ocr-cno-${index}`, c.ContainerNo.status);
+                applyConfidenceCmdts(`ocr-seal-${index}`, c.SealNo.status);
+                applyConfidenceCmdts(`ocr-size-${index}`, c.Size.status);
+                applyConfidenceCmdts(`ocr-item-${index}`, c.ItemDetails.status);
+            });
+        }
+
+        function addOcrContainerCmdts(index) {
+            const errorEl = document.getElementById(`ocr-error-${index}`);
+            errorEl.classList.remove('visible');
+            errorEl.style.color = '';
+
+            const bl = document.getElementById('bl').value.trim().toUpperCase();
+            const containerNo = document.getElementById(`ocr-cno-${index}`).value.trim().toUpperCase();
+            const sealNo = document.getElementById(`ocr-seal-${index}`).value.trim().toUpperCase();
+            const size = document.getElementById(`ocr-size-${index}`).value.trim();
+            const itemDetails = document.getElementById(`ocr-item-${index}`).value.trim();
+
+            let message = '';
+            if (!bl) message = 'Please enter the Bill of Lading number first.';
+            else if (!containerNo) message = 'Container number is required.';
+            else if (!size) message = 'Container size is required.';
+            else if (!itemDetails) message = 'Item details are required.';
+
+            if (message) {
+                errorEl.textContent = message;
+                errorEl.classList.add('visible');
+                return;
+            }
+
+            fetch('{{ route('cmdts.containers.add') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        BL: bl,
+                        ContainerNo: containerNo,
+                        SealNo: sealNo,
+                        Size: size,
+                        ItemDetails: itemDetails
+                    }),
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        renderContainersTable(data.containers);
+                        removeOcrContainerCmdts(index);
+                    } else {
+                        errorEl.textContent = data.message ?? 'Failed to add container.';
+                        errorEl.classList.add('visible');
+                    }
+                })
+                .catch(() => {
+                    errorEl.textContent = 'Something went wrong adding this container.';
+                    errorEl.classList.add('visible');
+                });
+        }
+
+        function removeOcrContainerCmdts(index) {
+            const card = document.getElementById(`ocr-card-cmdts-${index}`);
+            if (card) card.remove();
+        }
+
         // ── Add container to staging ──
         function addContainer() {
             const btn = document.getElementById('modal-add-btn');
@@ -485,19 +780,19 @@
             </thead>
             <tbody>
                 ${containers.map(c => `
-                                                            <tr>
-                                                                <td class="td-mono">${c.ContainerNo}</td>
-                                                                <td class="td-muted">${c.Size}ft</td>
-                                                                <td class="td-muted">${c.SealNo || '—'}</td>
-                                                                <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
-                                                                <td style="text-align: center;">
-                                                                    <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
-                                                                        <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                                        </svg>
-                                                                    </button>
-                                                                </td>
-                                                            </tr>`).join('')}
+                                                                                        <tr>
+                                                                                            <td class="td-mono">${c.ContainerNo}</td>
+                                                                                            <td class="td-muted">${c.Size}ft</td>
+                                                                                            <td class="td-muted">${c.SealNo || '—'}</td>
+                                                                                            <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
+                                                                                            <td style="text-align: center;">
+                                                                                                <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
+                                                                                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                                                                    </svg>
+                                                                                                </button>
+                                                                                            </td>
+                                                                                        </tr>`).join('')}
             </tbody>
         </table>`;
         }

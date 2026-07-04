@@ -234,7 +234,13 @@ class BLParserService
             'For the Containers array, create one object per container found on the document. ' .
             'If a container has its own weight stated explicitly on the document, use that exact value. ' .
             'If only a combined total weight is given for all containers, leave each container Weight as empty string "" ' .
-            'and place the combined figure in TotalGrossWeight instead.' .
+            'and place the combined figure in TotalGrossWeight instead. ' .
+            'Container size may be labeled differently depending on the shipping line — look for labels such as ' .
+            '"Size/Type", "Type/Size", "Container Type", "Equipment Type", or values embedded directly next to the ' .
+            'container number (e.g. "1x40HC", "20\'GP", "40GP"). Extract only the size portion (e.g. 20, 40, 40HC, 40HQ, 45HC). ' .
+            'Item description may also be labeled differently — look for "Description of Goods", "Commodity", ' .
+            '"Cargo Description", "Said to Contain", or similar. If the description is given once for the whole shipment ' .
+            'rather than per container, repeat that same description for every container in the Containers array.' .
             "\n\nReturn exactly this JSON structure:\n" .
             '{
                 "MainBL": "Master Bill of Lading number",
@@ -267,7 +273,8 @@ class BLParserService
                         "ContainerNo": "container number",
                         "SealNo": "seal number for this container",
                         "Size": "container size e.g. 20, 40, 40HQ, 40HC",
-                        "Weight": "this specific container weight as number only in KG, or empty string if only a combined total is given"
+                        "Weight": "this specific container weight as number only in KG, or empty string if only a combined total is given",
+                        "ItemDetails": "description of goods/cargo for this container"
                     }
                 ]
             }';
@@ -342,9 +349,9 @@ class BLParserService
                 $value = trim((string) $value);
 
                 if ($value === '') {
-                    // Weight empty is expected when BL only gives a combined total
-                    // ContainerNo/SealNo/Size empty is more concerning
-                    $confidence = $key === 'Weight' ? 0.4 : 0.3;
+                    // Weight/ItemDetails empty is expected — combined totals or shipment-level
+                    // description are common; ContainerNo/SealNo/Size empty is more concerning
+                    $confidence = in_array($key, ['Weight', 'ItemDetails']) ? 0.4 : 0.3;
                     $status     = 'empty';
                 } else {
                     $confidence = $this->scoreContainerValue($key, $value);
