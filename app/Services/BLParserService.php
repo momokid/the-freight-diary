@@ -242,9 +242,10 @@ class BLParserService
             '"Cargo Description", "Said to Contain", or similar. If the description is given once for the whole shipment ' .
             'rather than per container, repeat that same description for every container in the Containers array.' .
             "\n\nReturn exactly this JSON structure:\n" .
-            '{
+            '{triggerConsigneeOcrSearch
                 "MainBL": "Master Bill of Lading number",
                 "VesselName": "name of the vessel or ship",
+                "ShippingLine": "the carrier/shipping line company name if explicitly stated on the document (e.g. Maersk, MSC, CMA CGM, ONE) — leave empty string if only the vessel name is given and no separate carrier/line name appears",
                 "VoyageNo": "voyage number",
                 "POIS": "place of issue",
                 "DOIS": "date of issue in YYYY-MM-DD format",
@@ -390,6 +391,64 @@ class BLParserService
         return 0.75;
     }
 
+
+    // Match extracted carrier name against actual carrier list
+    public function matchCarrier(string $extractedName, array $carriers): array
+    {
+        $extractedName = trim($extractedName);
+
+        if ($extractedName === '' || empty($carriers)) {
+            return [
+                'CarrierID'   => null,
+                'CarrierName' => null,
+                'confidence'  => 0.0,
+                'status'      => 'empty',
+            ];
+        }
+
+        // ── Exact match (case-insensitive) always wins outright ──
+        foreach ($carriers as $carrier) {
+            if (strcasecmp(trim($carrier['CarrierName']), $extractedName) === 0) {
+                return [
+                    'CarrierID'   => $carrier['CarrierID'],
+                    'CarrierName' => $carrier['CarrierName'],
+                    'confidence'  => 1.0,
+                    'status'      => 'ok',
+                ];
+            }
+        }
+
+        // ── No exact match — fall back to similarity scoring ──
+        $best = ['CarrierID' => null, 'CarrierName' => null, 'score' => 0.0];
+
+        foreach ($carriers as $carrier) {
+            similar_text(
+                strtoupper($extractedName),
+                strtoupper($carrier['CarrierName']),
+                $percent
+            );
+            $score = $percent / 100;
+
+            if ($score > $best['score']) {
+                $best = [
+                    'CarrierID'   => $carrier['CarrierID'],
+                    'CarrierName' => $carrier['CarrierName'],
+                    'score'       => $score,
+                ];
+            }
+        }
+
+        $status = $best['score'] >= self::HIGH   ? 'ok'
+            : ($best['score'] >= self::MEDIUM ? 'review' : 'low');
+
+        return [
+            'CarrierID'   => $best['CarrierID'],
+            'CarrierName' => $best['CarrierName'],
+            'confidence'  => round($best['score'], 2),
+            'status'      => $status,
+        ];
+    }
+
     private function scoreValue(string $key, string $value, array $critical): float
     {
         if (in_array($key, ['DOIS', 'SOB', 'ETA'])) {
@@ -412,9 +471,60 @@ class BLParserService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Match an extracted text value against any list of {id, label} options
+    // Used for any <select> field matched post-OCR (carrier, shipper, POL, POD, etc.)
+    // ─────────────────────────────────────────────────────────────────────────
+    public function matchOption(string $extractedValue, array $options): array
+    {
+        $extractedValue = trim($extractedValue);
+
+        if ($extractedValue === '' || empty($options)) {
+            return [
+                'id'         => null,
+                'label'      => null,
+                'confidence' => 0.0,
+                'status'     => 'empty',
+            ];
+        }
+
+        // ── Exact match (case-insensitive) always wins outright ──
+        foreach ($options as $option) {
+            if (strcasecmp(trim($option['label']), $extractedValue) === 0) {
+                return [
+                    'id'         => $option['id'],
+                    'label'      => $option['label'],
+                    'confidence' => 1.0,
+                    'status'     => 'ok',
+                ];
+            }
+        }
+
+        // ── No exact match — fall back to similarity scoring ──
+        $best = ['id' => null, 'label' => null, 'score' => 0.0];
+
+        foreach ($options as $option) {
+            similar_text(strtoupper($extractedValue), strtoupper($option['label']), $percent);
+            $score = $percent / 100;
+
+            if ($score > $best['score']) {
+                $best = ['id' => $option['id'], 'label' => $option['label'], 'score' => $score];
+            }
+        }
+
+        $status = $best['score'] >= self::HIGH   ? 'ok'
+            : ($best['score'] >= self::MEDIUM ? 'review' : 'low');
+
+        return [
+            'id'         => $best['id'],
+            'label'      => $best['label'],
+            'confidence' => round($best['score'], 2),
+            'status'     => $status,
+        ];
+    }
+
     // Parse JSON from model response
     // Strips markdown fences if present
-    // ─────────────────────────────────────────────────────────────────────────
+
     private function parseJson(string $text): ?array
     {
         $clean = preg_replace('/```json|```/i', '', $text);

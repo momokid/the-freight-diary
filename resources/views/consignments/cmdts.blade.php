@@ -332,6 +332,23 @@
             searchTimer = setTimeout(searchConsignees, 400);
         }
 
+        function renderConsigneeDropdown(data) {
+            const dropdown = document.getElementById('consignee-dropdown');
+            if (!data.length) {
+                dropdown.style.display = 'none';
+                return;
+            }
+            dropdown.innerHTML = data.map(c => `
+            <div onclick="selectConsignee(${c.ConsigneeID}, '${c.FullName.replace(/'/g, "\\'")}')"
+                style="padding: 10px 14px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border-color);"
+                onmouseover="this.style.background='var(--content-bg)'"
+                onmouseout="this.style.background=''">
+                <div style="font-weight: 500; color: var(--text-primary);">${c.FullName}</div>
+                <div style="color: var(--text-muted); font-size: 0.75rem;">${c.TelNo}</div>
+            </div>`).join('');
+            dropdown.style.display = 'block';
+        }
+
         function searchConsignees() {
             const q = document.getElementById('consignee-search').value.trim();
             const dropdown = document.getElementById('consignee-dropdown');
@@ -347,20 +364,34 @@
                     }
                 })
                 .then(res => res.json())
+                .then(data => renderConsigneeDropdown(data));
+        }
+
+        function triggerConsigneeOcrSearch(name) {
+            document.getElementById('consignee-search').value = name;
+
+            fetch(`{{ route('cmdts.consignee-search') }}?q=${encodeURIComponent(name)}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(res => res.json())
                 .then(data => {
-                    if (!data.length) {
-                        dropdown.style.display = 'none';
+                    const exact = data.find(c => c.FullName.trim().toUpperCase() === name.trim().toUpperCase());
+
+                    if (exact) {
+                        selectConsignee(exact.ConsigneeID, exact.FullName);
+                        applyConfidenceCmdts('consignee-search', 'ok');
                         return;
                     }
-                    dropdown.innerHTML = data.map(c => `
-            <div onclick="selectConsignee(${c.ConsigneeID}, '${c.FullName.replace(/'/g, "\\'")}')"
-                style="padding: 10px 14px; cursor: pointer; font-size: 0.8rem; border-bottom: 1px solid var(--border-color);"
-                onmouseover="this.style.background='var(--content-bg)'"
-                onmouseout="this.style.background=''">
-                <div style="font-weight: 500; color: var(--text-primary);">${c.FullName}</div>
-                <div style="color: var(--text-muted); font-size: 0.75rem;">${c.TelNo}</div>
-            </div>`).join('');
-                    dropdown.style.display = 'block';
+
+                    if (data.length) {
+                        renderConsigneeDropdown(data);
+                        applyConfidenceCmdts('consignee-search', 'review');
+                    } else {
+                        // No match at all — leave empty for manual entry, per Option 2
+                        applyConfidenceCmdts('consignee-search', 'empty');
+                    }
                 });
         }
 
@@ -520,7 +551,16 @@
                     }
 
                     fillFieldCmdts('eta', f.ETA);
-                    matchDropdownCmdts('carrier-id', f.VesselName);
+
+                    if (data.matches && data.matches.carrier) {
+                        const cm = data.matches.carrier;
+                        if (cm.id) document.getElementById('carrier-id').value = cm.id;
+                        applyConfidenceCmdts('carrier-id', cm.status);
+                    }
+
+                    if (f.ConsigneeName && f.ConsigneeName.value) {
+                        triggerConsigneeOcrSearch(f.ConsigneeName.value);
+                    }
 
                     renderContainerPreviewCmdts(f.Containers);
 
@@ -780,19 +820,19 @@
             </thead>
             <tbody>
                 ${containers.map(c => `
-                                                                                        <tr>
-                                                                                            <td class="td-mono">${c.ContainerNo}</td>
-                                                                                            <td class="td-muted">${c.Size}ft</td>
-                                                                                            <td class="td-muted">${c.SealNo || '—'}</td>
-                                                                                            <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
-                                                                                            <td style="text-align: center;">
-                                                                                                <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
-                                                                                                    <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                                                                    </svg>
-                                                                                                </button>
-                                                                                            </td>
-                                                                                        </tr>`).join('')}
+                                                                                                                    <tr>
+                                                                                                                        <td class="td-mono">${c.ContainerNo}</td>
+                                                                                                                        <td class="td-muted">${c.Size}ft</td>
+                                                                                                                        <td class="td-muted">${c.SealNo || '—'}</td>
+                                                                                                                        <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
+                                                                                                                        <td style="text-align: center;">
+                                                                                                                            <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
+                                                                                                                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                                                                                                </svg>
+                                                                                                                            </button>
+                                                                                                                        </td>
+                                                                                                                    </tr>`).join('')}
             </tbody>
         </table>`;
         }
@@ -1041,5 +1081,13 @@
             document.getElementById('release-type').appendChild(opt);
             document.getElementById('release-type').value = id;
         };
+
+        // ── Clear OCR confidence on manual edit ──
+        ['bl', 'eta'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => clearConfidenceCmdts(id));
+        });
+
+        document.getElementById('carrier-id').addEventListener('change', () => clearConfidenceCmdts('carrier-id'));
     </script>
 @endpush

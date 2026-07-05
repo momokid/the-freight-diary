@@ -359,27 +359,53 @@ class ConsignmentController extends Controller
     }
 
     //extract from BL for container_main fields
-    public function extractFromBL(Request $request)
-    {
-        $request->validate([
-            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
-        ]);
+   public function extractFromBL(Request $request)
+{
+    $request->validate([
+        'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+    ]);
 
-        $result = (new \App\Services\BLParserService())->extract($request->file('file'));
+    $parser = new \App\Services\BLParserService();
+    $result = $parser->extract($request->file('file'));
 
-        if (! $result['success']) {
-            return response()->json([
-                'success' => false,
-                'message' => $result['message'] ?? 'Extraction failed.',
-            ], 500);
+    if (! $result['success']) {
+        return response()->json([
+            'success' => false,
+            'message' => $result['message'] ?? 'Extraction failed.',
+        ], 500);
+    }
+
+    $optionSources = [
+        'carrier' => ['table' => 'ship_carrier', 'idCol' => 'CarrierID', 'labelCol' => 'CarrierName', 'field' => 'ShippingLine', 'fallback' => 'VesselName'],
+        'shipper' => ['table' => 'shipper_main',  'idCol' => 'ShipperID', 'labelCol' => 'ShipperName', 'field' => 'ShipperName'],
+        'pol'     => ['table' => 'pol',           'idCol' => 'POL_ID',    'labelCol' => 'POL_Name',    'field' => 'POL'],
+        'pod'     => ['table' => 'pod',           'idCol' => 'POD_ID',    'labelCol' => 'POD_Name',    'field' => 'POD'],
+    ];
+
+    $matches = [];
+
+    foreach ($optionSources as $key => $src) {
+        $options = \Illuminate\Support\Facades\DB::table($src['table'])
+            ->select("{$src['idCol']} as id", "{$src['labelCol']} as label")
+            ->get()
+            ->map(fn ($o) => (array) $o)
+            ->toArray();
+
+        $text = $result['fields'][$src['field']]['value'] ?? '';
+        if ($text === '' && isset($src['fallback'])) {
+            $text = $result['fields'][$src['fallback']]['value'] ?? '';
         }
 
-        return response()->json([
-            'success'  => true,
-            'fields'   => $result['fields'],
-            'provider' => $result['provider'],
-        ]);
+        $matches[$key] = $parser->matchOption($text, $options);
     }
+
+    return response()->json([
+        'success'  => true,
+        'fields'   => $result['fields'],
+        'provider' => $result['provider'],
+        'matches'  => $matches,
+    ]);
+}
 
     public function sendNotification(Request $request, ClientNotificationService $notification)
     {
