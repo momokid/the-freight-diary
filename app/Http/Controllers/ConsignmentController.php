@@ -359,53 +359,104 @@ class ConsignmentController extends Controller
     }
 
     //extract from BL for container_main fields
-   public function extractFromBL(Request $request)
-{
-    $request->validate([
-        'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
-    ]);
+    public function extractFromBL(Request $request)
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
+        ]);
 
-    $parser = new \App\Services\BLParserService();
-    $result = $parser->extract($request->file('file'));
+        $file = $request->file('file');
+        $hash = hash_file('sha256', $file->getRealPath());
 
-    if (! $result['success']) {
-        return response()->json([
-            'success' => false,
-            'message' => $result['message'] ?? 'Extraction failed.',
-        ], 500);
-    }
+        // ── Cache check ──
+        $cached = DB::table('ocr_cache')
+            ->where('FileHash', $hash)
+            ->where('ExpiresAt', '>', now())
+            ->first();
 
-    $optionSources = [
-        'carrier' => ['table' => 'ship_carrier', 'idCol' => 'CarrierID', 'labelCol' => 'CarrierName', 'field' => 'ShippingLine', 'fallback' => 'VesselName'],
-        'shipper' => ['table' => 'shipper_main',  'idCol' => 'ShipperID', 'labelCol' => 'ShipperName', 'field' => 'ShipperName'],
-        'pol'     => ['table' => 'pol',           'idCol' => 'POL_ID',    'labelCol' => 'POL_Name',    'field' => 'POL'],
-        'pod'     => ['table' => 'pod',           'idCol' => 'POD_ID',    'labelCol' => 'POD_Name',    'field' => 'POD'],
-    ];
+        if ($cached) {
+            DB::table('ocr_cache')->where('ID', $cached->ID)->increment('HitCount');
+            $result = json_decode($cached->Result, true);
 
-    $matches = [];
-
-    foreach ($optionSources as $key => $src) {
-        $options = \Illuminate\Support\Facades\DB::table($src['table'])
-            ->select("{$src['idCol']} as id", "{$src['labelCol']} as label")
-            ->get()
-            ->map(fn ($o) => (array) $o)
-            ->toArray();
-
-        $text = $result['fields'][$src['field']]['value'] ?? '';
-        if ($text === '' && isset($src['fallback'])) {
-            $text = $result['fields'][$src['fallback']]['value'] ?? '';
+            return response()->json(array_merge($result, ['cached' => true]));
         }
 
-        $matches[$key] = $parser->matchOption($text, $options);
-    }
+        // ── Cache miss — compress (if possible) then extract ──
+        $parser = new \App\Services\BLParserService();
+        $compressed = $parser->compressForOcr($file->getRealPath(), $file->getMimeType());
 
-    return response()->json([
-        'success'  => true,
-        'fields'   => $result['fields'],
-        'provider' => $result['provider'],
-        'matches'  => $matches,
-    ]);
-}
+        $fileForExtraction = $compressed['path'] === $file->getRealPath()
+            ? $file
+            : new \Illuminate\Http\UploadedFile(
+                $compressed['path'],
+                $file->getClientOriginalName(),
+                $compressed['mime'],
+                null,
+                true
+            );
+
+        $result = $parser->extract($fileForExtraction);
+
+        if (! $result['success']) {
+            return response()->json([
+                'success' => false,
+                'message' => $result['message'] ?? 'Extraction failed.',
+            ], 500);
+        }
+
+        $containers  = $result['fields']['Containers'] ?? [];
+        $totalWeight = $result['fields']['TotalGrossWeight']['value'] ?? '';
+
+        if (count($containers) === 1 && empty($containers[0]['Weight']['value']) && $totalWeight !== '') {
+            $result['fields']['Containers'][0]['Weight'] = [
+                'value'      => $totalWeight,
+                'confidence' => 0.75,
+                'status'     => 'review',
+            ];
+        }
+
+        $optionSources = [
+            'carrier' => ['table' => 'ship_carrier', 'idCol' => 'CarrierID', 'labelCol' => 'CarrierName', 'field' => 'ShippingLine', 'fallback' => 'VesselName'],
+            'shipper' => ['table' => 'shipper_main',  'idCol' => 'ShipperID', 'labelCol' => 'ShipperName', 'field' => 'ShipperName'],
+            'pol'     => ['table' => 'pol',           'idCol' => 'POL_ID',    'labelCol' => 'POL_Name',    'field' => 'POL'],
+            'pod'     => ['table' => 'pod',           'idCol' => 'POD_ID',    'labelCol' => 'POD_Name',    'field' => 'POD'],
+        ];
+
+        $matches = [];
+        foreach ($optionSources as $key => $src) {
+            $options = DB::table($src['table'])
+                ->select("{$src['idCol']} as id", "{$src['labelCol']} as label")
+                ->get()
+                ->map(fn($o) => (array) $o)
+                ->toArray();
+
+            $text = $result['fields'][$src['field']]['value'] ?? '';
+            if ($text === '' && isset($src['fallback'])) {
+                $text = $result['fields'][$src['fallback']]['value'] ?? '';
+            }
+
+            $matches[$key] = $parser->matchOption($text, $options);
+        }
+
+        $response = [
+            'success'  => true,
+            'fields'   => $result['fields'],
+            'provider' => $result['provider'],
+            'matches'  => $matches,
+        ];
+
+        // ── Save to cache ──
+        DB::table('ocr_cache')->insert([
+            'FileHash'  => $hash,
+            'Result'    => json_encode($response),
+            'Provider'  => $result['provider'],
+            'HitCount'  => 1,
+            'CreatedAt' => now(),
+            'ExpiresAt' => now()->addDays(30),
+        ]);
+
+        return response()->json($response);
+    }
 
     public function sendNotification(Request $request, ClientNotificationService $notification)
     {

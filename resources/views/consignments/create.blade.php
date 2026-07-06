@@ -1114,16 +1114,24 @@
 
                     renderContainerPreview(f.Containers);
 
-                    // POL and POD — match extracted port name against dropdown options
-                    matchDropdown('pol-id', f.POL);
-                    matchDropdown('pod-id', f.POD);
+                    if (f.TotalGrossWeight && f.TotalGrossWeight.value) {
+                        document.getElementById('summary-weight').textContent = f.TotalGrossWeight.value +
+                            ' KG (extracted — pending)';
+                    }
 
-                    // Carrier — match vessel name against carrier dropdown
-                    // e.g. "MSC MICOL" → matches "MSC Line" if option contains "MSC"
-                    matchDropdown('carrier-id', f.VesselName);
+                    // NEW
+                    ['carrier', 'shipper', 'pol', 'pod'].forEach(key => {
+                        const m = data.matches && data.matches[key];
+                        if (!m) return;
 
-                    // Shipper — match extracted shipper name against shipper dropdown
-                    matchDropdown('shipper-id', f.ShipperName);
+                        const selectId = key === 'carrier' ? 'carrier-id' :
+                            key === 'shipper' ? 'shipper-id' :
+                            key === 'pol' ? 'pol-id' :
+                            'pod-id';
+
+                        if (m.id) document.getElementById(selectId).value = m.id;
+                        applyConfidence(selectId, m.status);
+                    });
 
                     // ── Success state ────
                     statusTextEl.textContent = '✓ Fields extracted — review highlighted fields';

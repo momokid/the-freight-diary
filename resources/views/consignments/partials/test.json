@@ -1,0 +1,191 @@
+{
+    "success": true,
+    "fields": {
+        "MainBL": {
+            "value": "MEDU9898550",
+            "confidence": 0.9,
+            "status": "ok"
+        },
+        "VesselName": {
+            "value": "MSC ARINA",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "ShippingLine": {
+            "value": "MSC Mediterranean Shipping Company",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "VoyageNo": {
+            "value": "FY619A",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "POIS": {
+            "value": "GUANGZHOU",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "DOIS": {
+            "value": "",
+            "confidence": 0.5,
+            "status": "empty"
+        },
+        "SOB": {
+            "value": "",
+            "confidence": 0.5,
+            "status": "empty"
+        },
+        "POL": {
+            "value": "NANSHA, CHINA",
+            "confidence": 0.8,
+            "status": "review"
+        },
+        "POD": {
+            "value": "TEMA, GHANA",
+            "confidence": 0.8,
+            "status": "review"
+        },
+        "Destination": {
+            "value": "TEMA, GHANA",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "ETA": {
+            "value": "",
+            "confidence": 0.5,
+            "status": "empty"
+        },
+        "ShipperName": {
+            "value": "GUANGZHOU LIANRUIFENG TRADING CO., LTD.",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "ShipperAddress": {
+            "value": "ROOM E392, UNIT 407 AND 408, NO. 4, LINGSHAN EAST ROAD, TIANHE DISTRICT, GUANGZHOU",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "ConsigneeName": {
+            "value": "FRESH STAYS ENTERPRISE",
+            "confidence": 0.8,
+            "status": "review"
+        },
+        "ConsigneeAddress": {
+            "value": "BOX 7222 ACCRA-GA\/R GHANA WEST AFRICA",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "ConsigneeTel": {
+            "value": "+233244229050",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "NotifyParty": {
+            "value": "FRESH STAYS ENTERPRISE, BOX 7222 ACCRA-GA\/R GHANA WEST AFRICA; Second Notify Party: TOP VICTORY INTERNATIONAL TRADING CO.,LIMITED, FLAT\/RM 917B BLK A 9\/F NEW MANDARIN PLAZA NO 14 SCIENCE MUSEUM ROAD TSIMSHATSUI KL",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "Description": {
+            "value": "LOT OF ACCESSORIES AUTOPARTS",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "HSCode": {
+            "value": "",
+            "confidence": 0.5,
+            "status": "empty"
+        },
+        "TotalGrossWeight": {
+            "value": "6510.000",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "TotalVolume": {
+            "value": "68.000",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "Packages": {
+            "value": "400",
+            "confidence": 0.9,
+            "status": "ok"
+        },
+        "PackageUnit": {
+            "value": "Package(s)",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "MarksAndNumbers": {
+            "value": "N\/M",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "FreightTerms": {
+            "value": "PREPAID",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "ContractNo": {
+            "value": "154090-98-999-ST",
+            "confidence": 0.75,
+            "status": "review"
+        },
+        "Containers": [
+            {
+                "ContainerNo": {
+                    "value": "CAIU9060810",
+                    "confidence": 0.95,
+                    "status": "ok"
+                },
+                "SealNo": {
+                    "value": "FJ26691660",
+                    "confidence": 0.75,
+                    "status": "review"
+                },
+                "Size": {
+                    "value": "40",
+                    "confidence": 0.9,
+                    "status": "ok"
+                },
+                "Weight": {
+                    "value": "",
+                    "confidence": 0.4,
+                    "status": "empty"
+                },
+                "ItemDetails": {
+                    "value": "LOT OF ACCESSORIES AUTOPARTS",
+                    "confidence": 0.75,
+                    "status": "review"
+                }
+            }
+        ]
+    },
+    "provider": "claude",
+    "matches": {
+        "carrier": {
+            "id": 509,
+            "label": "PANACEA SHIPPING",
+            "confidence": 0.52,
+            "status": "low"
+        },
+        "shipper": {
+            "id": 417,
+            "label": "GHASSAN ABOUD CAR TRADING LTD.",
+            "confidence": 0.61,
+            "status": "review"
+        },
+        "pol": {
+            "id": 220,
+            "label": "Assin",
+            "confidence": 0.44,
+            "status": "low"
+        },
+        "pod": {
+            "id": 300,
+            "label": "Tema, Ghana",
+            "confidence": 1,
+            "status": "ok"
+        }
+    }
+}

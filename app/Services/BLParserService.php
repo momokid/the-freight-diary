@@ -223,6 +223,52 @@ class BLParserService
         }
     }
 
+    public function compressForOcr(string $filePath, string $mimeType): array
+    {
+        if (! extension_loaded('imagick')) {
+            return ['path' => $filePath, 'mime' => $mimeType]; // no-op locally
+        }
+
+        try {
+            $isPdf = $mimeType === 'application/pdf';
+            $imagick = new \Imagick();
+
+            if ($isPdf) {
+                $imagick->setResolution(150, 150);
+                $imagick->readImage($filePath); // reads ALL pages, not just [0]
+            } else {
+                $imagick->readImage($filePath);
+            }
+
+            foreach ($imagick as $page) {
+                $page->setImageColorspace(\Imagick::COLORSPACE_GRAY);
+
+                $geometry = $page->getImageGeometry();
+                if ($geometry['width'] > 1600) {
+                    $page->resizeImage(1600, 0, \Imagick::FILTER_LANCZOS, 1);
+                }
+
+                $page->setImageCompressionQuality(80);
+            }
+
+            $outputPath = sys_get_temp_dir() . '/' . uniqid('ocr_', true) . ($isPdf ? '.pdf' : '.jpg');
+
+            if ($isPdf) {
+                $imagick->setImageFormat('jpeg'); // per-page compression codec inside the PDF
+                $imagick->writeImages($outputPath, true); // true = adjoin all pages into one file
+            } else {
+                $imagick->setImageFormat('jpeg');
+                $imagick->writeImage($outputPath);
+            }
+
+            $imagick->clear();
+            $imagick->destroy();
+
+            return ['path' => $outputPath, 'mime' => $isPdf ? 'application/pdf' : 'image/jpeg'];
+        } catch (\Throwable $e) {
+            return ['path' => $filePath, 'mime' => $mimeType]; // never block OCR over a compression failure
+        }
+    }
 
     // Prompt
     private function buildPrompt(): string
@@ -237,7 +283,8 @@ class BLParserService
             'and place the combined figure in TotalGrossWeight instead. ' .
             'Container size may be labeled differently depending on the shipping line — look for labels such as ' .
             '"Size/Type", "Type/Size", "Container Type", "Equipment Type", or values embedded directly next to the ' .
-            'container number (e.g. "1x40HC", "20\'GP", "40GP"). Extract only the size portion (e.g. 20, 40, 40HC, 40HQ, 45HC). ' .
+            'container number (e.g. "1x40HC", "20\'GP", "40GP"). Extract only the two-digit size number, stripping any suffix such as HC, HQ, GP, RF, or ft ' .
+            '(e.g. "40HC" → "40", "20\'GP" → "20", "45HQ" → "45"). ' .
             'Item description may also be labeled differently — look for "Description of Goods", "Commodity", ' .
             '"Cargo Description", "Said to Contain", or similar. If the description is given once for the whole shipment ' .
             'rather than per container, repeat that same description for every container in the Containers array.' .
@@ -380,7 +427,7 @@ class BLParserService
         }
 
         if ($key === 'Size') {
-            return preg_match('/^\d{2}[A-Z]{0,2}$/', $value) ? 0.90 : 0.60;
+            return preg_match('/^\d{2}$/', $value) ? 0.90 : 0.60;
         }
 
         if ($key === 'Weight') {

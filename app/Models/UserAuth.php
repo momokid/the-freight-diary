@@ -44,6 +44,7 @@ class UserAuth extends Model
         'ManagementReport',
         'MessagingCenter',
         'SendArrivalSms',
+        'Hashing',
     ];
 
     protected $table = 'user_auth';
