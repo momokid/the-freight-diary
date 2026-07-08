@@ -195,6 +195,11 @@ Route::middleware('auth')->group(function () {
             Route::post('/user-privilege/reset-password', [UserPrivilegeController::class, 'resetPassword'])->name('user-privilege.reset-password');
         });
 
+        Route::middleware('permission:Hashing')->prefix('ocr-cache')->name('ocr-cache.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Settings\OcrCacheController::class, 'index'])->name('index');
+            Route::delete('/clear', [\App\Http\Controllers\Settings\OcrCacheController::class, 'clearAll'])->name('clear');
+        });
+
         // Ledger Control — requires BasicConfig permission
         Route::middleware('permission:BasicConfig')->group(function () {
             // Ledger Control routes
