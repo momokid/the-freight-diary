@@ -106,13 +106,13 @@
                                 User Privilege
                             </a>
                         @endif
+                        @if (isset($userAuth) && $userAuth->hasPermission('Hashing'))
+                            <a href="{{ route('settings.ocr-cache.index') }}"
+                                class="submenu-link {{ request()->routeIs('settings.ocr-cache.*') ? 'active' : '' }}">
+                                OCR Cache Monitor
+                            </a>
+                        @endif
                     </div>
-                    @if (isset($userAuth) && $userAuth->hasPermission('Hashing'))
-                        <a href="{{ route('settings.ocr-cache.index') }}"
-                            class="submenu-link {{ request()->routeIs('settings.ocr-cache.*') ? 'active' : '' }}">
-                            OCR Cache Monitor
-                        </a>
-                    @endif
                 </div>
             @endif
 
