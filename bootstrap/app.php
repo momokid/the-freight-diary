@@ -25,6 +25,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // security headers on every response
         $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
     })
-    ->withExceptions(function (Exceptions $exceptions): void {
-        //
+    ->withExceptions(function (Exceptions $exceptions) {
+        $exceptions->reportable(function (\Throwable $e) {
+            $username = null;
+            try {
+                $username = \Illuminate\Support\Facades\Auth::check()
+                    ? \Illuminate\Support\Facades\Auth::user()->ID
+                    : null;
+            } catch (\Throwable $authError) {
+                // console context or auth not bootstrapped — leave username null
+            }
+
+            app(\App\Services\ErrorLogService::class)->logException(
+                $e,
+                request()?->path(),
+                $username
+            );
+        });
     })->create();

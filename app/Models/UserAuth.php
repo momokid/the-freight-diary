@@ -45,6 +45,7 @@ class UserAuth extends Model
         'MessagingCenter',
         'SendArrivalSms',
         'Hashing',
+        'ErrorLogTicket',
     ];
 
     protected $table = 'user_auth';

@@ -67,6 +67,7 @@ class UserPrivilegeController extends Controller
                 'EditDisbursementAnalysis' => 'Edit Disbursement Analysis',
                 'Hashing' => 'Hashing',
                 'ReportVisibility' => 'Report Visibility (Full Access)',
+                'ErrorLogTicket' => 'Error Log Tickets',
             ],
         ];
 

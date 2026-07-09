@@ -200,6 +200,25 @@ Route::middleware('auth')->group(function () {
             Route::delete('/clear', [\App\Http\Controllers\Settings\OcrCacheController::class, 'clearAll'])->name('clear');
         });
 
+        Route::middleware('permission:SystemSettings')->prefix('system-settings')->name('system-settings.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Settings\SystemSettingsController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Settings\SystemSettingsController::class, 'store'])->name('store');
+            Route::put('/{key}', [\App\Http\Controllers\Settings\SystemSettingsController::class, 'update'])->name('update');
+        });
+
+        Route::middleware('permission:ErrorLogTicket')->prefix('system-settings')->name('system-settings.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Settings\SystemSettingsController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Settings\SystemSettingsController::class, 'store'])->name('store');
+            Route::put('/{key}', [\App\Http\Controllers\Settings\SystemSettingsController::class, 'update'])->name('update');
+        });
+
+        Route::middleware('permission:ErrorLogTicket')->prefix('error-log')->name('error-log.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Settings\ErrorLogController::class, 'index'])->name('index');
+            Route::get('/data', [\App\Http\Controllers\Settings\ErrorLogController::class, 'data'])->name('data');
+            Route::get('/{id}', [\App\Http\Controllers\Settings\ErrorLogController::class, 'show'])->name('show');
+            Route::put('/{id}/status', [\App\Http\Controllers\Settings\ErrorLogController::class, 'updateStatus'])->name('status');
+        });
+
         // Ledger Control — requires BasicConfig permission
         Route::middleware('permission:BasicConfig')->group(function () {
             // Ledger Control routes

@@ -112,7 +112,29 @@
                                 OCR Cache Monitor
                             </a>
                         @endif
+                        @if (isset($userAuth) && $userAuth->hasPermission('ErrorLogTicket'))
+                            <a href="{{ route('settings.system-settings.index') }}"
+                                class="submenu-link {{ request()->routeIs('settings.system-settings.*') ? 'active' : '' }}">
+                                System Settings
+                            </a>
+                        @endif
                     </div>
+                </div>
+            @endif
+
+            {{-- Error logs --}}
+            @if (isset($userAuth) && $userAuth->hasPermission('ErrorLogTicket'))
+                <div class="nav-item-wrapper">
+                    <a href="{{ route('settings.error-log.index') }}"
+                        class="nav-link {{ request()->routeIs('settings.error-log.*') ? 'active' : '' }}">
+                        <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span class="nav-label">Error Log Tickets</span>
+                    </a>
+                    <div class="tooltip">Error Log Tickets</div>
                 </div>
             @endif
 

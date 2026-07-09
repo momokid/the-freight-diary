@@ -22,3 +22,11 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan migrate --force
+
+
+
+///////////////////////////////////////
+INSERT IGNORE INTO `system_settings` (`key`, `value`, `label`, `group`, `created_at`, `updated_at`)
+VALUES 
+  ('error_alert_email', NULL, 'Error Alert Email', 'error_log', NOW(), NOW()),
+  ('error_alert_phone', NULL, 'Error Alert Phone', 'error_log', NOW(), NOW());
