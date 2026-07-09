@@ -119,13 +119,13 @@
                     {{-- Row 3: Vessel Name, Voyage No --}}
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Vessel Name <span style="color: #ef4444;">*</span></label>
+                            <label class="form-label">Vessel Name <span style="color: #ef4444;"></span></label>
                             <input type="text" id="vessel-name" name="VesselName" placeholder="e.g. MSC EMMA"
                                 maxlength="80" class="form-input">
                             <p id="vessel-error" class="form-error"></p>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Voyage No <span style="color: #ef4444;">*</span></label>
+                            <label class="form-label">Voyage # <span style="color: #ef4444;">*</span></label>
                             <input type="text" id="voyage-no" name="VoyageNo" placeholder="e.g. 241N" maxlength="80"
                                 class="form-input">
                             <p id="voyage-error" class="form-error"></p>
@@ -197,7 +197,7 @@
                     {{-- Row 7: Rotation, Agent Contact --}}
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                         <div class="form-group" style="margin-bottom: 0;">
-                            <label class="form-label">Rotation # <span style="color: #ef4444;">*</span></label>
+                            <label class="form-label">Rotation # <span style="color: #ef4444;"></span></label>
                             <input type="text" id="rotation" name="Rotation" placeholder="e.g. RTN-2024-001"
                                 maxlength="30" class="form-input">
                             <p id="rotation-error" class="form-error"></p>
@@ -732,14 +732,12 @@
                 ['CarrierID', 'Carrier'],
                 ['ShipperID', 'Shipper'],
                 ['VesselName', 'Vessel Name'],
-                ['VoyageNo', 'Voyage No'],
                 ['BL', 'Bill of Lading'],
                 ['POIS', 'Place of Issue'],
                 ['DOIS', 'Date of Issue'],
                 ['SOB', 'Shipped on Board'],
                 ['POL_ID', 'Port of Loading'],
                 ['POD_ID', 'Port of Discharge'],
-                ['Rotation', 'Rotation #'],
                 ['Destination', 'Destination'],
                 ['Ownership', 'Ownership'],
             ];
