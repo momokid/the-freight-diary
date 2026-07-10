@@ -554,6 +554,12 @@ Route::middleware('auth')->group(function () {
                 Route::get('/consignment-status/export', [OperationsReportController::class, 'consignmentStatusExport'])
                     ->name('consignment-status.export');
 
+                //Consignment Lookup
+                Route::get('/consignment-lookup', [OperationsReportController::class, 'consignmentLookup'])
+                    ->name('consignment-lookup');
+                Route::get('/consignment-lookup/resolve', [OperationsReportController::class, 'resolveBL'])
+                    ->name('consignment-lookup.resolve');
+
                 // ── Consignment Detail Report ─────────────────────────────────────
                 Route::get('/consignment-detail', [OperationsReportController::class, 'consignmentDetail'])
                     ->name('consignment-detail');

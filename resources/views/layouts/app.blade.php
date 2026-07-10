@@ -531,6 +531,16 @@
             {{-- Right side --}}
             <div style="display: flex; align-items: center; gap: 8px;">
 
+                {{-- Consignment History --}}
+                <button onclick="window.ConsignmentHistory.open()" title="Consignment History"
+                    style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--topbar-btn-border); background: var(--topbar-btn-bg); color: var(--topbar-text); cursor: pointer;">
+                    <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </button>
+
                 {{-- HS Code Advisor  --}}
                 <button onclick="window.HSAdvisor.open()"
                     style="padding:6px 14px; background:#185FA5; color:#fff; border:none;
@@ -631,6 +641,9 @@
 
     {{-- ── HS Code Advisor Modal ── --}}
     @include('partials.hs-advisor-modal')
+
+    {{-- ── Consignment History Drawer ── --}}
+    @include('partials.consignment-history-drawer')
 
     {{-- SMS Modal --}}
     <x-sms-modal />

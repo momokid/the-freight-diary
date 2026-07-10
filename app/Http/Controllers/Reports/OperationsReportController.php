@@ -174,9 +174,14 @@ class OperationsReportController extends BaseReportController
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.consignment-status-print', compact(
-            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo'
+            'rows',
+            'summary',
+            'reportTitle',
+            'dateFrom',
+            'dateTo'
         ));
     }
+
 
     public function consignmentStatusExport(Request $request)
     {
@@ -213,19 +218,19 @@ class OperationsReportController extends BaseReportController
 
         // ── Data rows ────────────────────────────────────────────────────────
         foreach ($rows as $i => $r) {
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $r->ConsigneeName ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $r->ContainerNos ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->CmdtTypeID == 1 ? 'LCL' : 'FCL');
-            $sheet->setCellValue('F'.$dataRow, $statusLabels[$r->Status] ?? '-');
-            $sheet->setCellValue('G'.$dataRow, $r->AgeDays);
-            $sheet->setCellValue('H'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $r->ContainerNos ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->CmdtTypeID == 1 ? 'LCL' : 'FCL');
+            $sheet->setCellValue('F' . $dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('G' . $dataRow, $r->AgeDays);
+            $sheet->setCellValue('H' . $dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
 
             // Age warning — red bold if active and overdue
             if ($r->Status != 0 && $r->AgeDays > 7) {
-                $sheet->getStyle('G'.$dataRow)->getFont()->getColor()->setRGB('B91C1C');
-                $sheet->getStyle('G'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('G' . $dataRow)->getFont()->getColor()->setRGB('B91C1C');
+                $sheet->getStyle('G' . $dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
@@ -239,7 +244,7 @@ class OperationsReportController extends BaseReportController
 
         // ── Borders + stream ─────────────────────────────────────────────────
         $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'H');
-        $this->streamExcel($spreadsheet, 'consignment-status-'.now()->format('Ymd-His').'.xlsx');
+        $this->streamExcel($spreadsheet, 'consignment-status-' . now()->format('Ymd-His') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -274,7 +279,11 @@ class OperationsReportController extends BaseReportController
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.consignment-detail-print', compact(
-            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo'
+            'rows',
+            'summary',
+            'reportTitle',
+            'dateFrom',
+            'dateTo'
         ));
     }
 
@@ -315,26 +324,26 @@ class OperationsReportController extends BaseReportController
         foreach ($rows as $i => $r) {
             // LCL shows HBL count, FCL shows consignee name
             $consigneeCell = $r->CmdtTypeID == 1
-                ? ($r->HBLCount.' HBL'.($r->HBLCount != 1 ? 's' : ''))
+                ? ($r->HBLCount . ' HBL' . ($r->HBLCount != 1 ? 's' : ''))
                 : ($r->ConsigneeName ?? '-');
 
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
-            $sheet->setCellValue('C'.$dataRow, trim(($r->VesselName ?? '-').' / '.($r->VoyageNo ?? '-')));
-            $sheet->setCellValue('D'.$dataRow, $r->CarrierName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->ShipperName ?? '-');
-            $sheet->setCellValue('F'.$dataRow, $consigneeCell);
-            $sheet->setCellValue('G'.$dataRow, $r->POL_Name ?? '-');
-            $sheet->setCellValue('H'.$dataRow, $r->ContainerNos ?? '-');
-            $sheet->setCellValue('I'.$dataRow, $r->CmdtTypeID == 1 ? 'LCL' : 'FCL');
-            $sheet->setCellValue('J'.$dataRow, $statusLabels[$r->Status] ?? '-');
-            $sheet->setCellValue('K'.$dataRow, $r->AgeDays);
-            $sheet->setCellValue('L'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C' . $dataRow, trim(($r->VesselName ?? '-') . ' / ' . ($r->VoyageNo ?? '-')));
+            $sheet->setCellValue('D' . $dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->ShipperName ?? '-');
+            $sheet->setCellValue('F' . $dataRow, $consigneeCell);
+            $sheet->setCellValue('G' . $dataRow, $r->POL_Name ?? '-');
+            $sheet->setCellValue('H' . $dataRow, $r->ContainerNos ?? '-');
+            $sheet->setCellValue('I' . $dataRow, $r->CmdtTypeID == 1 ? 'LCL' : 'FCL');
+            $sheet->setCellValue('J' . $dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('K' . $dataRow, $r->AgeDays);
+            $sheet->setCellValue('L' . $dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
 
             // Age warning — red bold if active and overdue
             if ($r->Status != 0 && $r->AgeDays > 7) {
-                $sheet->getStyle('K'.$dataRow)->getFont()->getColor()->setRGB('B91C1C');
-                $sheet->getStyle('K'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('K' . $dataRow)->getFont()->getColor()->setRGB('B91C1C');
+                $sheet->getStyle('K' . $dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
@@ -342,9 +351,18 @@ class OperationsReportController extends BaseReportController
 
         // ── Column widths ────────────────────────────────────────────────────
         $widths = [
-            'A' => 5,  'B' => 20, 'C' => 24, 'D' => 18,
-            'E' => 22, 'F' => 22, 'G' => 16, 'H' => 24,
-            'I' => 8,  'J' => 14, 'K' => 12, 'L' => 18,
+            'A' => 5,
+            'B' => 20,
+            'C' => 24,
+            'D' => 18,
+            'E' => 22,
+            'F' => 22,
+            'G' => 16,
+            'H' => 24,
+            'I' => 8,
+            'J' => 14,
+            'K' => 12,
+            'L' => 18,
         ];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
@@ -352,7 +370,7 @@ class OperationsReportController extends BaseReportController
 
         // ── Borders + stream ─────────────────────────────────────────────────
         $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'L');
-        $this->streamExcel($spreadsheet, 'consignment-detail-'.now()->format('Ymd-His').'.xlsx');
+        $this->streamExcel($spreadsheet, 'consignment-detail-' . now()->format('Ymd-His') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -459,15 +477,21 @@ class OperationsReportController extends BaseReportController
         $lclCount = $rows->where('CmdtTypeID', 1)->count();
         $fclCount = $rows->where('CmdtTypeID', '!=', 1)->count();
 
-        $reportTitle = 'Consignment Carrier Report — '.$carrierName;
+        $reportTitle = 'Consignment Carrier Report — ' . $carrierName;
         $dateFrom = \Carbon\Carbon::parse($dateFrom)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($dateTo)->format('d M Y');
 
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.consignment-carrier-print', compact(
-            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo',
-            'carrierName', 'lclCount', 'fclCount'
+            'rows',
+            'summary',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'carrierName',
+            'lclCount',
+            'fclCount'
         ));
     }
 
@@ -502,7 +526,7 @@ class OperationsReportController extends BaseReportController
         // ── Header rows ──────────────────────────────────────────────────────
         $this->buildExcelHeader(
             $sheet,
-            'Consignment Carrier Report — '.$carrierName,
+            'Consignment Carrier Report — ' . $carrierName,
             \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
             \Carbon\Carbon::parse($dateTo)->format('d M Y'),
             'I'
@@ -510,7 +534,7 @@ class OperationsReportController extends BaseReportController
 
         // Row 5 — Carrier label
         $sheet->mergeCells('A5:I5');
-        $sheet->setCellValue('A5', 'Carrier: '.$carrierName);
+        $sheet->setCellValue('A5', 'Carrier: ' . $carrierName);
         $sheet->getStyle('A5')->getFont()->setBold(true)->setSize(10);
         $sheet->getStyle('A5')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
 
@@ -520,35 +544,42 @@ class OperationsReportController extends BaseReportController
 
         // ── Data rows ────────────────────────────────────────────────────────
         foreach ($rows as $i => $r) {
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $r->ETA ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
-            $sheet->setCellValue('D'.$dataRow, $r->ConsigneeName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->ContainerNos ?? '-');
-            $sheet->setCellValue('F'.$dataRow, $r->CommodityType ?? '-');
-            $sheet->setCellValue('G'.$dataRow, $statusLabels[$r->Status] ?? '-');
-            $sheet->setCellValue('H'.$dataRow, $r->AgeDays);
-            $sheet->setCellValue('I'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $r->ETA ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
+            $sheet->setCellValue('D' . $dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->ContainerNos ?? '-');
+            $sheet->setCellValue('F' . $dataRow, $r->CommodityType ?? '-');
+            $sheet->setCellValue('G' . $dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('H' . $dataRow, $r->AgeDays);
+            $sheet->setCellValue('I' . $dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
 
             // Age warning — red bold if active and overdue
             if ($r->Status != 0 && $r->AgeDays > 7) {
-                $sheet->getStyle('H'.$dataRow)->getFont()->getColor()->setRGB('B91C1C');
-                $sheet->getStyle('H'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('H' . $dataRow)->getFont()->getColor()->setRGB('B91C1C');
+                $sheet->getStyle('H' . $dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
         }
 
         // ── LCL / FCL totals row ─────────────────────────────────────────────
-        $sheet->setCellValue('A'.$dataRow, 'Totals');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('F'.$dataRow, 'LCL: '.$lclCount.'  |  FCL: '.$fclCount);
-        $sheet->getStyle('F'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Totals');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('F' . $dataRow, 'LCL: ' . $lclCount . '  |  FCL: ' . $fclCount);
+        $sheet->getStyle('F' . $dataRow)->getFont()->setBold(true);
 
         // ── Column widths ────────────────────────────────────────────────────
         $widths = [
-            'A' => 5,  'B' => 20, 'C' => 14, 'D' => 28,
-            'E' => 26, 'F' => 20, 'G' => 14, 'H' => 12, 'I' => 18,
+            'A' => 5,
+            'B' => 20,
+            'C' => 14,
+            'D' => 28,
+            'E' => 26,
+            'F' => 20,
+            'G' => 14,
+            'H' => 12,
+            'I' => 18,
         ];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
@@ -556,7 +587,7 @@ class OperationsReportController extends BaseReportController
 
         // ── Borders + stream ─────────────────────────────────────────────────
         $this->buildExcelBorders($sheet, 7, $dataRow - 1, 'I');
-        $this->streamExcel($spreadsheet, 'consignment-carrier-'.now()->format('Ymd-His').'.xlsx');
+        $this->streamExcel($spreadsheet, 'consignment-carrier-' . now()->format('Ymd-His') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -635,10 +666,10 @@ class OperationsReportController extends BaseReportController
     private function buildAgeSummary($rows): array
     {
         return [
-            'fresh' => $rows->filter(fn ($r) => $r->AgeDays <= 7)->count(),
-            'warning' => $rows->filter(fn ($r) => $r->AgeDays > 7 && $r->AgeDays <= 14)->count(),
-            'critical' => $rows->filter(fn ($r) => $r->AgeDays > 14 && $r->AgeDays <= 30)->count(),
-            'overdue' => $rows->filter(fn ($r) => $r->AgeDays > 30)->count(),
+            'fresh' => $rows->filter(fn($r) => $r->AgeDays <= 7)->count(),
+            'warning' => $rows->filter(fn($r) => $r->AgeDays > 7 && $r->AgeDays <= 14)->count(),
+            'critical' => $rows->filter(fn($r) => $r->AgeDays > 14 && $r->AgeDays <= 30)->count(),
+            'overdue' => $rows->filter(fn($r) => $r->AgeDays > 30)->count(),
             'total' => $rows->count(),
         ];
     }
@@ -676,8 +707,14 @@ class OperationsReportController extends BaseReportController
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.port-aging-print', compact(
-            'rows', 'summary', 'ageSummary', 'lclCount', 'fclCount',
-            'reportTitle', 'dateFrom', 'dateTo'
+            'rows',
+            'summary',
+            'ageSummary',
+            'lclCount',
+            'fclCount',
+            'reportTitle',
+            'dateFrom',
+            'dateTo'
         ));
     }
 
@@ -721,40 +758,47 @@ class OperationsReportController extends BaseReportController
         foreach ($rows as $i => $r) {
             $bracket = $this->ageBracket((int) $r->AgeDays);
 
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $r->ETA ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
-            $sheet->setCellValue('D'.$dataRow, $r->ConsigneeName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->CarrierName ?? '-');
-            $sheet->setCellValue('F'.$dataRow, $r->ContainerNos ?? '-');
-            $sheet->setCellValue('G'.$dataRow, $r->CommodityType ?? '-');
-            $sheet->setCellValue('H'.$dataRow, $statusLabels[$r->Status] ?? '-');
-            $sheet->setCellValue('I'.$dataRow, $r->AgeDays);
-            $sheet->setCellValue('J'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $r->ETA ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
+            $sheet->setCellValue('D' . $dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('F' . $dataRow, $r->ContainerNos ?? '-');
+            $sheet->setCellValue('G' . $dataRow, $r->CommodityType ?? '-');
+            $sheet->setCellValue('H' . $dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('I' . $dataRow, $r->AgeDays);
+            $sheet->setCellValue('J' . $dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
 
             // Age colour coding per bracket
-            $sheet->getStyle('I'.$dataRow)->getFont()
+            $sheet->getStyle('I' . $dataRow)->getFont()
                 ->getColor()->setRGB($bracket['hex']);
 
             // Bold for critical and overdue
             if ($r->AgeDays > 14) {
-                $sheet->getStyle('I'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('I' . $dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
         }
 
         // ── LCL / FCL totals row ─────────────────────────────────────────────
-        $sheet->setCellValue('A'.$dataRow, 'Totals');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('G'.$dataRow, 'LCL: '.$lclCount.'  |  FCL: '.$fclCount);
-        $sheet->getStyle('G'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Totals');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('G' . $dataRow, 'LCL: ' . $lclCount . '  |  FCL: ' . $fclCount);
+        $sheet->getStyle('G' . $dataRow)->getFont()->setBold(true);
 
         // ── Column widths ────────────────────────────────────────────────────
         $widths = [
-            'A' => 5,  'B' => 20, 'C' => 14, 'D' => 26,
-            'E' => 20, 'F' => 24, 'G' => 18, 'H' => 14,
-            'I' => 12, 'J' => 18,
+            'A' => 5,
+            'B' => 20,
+            'C' => 14,
+            'D' => 26,
+            'E' => 20,
+            'F' => 24,
+            'G' => 18,
+            'H' => 14,
+            'I' => 12,
+            'J' => 18,
         ];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
@@ -762,7 +806,7 @@ class OperationsReportController extends BaseReportController
 
         // ── Borders + stream ─────────────────────────────────────────────────
         $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'J');
-        $this->streamExcel($spreadsheet, 'port-aging-'.now()->format('Ymd-His').'.xlsx');
+        $this->streamExcel($spreadsheet, 'port-aging-' . now()->format('Ymd-His') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -838,10 +882,10 @@ class OperationsReportController extends BaseReportController
     private function buildOverdueSummary($rows): array
     {
         return [
-            'one_to_seven' => $rows->filter(fn ($r) => $r->DaysOverdue >= 1 && $r->DaysOverdue <= 7)->count(),
-            'eight_to_fourteen' => $rows->filter(fn ($r) => $r->DaysOverdue >= 8 && $r->DaysOverdue <= 14)->count(),
-            'fifteen_to_thirty' => $rows->filter(fn ($r) => $r->DaysOverdue >= 15 && $r->DaysOverdue <= 30)->count(),
-            'over_thirty' => $rows->filter(fn ($r) => $r->DaysOverdue > 30)->count(),
+            'one_to_seven' => $rows->filter(fn($r) => $r->DaysOverdue >= 1 && $r->DaysOverdue <= 7)->count(),
+            'eight_to_fourteen' => $rows->filter(fn($r) => $r->DaysOverdue >= 8 && $r->DaysOverdue <= 14)->count(),
+            'fifteen_to_thirty' => $rows->filter(fn($r) => $r->DaysOverdue >= 15 && $r->DaysOverdue <= 30)->count(),
+            'over_thirty' => $rows->filter(fn($r) => $r->DaysOverdue > 30)->count(),
             'total' => $rows->count(),
         ];
     }
@@ -877,8 +921,12 @@ class OperationsReportController extends BaseReportController
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.pending-clearance-print', compact(
-            'rows', 'summary', 'overdueSummary',
-            'reportTitle', 'dateFrom', 'dateTo'
+            'rows',
+            'summary',
+            'overdueSummary',
+            'reportTitle',
+            'dateFrom',
+            'dateTo'
         ));
     }
 
@@ -914,8 +962,17 @@ class OperationsReportController extends BaseReportController
 
         // ── Blue column header row ───────────────────────────────────────────
         $headers = [
-            '#', 'Main BL', 'ETA', 'Days Overdue', 'Consignee',
-            'Phone', 'Carrier', 'Container No(s).', 'Commodity', 'Status', 'Date Registered',
+            '#',
+            'Main BL',
+            'ETA',
+            'Days Overdue',
+            'Consignee',
+            'Phone',
+            'Carrier',
+            'Container No(s).',
+            'Commodity',
+            'Status',
+            'Date Registered',
         ];
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
@@ -924,25 +981,25 @@ class OperationsReportController extends BaseReportController
             $days = (int) $r->DaysOverdue;
             $bracket = $this->ageBracket($days);
 
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $r->ETA
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $r->ETA
                 ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
-            $sheet->setCellValue('D'.$dataRow, $days);
-            $sheet->setCellValue('E'.$dataRow, $r->ConsigneeName ?? '-');
-            $sheet->setCellValue('F'.$dataRow, $r->ConsigneeTel ?? '-');
-            $sheet->setCellValue('G'.$dataRow, $r->CarrierName ?? '-');
-            $sheet->setCellValue('H'.$dataRow, $r->ContainerNos ?? '-');
-            $sheet->setCellValue('I'.$dataRow, $r->CommodityType ?? '-');
-            $sheet->setCellValue('J'.$dataRow, $statusLabels[$r->Status] ?? '-');
-            $sheet->setCellValue('K'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('D' . $dataRow, $days);
+            $sheet->setCellValue('E' . $dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('F' . $dataRow, $r->ConsigneeTel ?? '-');
+            $sheet->setCellValue('G' . $dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('H' . $dataRow, $r->ContainerNos ?? '-');
+            $sheet->setCellValue('I' . $dataRow, $r->CommodityType ?? '-');
+            $sheet->setCellValue('J' . $dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('K' . $dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
 
             // Days overdue colour per bracket
-            $sheet->getStyle('D'.$dataRow)->getFont()
+            $sheet->getStyle('D' . $dataRow)->getFont()
                 ->getColor()->setRGB($bracket['hex']);
 
             if ($days > 14) {
-                $sheet->getStyle('D'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('D' . $dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
@@ -950,9 +1007,17 @@ class OperationsReportController extends BaseReportController
 
         // ── Column widths ────────────────────────────────────────────────────
         $widths = [
-            'A' => 5,  'B' => 20, 'C' => 14, 'D' => 14,
-            'E' => 26, 'F' => 16, 'G' => 18, 'H' => 24,
-            'I' => 18, 'J' => 14, 'K' => 18,
+            'A' => 5,
+            'B' => 20,
+            'C' => 14,
+            'D' => 14,
+            'E' => 26,
+            'F' => 16,
+            'G' => 18,
+            'H' => 24,
+            'I' => 18,
+            'J' => 14,
+            'K' => 18,
         ];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
@@ -962,7 +1027,7 @@ class OperationsReportController extends BaseReportController
         $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'K');
         $this->streamExcel(
             $spreadsheet,
-            'pending-clearance-'.now()->format('Ymd-His').'.xlsx'
+            'pending-clearance-' . now()->format('Ymd-His') . '.xlsx'
         );
     }
 
@@ -1239,7 +1304,11 @@ class OperationsReportController extends BaseReportController
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.consignment-volume-print', compact(
-            'rows', 'periodTotals', 'reportTitle', 'dateFrom', 'dateTo'
+            'rows',
+            'periodTotals',
+            'reportTitle',
+            'dateFrom',
+            'dateTo'
         ));
     }
 
@@ -1277,22 +1346,22 @@ class OperationsReportController extends BaseReportController
 
         // ── Data rows ────────────────────────────────────────────────────────
         foreach ($rows as $r) {
-            $sheet->setCellValue('A'.$dataRow, $r->MonthLabel);
-            $sheet->setCellValue('B'.$dataRow, $r->Total);
-            $sheet->setCellValue('C'.$dataRow, $r->LCL);
-            $sheet->setCellValue('D'.$dataRow, $r->FCL);
-            $sheet->setCellValue('E'.$dataRow, $r->UniqueConsignees);
-            $sheet->setCellValue('F'.$dataRow, $r->PctChange !== null
-                ? ($r->PctChange > 0 ? '+' : '').$r->PctChange.'%'
+            $sheet->setCellValue('A' . $dataRow, $r->MonthLabel);
+            $sheet->setCellValue('B' . $dataRow, $r->Total);
+            $sheet->setCellValue('C' . $dataRow, $r->LCL);
+            $sheet->setCellValue('D' . $dataRow, $r->FCL);
+            $sheet->setCellValue('E' . $dataRow, $r->UniqueConsignees);
+            $sheet->setCellValue('F' . $dataRow, $r->PctChange !== null
+                ? ($r->PctChange > 0 ? '+' : '') . $r->PctChange . '%'
                 : '—');
 
             // % change colour coding
             if ($r->PctChange !== null) {
                 $hex = $r->PctChange > 0 ? '15803d'
-                     : ($r->PctChange < 0 ? 'b91c1c' : '6b7280');
-                $sheet->getStyle('F'.$dataRow)->getFont()->getColor()->setRGB($hex);
+                    : ($r->PctChange < 0 ? 'b91c1c' : '6b7280');
+                $sheet->getStyle('F' . $dataRow)->getFont()->getColor()->setRGB($hex);
                 if ($r->PctChange != 0) {
-                    $sheet->getStyle('F'.$dataRow)->getFont()->setBold(true);
+                    $sheet->getStyle('F' . $dataRow)->getFont()->setBold(true);
                 }
             }
 
@@ -1300,31 +1369,31 @@ class OperationsReportController extends BaseReportController
         }
 
         // ── Period totals row ────────────────────────────────────────────────
-        $sheet->setCellValue('A'.$dataRow, 'PERIOD TOTAL');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('B'.$dataRow, $periodTotals['total']);
-        $sheet->getStyle('B'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('C'.$dataRow, $periodTotals['lcl']);
-        $sheet->getStyle('C'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('D'.$dataRow, $periodTotals['fcl']);
-        $sheet->getStyle('D'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('E'.$dataRow, $periodTotals['unique_consignees']);
-        $sheet->getStyle('E'.$dataRow)->getFont()->setBold(true);
-        $sheet->getStyle('A'.$dataRow.':F'.$dataRow)
+        $sheet->setCellValue('A' . $dataRow, 'PERIOD TOTAL');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('B' . $dataRow, $periodTotals['total']);
+        $sheet->getStyle('B' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('C' . $dataRow, $periodTotals['lcl']);
+        $sheet->getStyle('C' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('D' . $dataRow, $periodTotals['fcl']);
+        $sheet->getStyle('D' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('E' . $dataRow, $periodTotals['unique_consignees']);
+        $sheet->getStyle('E' . $dataRow)->getFont()->setBold(true);
+        $sheet->getStyle('A' . $dataRow . ':F' . $dataRow)
             ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()->setRGB('f3f4f6');
 
         $dataRow++;
 
         // ── Best / worst month rows ──────────────────────────────────────────
-        $sheet->setCellValue('A'.$dataRow, 'Best Month');
-        $sheet->setCellValue('B'.$dataRow, $periodTotals['best_month'].' ('.$periodTotals['best_month_count'].')');
-        $sheet->getStyle('B'.$dataRow)->getFont()->getColor()->setRGB('15803d');
+        $sheet->setCellValue('A' . $dataRow, 'Best Month');
+        $sheet->setCellValue('B' . $dataRow, $periodTotals['best_month'] . ' (' . $periodTotals['best_month_count'] . ')');
+        $sheet->getStyle('B' . $dataRow)->getFont()->getColor()->setRGB('15803d');
         $dataRow++;
 
-        $sheet->setCellValue('A'.$dataRow, 'Worst Month');
-        $sheet->setCellValue('B'.$dataRow, $periodTotals['worst_month'].' ('.$periodTotals['worst_month_count'].')');
-        $sheet->getStyle('B'.$dataRow)->getFont()->getColor()->setRGB('b91c1c');
+        $sheet->setCellValue('A' . $dataRow, 'Worst Month');
+        $sheet->setCellValue('B' . $dataRow, $periodTotals['worst_month'] . ' (' . $periodTotals['worst_month_count'] . ')');
+        $sheet->getStyle('B' . $dataRow)->getFont()->getColor()->setRGB('b91c1c');
 
         // ── Column widths ────────────────────────────────────────────────────
         $widths = ['A' => 20, 'B' => 14, 'C' => 14, 'D' => 14, 'E' => 20, 'F' => 14];
@@ -1336,7 +1405,7 @@ class OperationsReportController extends BaseReportController
         $this->buildExcelBorders($sheet, 6, $dataRow - 3, 'F');
         $this->streamExcel(
             $spreadsheet,
-            'consignment-volume-'.now()->format('Ymd-His').'.xlsx'
+            'consignment-volume-' . now()->format('Ymd-His') . '.xlsx'
         );
     }
 
@@ -1454,7 +1523,11 @@ class OperationsReportController extends BaseReportController
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.gate-out-register-print', compact(
-            'rows', 'summary', 'reportTitle', 'dateFrom', 'dateTo'
+            'rows',
+            'summary',
+            'reportTitle',
+            'dateFrom',
+            'dateTo'
         ));
     }
 
@@ -1490,9 +1563,17 @@ class OperationsReportController extends BaseReportController
 
         // ── Blue column header row ───────────────────────────────────────────
         $headers = [
-            '#', 'Main BL', 'ETA', 'Container No', 'Size',
-            'Consignee', 'Carrier', 'Gate Out Date',
-            'Return Date', 'Demurrage (Days)', 'Status',
+            '#',
+            'Main BL',
+            'ETA',
+            'Container No',
+            'Size',
+            'Consignee',
+            'Carrier',
+            'Gate Out Date',
+            'Return Date',
+            'Demurrage (Days)',
+            'Status',
         ];
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
@@ -1500,50 +1581,58 @@ class OperationsReportController extends BaseReportController
         foreach ($rows as $i => $r) {
             $days = (int) $r->DemurrageDays;
 
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $r->ETA
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $r->ETA
                 ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
-            $sheet->setCellValue('D'.$dataRow, $r->ContainerNo ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->ContainerSize ?? '-');
-            $sheet->setCellValue('F'.$dataRow, $r->ConsigneeName ?? '-');
-            $sheet->setCellValue('G'.$dataRow, $r->CarrierName ?? '-');
-            $sheet->setCellValue('H'.$dataRow, $r->GateOutDate
+            $sheet->setCellValue('D' . $dataRow, $r->ContainerNo ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->ContainerSize ?? '-');
+            $sheet->setCellValue('F' . $dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('G' . $dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('H' . $dataRow, $r->GateOutDate
                 ? \Carbon\Carbon::parse($r->GateOutDate)->format('d M Y') : '-');
-            $sheet->setCellValue('I'.$dataRow, ($r->ReturnDate && $r->ReturnDate !== '0000-00-00')
+            $sheet->setCellValue('I' . $dataRow, ($r->ReturnDate && $r->ReturnDate !== '0000-00-00')
                 ? \Carbon\Carbon::parse($r->ReturnDate)->format('d M Y') : '—');
-            $sheet->setCellValue('J'.$dataRow, $days);
-            $sheet->setCellValue('K'.$dataRow, $r->ReturnStatus === 'returned' ? 'Returned' : 'Gated Out');
+            $sheet->setCellValue('J' . $dataRow, $days);
+            $sheet->setCellValue('K' . $dataRow, $r->ReturnStatus === 'returned' ? 'Returned' : 'Gated Out');
 
             // Demurrage colour coding
             if ($days > 7) {
-                $sheet->getStyle('J'.$dataRow)->getFont()->getColor()->setRGB('b91c1c');
-                $sheet->getStyle('J'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('J' . $dataRow)->getFont()->getColor()->setRGB('b91c1c');
+                $sheet->getStyle('J' . $dataRow)->getFont()->setBold(true);
             } elseif ($days >= 1) {
-                $sheet->getStyle('J'.$dataRow)->getFont()->getColor()->setRGB('b45309');
+                $sheet->getStyle('J' . $dataRow)->getFont()->getColor()->setRGB('b45309');
             } else {
-                $sheet->getStyle('J'.$dataRow)->getFont()->getColor()->setRGB('6b7280');
+                $sheet->getStyle('J' . $dataRow)->getFont()->getColor()->setRGB('6b7280');
             }
 
             $dataRow++;
         }
 
         // ── Summary totals row ───────────────────────────────────────────────
-        $sheet->setCellValue('A'.$dataRow, 'TOTALS');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('F'.$dataRow, 'Gated Out: '.$summary['gated_out'].'  |  Returned: '.$summary['returned']);
-        $sheet->getStyle('F'.$dataRow)->getFont()->setBold(true);
-        $sheet->setCellValue('J'.$dataRow, $summary['total_demurrage_days'].' days total');
-        $sheet->getStyle('J'.$dataRow)->getFont()->setBold(true);
-        $sheet->getStyle('A'.$dataRow.':K'.$dataRow)
+        $sheet->setCellValue('A' . $dataRow, 'TOTALS');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('F' . $dataRow, 'Gated Out: ' . $summary['gated_out'] . '  |  Returned: ' . $summary['returned']);
+        $sheet->getStyle('F' . $dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('J' . $dataRow, $summary['total_demurrage_days'] . ' days total');
+        $sheet->getStyle('J' . $dataRow)->getFont()->setBold(true);
+        $sheet->getStyle('A' . $dataRow . ':K' . $dataRow)
             ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()->setRGB('f3f4f6');
 
         // ── Column widths ────────────────────────────────────────────────────
         $widths = [
-            'A' => 5,  'B' => 20, 'C' => 14, 'D' => 18,
-            'E' => 10, 'F' => 26, 'G' => 18, 'H' => 16,
-            'I' => 16, 'J' => 16, 'K' => 14,
+            'A' => 5,
+            'B' => 20,
+            'C' => 14,
+            'D' => 18,
+            'E' => 10,
+            'F' => 26,
+            'G' => 18,
+            'H' => 16,
+            'I' => 16,
+            'J' => 16,
+            'K' => 14,
         ];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
@@ -1553,7 +1642,7 @@ class OperationsReportController extends BaseReportController
         $this->buildExcelBorders($sheet, 6, $dataRow - 1, 'K');
         $this->streamExcel(
             $spreadsheet,
-            'gate-out-register-'.now()->format('Ymd-His').'.xlsx'
+            'gate-out-register-' . now()->format('Ymd-His') . '.xlsx'
         );
     }
 
@@ -1633,7 +1722,7 @@ class OperationsReportController extends BaseReportController
     private function buildCarrierPerformanceSummary($rows): \Illuminate\Support\Collection
     {
         return $rows->groupBy('CarrierName')->map(function ($group, $carrierName) {
-            $days = $group->pluck('DaysToClear')->map(fn ($d) => (int) $d);
+            $days = $group->pluck('DaysToClear')->map(fn($d) => (int) $d);
 
             return (object) [
                 'CarrierName' => $carrierName ?? 'Unknown',
@@ -1650,7 +1739,7 @@ class OperationsReportController extends BaseReportController
     // ── Overall summary strip ────────────────────────────────────────────────
     private function buildClearanceOverallSummary($rows): array
     {
-        $days = $rows->pluck('DaysToClear')->map(fn ($d) => (int) $d);
+        $days = $rows->pluck('DaysToClear')->map(fn($d) => (int) $d);
 
         return [
             'total' => $rows->count(),
@@ -1697,8 +1786,13 @@ class OperationsReportController extends BaseReportController
         // $company is auto-shared by AppServiceProvider — do NOT query it here.
 
         return view('reports.operations.clearance-performance-print', compact(
-            'rows', 'carrierSummary', 'overallSummary',
-            'reportTitle', 'dateFrom', 'dateTo', 'carrierName'
+            'rows',
+            'carrierSummary',
+            'overallSummary',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'carrierName'
         ));
     }
 
@@ -1731,7 +1825,7 @@ class OperationsReportController extends BaseReportController
         // ── Header rows ──────────────────────────────────────────────────────
         $this->buildExcelHeader(
             $sheet,
-            'Clearance Performance Report — '.$carrierName,
+            'Clearance Performance Report — ' . $carrierName,
             \Carbon\Carbon::parse($dateFrom)->format('d M Y'),
             \Carbon\Carbon::parse($dateTo)->format('d M Y'),
             'G'
@@ -1749,21 +1843,21 @@ class OperationsReportController extends BaseReportController
         $dataRow = $this->buildExcelColumnHeaders($sheet, 7, $carrierHeaders);
 
         foreach ($carrierSummary as $c) {
-            $sheet->setCellValue('A'.$dataRow, $c->CarrierName);
-            $sheet->setCellValue('B'.$dataRow, $c->Total);
-            $sheet->setCellValue('C'.$dataRow, $c->AvgDays);
-            $sheet->setCellValue('D'.$dataRow, $c->FastestDays);
-            $sheet->setCellValue('E'.$dataRow, $c->SlowestDays);
-            $sheet->setCellValue('F'.$dataRow, $c->Cleared);
-            $sheet->setCellValue('G'.$dataRow, $c->Pending);
+            $sheet->setCellValue('A' . $dataRow, $c->CarrierName);
+            $sheet->setCellValue('B' . $dataRow, $c->Total);
+            $sheet->setCellValue('C' . $dataRow, $c->AvgDays);
+            $sheet->setCellValue('D' . $dataRow, $c->FastestDays);
+            $sheet->setCellValue('E' . $dataRow, $c->SlowestDays);
+            $sheet->setCellValue('F' . $dataRow, $c->Cleared);
+            $sheet->setCellValue('G' . $dataRow, $c->Pending);
 
             // Colour avg days
             $hex = $c->AvgDays <= 7 ? '15803d'
-                 : ($c->AvgDays <= 14 ? 'b45309'
-                 : ($c->AvgDays <= 30 ? 'c2410c' : 'b91c1c'));
-            $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB($hex);
+                : ($c->AvgDays <= 14 ? 'b45309'
+                    : ($c->AvgDays <= 30 ? 'c2410c' : 'b91c1c'));
+            $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB($hex);
             if ($c->AvgDays > 14) {
-                $sheet->getStyle('C'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('C' . $dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
@@ -1772,10 +1866,10 @@ class OperationsReportController extends BaseReportController
         $dataRow++; // spacer row
 
         // ── Section 2: Individual consignment detail ─────────────────────────
-        $sheet->mergeCells('A'.$dataRow.':G'.$dataRow);
-        $sheet->setCellValue('A'.$dataRow, 'INDIVIDUAL CONSIGNMENT DETAIL');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('A'.$dataRow.':G'.$dataRow)->getFill()
+        $sheet->mergeCells('A' . $dataRow . ':G' . $dataRow);
+        $sheet->setCellValue('A' . $dataRow, 'INDIVIDUAL CONSIGNMENT DETAIL');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A' . $dataRow . ':G' . $dataRow)->getFill()
             ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()->setRGB('eff6ff');
 
@@ -1789,21 +1883,21 @@ class OperationsReportController extends BaseReportController
         foreach ($rows as $i => $r) {
             $days = (int) $r->DaysToClear;
             $hex = $days <= 7 ? '15803d'
-                  : ($days <= 14 ? 'b45309'
-                  : ($days <= 30 ? 'c2410c' : 'b91c1c'));
+                : ($days <= 14 ? 'b45309'
+                    : ($days <= 30 ? 'c2410c' : 'b91c1c'));
 
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, $r->MainBL ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $r->ETA
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, $r->MainBL ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $r->ETA
                 ? \Carbon\Carbon::parse($r->ETA)->format('d M Y') : '-');
-            $sheet->setCellValue('D'.$dataRow, $r->ConsigneeName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->CarrierName ?? '-');
-            $sheet->setCellValue('F'.$dataRow, $days);
-            $sheet->setCellValue('G'.$dataRow, $statusLabels[$r->Status] ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $r->ConsigneeName ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->CarrierName ?? '-');
+            $sheet->setCellValue('F' . $dataRow, $days);
+            $sheet->setCellValue('G' . $dataRow, $statusLabels[$r->Status] ?? '-');
 
-            $sheet->getStyle('F'.$dataRow)->getFont()->getColor()->setRGB($hex);
+            $sheet->getStyle('F' . $dataRow)->getFont()->getColor()->setRGB($hex);
             if ($days > 14) {
-                $sheet->getStyle('F'.$dataRow)->getFont()->setBold(true);
+                $sheet->getStyle('F' . $dataRow)->getFont()->setBold(true);
             }
 
             $dataRow++;
@@ -1821,7 +1915,23 @@ class OperationsReportController extends BaseReportController
         // ── Stream ───────────────────────────────────────────────────────────
         $this->streamExcel(
             $spreadsheet,
-            'clearance-performance-'.now()->format('Ymd-His').'.xlsx'
+            'clearance-performance-' . now()->format('Ymd-His') . '.xlsx'
         );
+    }
+
+    public function resolveBL(Request $request)
+    {
+        $bl = strtoupper(trim($request->query('bl', '')));
+
+        $consignmentId = DB::table('container_main')
+            ->where('BL', $bl)
+            ->where('BranchID', Auth::user()->BranchID)
+            ->value('ConsignmentID');
+
+        if (! $consignmentId) {
+            return response()->json(['success' => false, 'message' => 'No consignment found for this BL.'], 404);
+        }
+
+        return response()->json(['success' => true, 'consignmentId' => $consignmentId]);
     }
 }
