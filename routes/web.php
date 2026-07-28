@@ -44,6 +44,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MessagingCenterController;
 use App\Http\Controllers\ArrivalSmsController;
+use App\Services\PdfExportService;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -65,6 +66,14 @@ Route::post('/webhook/whatsapp', [WhatsAppController::class, 'receive'])->name('
 Route::middleware('auth')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+
+    Route::get('/test-pdf-composer', function () {
+        return app(\App\Services\PdfExportService::class)->stream(
+            'test-pdf-composer',
+            [],
+            'test.pdf'
+        );
+    });
 
     // ── HS Code Prediction ────────────────────────────────────────────────────
     Route::prefix('hs-code')->name('hs-code.')->group(function () {
@@ -733,6 +742,8 @@ Route::middleware('auth')->group(function () {
                 // ── Receipt Register ──────────────────────────────────────────────
                 Route::get('/receipt-register/print', [AccountingReportController::class, 'receiptRegisterPrint'])->name('receipt-register.print');
                 Route::get('/receipt-register/export', [AccountingReportController::class, 'receiptRegisterExport'])->name('receipt-register.export');
+                Route::get('/receipt-register/pdf', [AccountingReportController::class, 'receiptRegisterPdf'])->name('receipt-register.pdf');
+                Route::get('/receipt-register/pdf', [AccountingReportController::class, 'receiptRegisterPdf'])->name('receipt-register.pdf');
 
                 // ── Account Activity ──────────────────────────────────────────────
                 Route::get('/account-activity/print', [AccountingReportController::class, 'accountActivityPrint'])->name('account-activity.print');

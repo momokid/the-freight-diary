@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use App\Services\PdfExportService;
 
 class AccountingReportController extends BaseReportController
 {
@@ -46,7 +47,7 @@ class AccountingReportController extends BaseReportController
             ->whereYear('journal.Date', $year)
             ->where('journal.Reversed', 0)
             ->where('journal.Status', 1)
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('journal.BranchID', $branchID))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('journal.BranchID', $branchID))
             ->where('ledger_account.Type', 'INCOME')
             ->sum('journal.Cr');
 
@@ -56,7 +57,7 @@ class AccountingReportController extends BaseReportController
             ->whereYear('journal.Date', $year)
             ->where('journal.Reversed', 0)
             ->where('journal.Status', 1)
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('journal.BranchID', $branchID))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('journal.BranchID', $branchID))
             ->where('ledger_account.Type', 'EXPENDITURE')
             ->sum('journal.Dr');
 
@@ -77,7 +78,7 @@ class AccountingReportController extends BaseReportController
             ->whereYear('journal.Date', '>=', $startYear)
             ->where('journal.Reversed', 0)
             ->where('journal.Status', 1)
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('journal.BranchID', $branchID))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('journal.BranchID', $branchID))
             ->where('ledger_account.Type', 'INCOME')
             ->sum('journal.Cr');
 
@@ -87,7 +88,7 @@ class AccountingReportController extends BaseReportController
             ->whereYear('journal.Date', '>=', $startYear)
             ->where('journal.Reversed', 0)
             ->where('journal.Status', 1)
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('journal.BranchID', $branchID))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('journal.BranchID', $branchID))
             ->where('ledger_account.Type', 'EXPENDITURE')
             ->sum('journal.Dr');
 
@@ -148,7 +149,7 @@ class AccountingReportController extends BaseReportController
             ->where('j.Reversed', 0)
             ->where('j.Date', '<=', $asAt)
             ->whereIn('j.Restricted', $allowedRestricted)
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID))
             ->groupBy('j.AccountID')
             ->orderByRaw('la.Type, la.AccountName')
             ->get([
@@ -189,8 +190,13 @@ class AccountingReportController extends BaseReportController
         $asAtFormatted = \Carbon\Carbon::parse($asAt)->format('d M Y');
 
         return view('reports.accounting.trial-balance-print', compact(
-            'rows', 'totalDr', 'totalCr', 'vision',
-            'reportTitle', 'asAtFormatted', 'branchID'
+            'rows',
+            'totalDr',
+            'totalCr',
+            'vision',
+            'reportTitle',
+            'asAtFormatted',
+            'branchID'
         ));
     }
 
@@ -214,32 +220,35 @@ class AccountingReportController extends BaseReportController
         $sheet->setTitle('Trial Balance');
 
         $this->buildExcelHeader(
-            $sheet, 'Trial Balance — As At '.
-            \Carbon\Carbon::parse($asAt)->format('d M Y'),
-            '', '', 'E'
+            $sheet,
+            'Trial Balance — As At ' .
+                \Carbon\Carbon::parse($asAt)->format('d M Y'),
+            '',
+            '',
+            'E'
         );
 
         $headers = ['Account No', 'Account Name', 'Type', 'Total Dr (GH₵)', 'Total Cr (GH₵)', 'Balance (GH₵)'];
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
         foreach ($rows as $r) {
-            $sheet->setCellValue('A'.$dataRow, $r->AccountID);
-            $sheet->setCellValue('B'.$dataRow, $r->AccountName);
-            $sheet->setCellValue('C'.$dataRow, $r->Type);
-            $sheet->setCellValue('D'.$dataRow, $r->TotalDr);
-            $sheet->setCellValue('E'.$dataRow, $r->TotalCr);
-            $sheet->setCellValue('F'.$dataRow, $r->Balance);
+            $sheet->setCellValue('A' . $dataRow, $r->AccountID);
+            $sheet->setCellValue('B' . $dataRow, $r->AccountName);
+            $sheet->setCellValue('C' . $dataRow, $r->Type);
+            $sheet->setCellValue('D' . $dataRow, $r->TotalDr);
+            $sheet->setCellValue('E' . $dataRow, $r->TotalCr);
+            $sheet->setCellValue('F' . $dataRow, $r->Balance);
 
             $hex = $r->Balance >= 0 ? '15803d' : 'b91c1c';
-            $sheet->getStyle('F'.$dataRow)->getFont()->getColor()->setRGB($hex);
+            $sheet->getStyle('F' . $dataRow)->getFont()->getColor()->setRGB($hex);
             $dataRow++;
         }
 
         // Totals
-        $sheet->setCellValue('A'.$dataRow, 'TOTALS');
-        $sheet->setCellValue('D'.$dataRow, $totalDr);
-        $sheet->setCellValue('E'.$dataRow, $totalCr);
-        $sheet->getStyle('A'.$dataRow.':F'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'TOTALS');
+        $sheet->setCellValue('D' . $dataRow, $totalDr);
+        $sheet->setCellValue('E' . $dataRow, $totalCr);
+        $sheet->getStyle('A' . $dataRow . ':F' . $dataRow)->getFont()->setBold(true);
 
         $widths = ['A' => 12, 'B' => 30, 'C' => 14, 'D' => 18, 'E' => 18, 'F' => 18];
         foreach ($widths as $c => $w) {
@@ -247,7 +256,7 @@ class AccountingReportController extends BaseReportController
         }
 
         $this->buildExcelBorders($sheet, 6, $dataRow, 'F');
-        $this->streamExcel($spreadsheet, 'trial-balance-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'trial-balance-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -362,12 +371,17 @@ class AccountingReportController extends BaseReportController
             $branchID
         );
         $vision = $this->buildVisionProgress($branchID);
-        $reportTitle = 'GL Statement — '.($data['account']?->AccountName ?? '');
+        $reportTitle = 'GL Statement — ' . ($data['account']?->AccountName ?? '');
         $dateFrom = \Carbon\Carbon::parse($request->date_from)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.gl-statement-print', compact(
-            'data', 'vision', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'vision',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
     }
 
@@ -395,7 +409,7 @@ class AccountingReportController extends BaseReportController
 
         $this->buildExcelHeader(
             $sheet,
-            'GL Statement — '.($data['account']?->AccountName ?? ''),
+            'GL Statement — ' . ($data['account']?->AccountName ?? ''),
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'G'
@@ -405,31 +419,31 @@ class AccountingReportController extends BaseReportController
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
         // Opening balance row
-        $sheet->setCellValue('A'.$dataRow, 'Opening Balance');
-        $sheet->setCellValue('G'.$dataRow, $data['openingBalance']);
-        $sheet->getStyle('A'.$dataRow.':G'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Opening Balance');
+        $sheet->setCellValue('G' . $dataRow, $data['openingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':G' . $dataRow)->getFont()->setBold(true);
         $dataRow++;
 
         foreach ($data['transactions'] as $tx) {
-            $sheet->setCellValue('A'.$dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
-            $sheet->setCellValue('B'.$dataRow, $tx->ReceiptNo ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $tx->Description ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $tx->SubAccountName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $tx->Dr);
-            $sheet->setCellValue('F'.$dataRow, $tx->Cr);
-            $sheet->setCellValue('G'.$dataRow, $tx->RunningBalance);
+            $sheet->setCellValue('A' . $dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
+            $sheet->setCellValue('B' . $dataRow, $tx->ReceiptNo ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $tx->Description ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $tx->SubAccountName ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $tx->Dr);
+            $sheet->setCellValue('F' . $dataRow, $tx->Cr);
+            $sheet->setCellValue('G' . $dataRow, $tx->RunningBalance);
 
             $hex = $tx->RunningBalance >= 0 ? '15803d' : 'b91c1c';
-            $sheet->getStyle('G'.$dataRow)->getFont()->getColor()->setRGB($hex);
+            $sheet->getStyle('G' . $dataRow)->getFont()->getColor()->setRGB($hex);
             $dataRow++;
         }
 
         // Closing balance row
-        $sheet->setCellValue('A'.$dataRow, 'Closing Balance');
-        $sheet->setCellValue('E'.$dataRow, $data['totalDr']);
-        $sheet->setCellValue('F'.$dataRow, $data['totalCr']);
-        $sheet->setCellValue('G'.$dataRow, $data['closingBalance']);
-        $sheet->getStyle('A'.$dataRow.':G'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Closing Balance');
+        $sheet->setCellValue('E' . $dataRow, $data['totalDr']);
+        $sheet->setCellValue('F' . $dataRow, $data['totalCr']);
+        $sheet->setCellValue('G' . $dataRow, $data['closingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':G' . $dataRow)->getFont()->setBold(true);
 
         $widths = ['A' => 14, 'B' => 16, 'C' => 30, 'D' => 24, 'E' => 16, 'F' => 16, 'G' => 18];
         foreach ($widths as $c => $w) {
@@ -437,7 +451,7 @@ class AccountingReportController extends BaseReportController
         }
 
         $this->buildExcelBorders($sheet, 6, $dataRow, 'G');
-        $this->streamExcel($spreadsheet, 'gl-statement-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'gl-statement-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -451,17 +465,22 @@ class AccountingReportController extends BaseReportController
     ): array {
         $ieAccount = DB::table('active_ie')->first();
         if (! $ieAccount) {
-            return ['income' => collect(), 'expenditure' => collect(),
-                'totalIncome' => 0, 'totalExpenditure' => 0, 'netSurplus' => 0];
+            return [
+                'income' => collect(),
+                'expenditure' => collect(),
+                'totalIncome' => 0,
+                'totalExpenditure' => 0,
+                'netSurplus' => 0
+            ];
         }
 
-        $baseQuery = fn () => DB::table('journal as j')
+        $baseQuery = fn() => DB::table('journal as j')
             ->join('ledger_account as la', 'j.SubAccountID', '=', 'la.AccountNo')
             ->where('j.AccountID', $ieAccount->AccountID)
             ->where('j.Status', 1)
             ->where('j.Reversed', 0)
             ->whereBetween('j.Date', [$dateFrom, $dateTo])
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID))
             ->groupBy('j.SubAccountID', 'la.AccountName', 'la.Type');
 
         $income = $baseQuery()
@@ -509,7 +528,12 @@ class AccountingReportController extends BaseReportController
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.income-expenditure-print', compact(
-            'data', 'vision', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'vision',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
     }
 
@@ -530,7 +554,8 @@ class AccountingReportController extends BaseReportController
         $sheet->setTitle('Income and Expenditure');
 
         $this->buildExcelHeader(
-            $sheet, 'Income & Expenditure Statement',
+            $sheet,
+            'Income & Expenditure Statement',
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'C'
@@ -538,60 +563,60 @@ class AccountingReportController extends BaseReportController
 
         $dataRow = 6;
         // Income section
-        $sheet->setCellValue('A'.$dataRow, 'INCOME');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)
+        $sheet->setCellValue('A' . $dataRow, 'INCOME');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)
             ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()->setRGB('eff6ff');
         $dataRow++;
 
         foreach ($data['income'] as $r) {
-            $sheet->setCellValue('A'.$dataRow, $r->AccountNo);
-            $sheet->setCellValue('B'.$dataRow, $r->AccountName);
-            $sheet->setCellValue('C'.$dataRow, $r->TotalCr);
-            $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB('15803d');
+            $sheet->setCellValue('A' . $dataRow, $r->AccountNo);
+            $sheet->setCellValue('B' . $dataRow, $r->AccountName);
+            $sheet->setCellValue('C' . $dataRow, $r->TotalCr);
+            $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB('15803d');
             $dataRow++;
         }
 
-        $sheet->setCellValue('B'.$dataRow, 'Total Income');
-        $sheet->setCellValue('C'.$dataRow, $data['totalIncome']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('B' . $dataRow, 'Total Income');
+        $sheet->setCellValue('C' . $dataRow, $data['totalIncome']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
         $dataRow += 2;
 
         // Expenditure section
-        $sheet->setCellValue('A'.$dataRow, 'EXPENDITURE');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)
+        $sheet->setCellValue('A' . $dataRow, 'EXPENDITURE');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)
             ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()->setRGB('fef2f2');
         $dataRow++;
 
         foreach ($data['expenditure'] as $r) {
-            $sheet->setCellValue('A'.$dataRow, $r->AccountNo);
-            $sheet->setCellValue('B'.$dataRow, $r->AccountName);
-            $sheet->setCellValue('C'.$dataRow, $r->TotalDr);
-            $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB('b91c1c');
+            $sheet->setCellValue('A' . $dataRow, $r->AccountNo);
+            $sheet->setCellValue('B' . $dataRow, $r->AccountName);
+            $sheet->setCellValue('C' . $dataRow, $r->TotalDr);
+            $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB('b91c1c');
             $dataRow++;
         }
 
-        $sheet->setCellValue('B'.$dataRow, 'Total Expenditure');
-        $sheet->setCellValue('C'.$dataRow, $data['totalExpenditure']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('B' . $dataRow, 'Total Expenditure');
+        $sheet->setCellValue('C' . $dataRow, $data['totalExpenditure']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
         $dataRow += 2;
 
         // Net surplus
-        $sheet->setCellValue('B'.$dataRow, 'NET SURPLUS / (DEFICIT)');
-        $sheet->setCellValue('C'.$dataRow, $data['netSurplus']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true)->setSize(12);
+        $sheet->setCellValue('B' . $dataRow, 'NET SURPLUS / (DEFICIT)');
+        $sheet->setCellValue('C' . $dataRow, $data['netSurplus']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true)->setSize(12);
         $hex = $data['netSurplus'] >= 0 ? '15803d' : 'b91c1c';
-        $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB($hex);
+        $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB($hex);
 
         $widths = ['A' => 12, 'B' => 35, 'C' => 20];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
         }
 
-        $this->streamExcel($spreadsheet, 'income-expenditure-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'income-expenditure-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -606,11 +631,11 @@ class AccountingReportController extends BaseReportController
             ->get(['la.AccountNo', 'la.AccountName', 'la.Class']);
 
         return $cashAccounts->map(function ($account) use ($date, $branchID) {
-            $baseQuery = fn ($q) => $q
+            $baseQuery = fn($q) => $q
                 ->where('AccountID', $account->AccountNo)
                 ->where('Status', 1)
                 ->where('Reversed', 0)
-                ->when($branchID !== 'ALL', fn ($q) => $q->where('BranchID', $branchID));
+                ->when($branchID !== 'ALL', fn($q) => $q->where('BranchID', $branchID));
 
             // Opening balance — all movements before selected date
             $openingDr = DB::table('journal')
@@ -667,7 +692,10 @@ class AccountingReportController extends BaseReportController
         $dateFormatted = \Carbon\Carbon::parse($date)->format('d M Y');
 
         return view('reports.accounting.daily-balance-print', compact(
-            'accounts', 'reportTitle', 'dateFormatted', 'branchID'
+            'accounts',
+            'reportTitle',
+            'dateFormatted',
+            'branchID'
         ));
     }
 
@@ -688,36 +716,39 @@ class AccountingReportController extends BaseReportController
         $sheet->setTitle('Daily Balance');
 
         $this->buildExcelHeader(
-            $sheet, 'Daily Balancing Sheet — '.
-            \Carbon\Carbon::parse($date)->format('d M Y'),
-            '', '', 'D'
+            $sheet,
+            'Daily Balancing Sheet — ' .
+                \Carbon\Carbon::parse($date)->format('d M Y'),
+            '',
+            '',
+            'D'
         );
 
         $dataRow = 6;
         foreach ($accounts as $account) {
             // Account header
-            $sheet->setCellValue('A'.$dataRow, $account->AccountName);
-            $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
+            $sheet->setCellValue('A' . $dataRow, $account->AccountName);
+            $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true)->setSize(11);
             $dataRow++;
 
-            $sheet->setCellValue('A'.$dataRow, 'Opening Balance');
-            $sheet->setCellValue('D'.$dataRow, $account->OpeningBalance);
-            $sheet->getStyle('D'.$dataRow)->getFont()->setBold(true);
+            $sheet->setCellValue('A' . $dataRow, 'Opening Balance');
+            $sheet->setCellValue('D' . $dataRow, $account->OpeningBalance);
+            $sheet->getStyle('D' . $dataRow)->getFont()->setBold(true);
             $dataRow++;
 
             foreach ($account->Transactions as $tx) {
-                $sheet->setCellValue('A'.$dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
-                $sheet->setCellValue('B'.$dataRow, $tx->ReceiptNo ?? '-');
-                $sheet->setCellValue('C'.$dataRow, $tx->Description ?? '-');
-                $sheet->setCellValue('D'.$dataRow, $tx->Mode === 'Dr' ? $tx->Dr : -$tx->Cr);
+                $sheet->setCellValue('A' . $dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
+                $sheet->setCellValue('B' . $dataRow, $tx->ReceiptNo ?? '-');
+                $sheet->setCellValue('C' . $dataRow, $tx->Description ?? '-');
+                $sheet->setCellValue('D' . $dataRow, $tx->Mode === 'Dr' ? $tx->Dr : -$tx->Cr);
                 $dataRow++;
             }
 
-            $sheet->setCellValue('A'.$dataRow, 'Closing Balance');
-            $sheet->setCellValue('D'.$dataRow, $account->ClosingBalance);
-            $sheet->getStyle('A'.$dataRow.':D'.$dataRow)->getFont()->setBold(true);
+            $sheet->setCellValue('A' . $dataRow, 'Closing Balance');
+            $sheet->setCellValue('D' . $dataRow, $account->ClosingBalance);
+            $sheet->getStyle('A' . $dataRow . ':D' . $dataRow)->getFont()->setBold(true);
             $hex = $account->ClosingBalance >= 0 ? '15803d' : 'b91c1c';
-            $sheet->getStyle('D'.$dataRow)->getFont()->getColor()->setRGB($hex);
+            $sheet->getStyle('D' . $dataRow)->getFont()->getColor()->setRGB($hex);
             $dataRow += 2;
         }
 
@@ -726,7 +757,7 @@ class AccountingReportController extends BaseReportController
             $sheet->getColumnDimension($c)->setWidth($w);
         }
 
-        $this->streamExcel($spreadsheet, 'daily-balance-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'daily-balance-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -743,8 +774,8 @@ class AccountingReportController extends BaseReportController
             ->join('ledger_account as la', 'j.AccountID', '=', 'la.AccountNo')
             ->where('j.Reversed', 1)
             ->whereBetween('j.Date', [$dateFrom, $dateTo])
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID))
-            ->when($username, fn ($q) => $q->where('j.ReversedBy', $username))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID))
+            ->when($username, fn($q) => $q->where('j.ReversedBy', $username))
             ->orderBy('j.ReversedAt', 'desc')
             ->get([
                 'j.ReceiptNo',
@@ -782,15 +813,21 @@ class AccountingReportController extends BaseReportController
         $branchID = $request->branch_id ?? $user->BranchID;
 
         $data = $this->buildWasteSheet(
-            $request->date_from, $request->date_to,
-            $branchID, $request->username
+            $request->date_from,
+            $request->date_to,
+            $branchID,
+            $request->username
         );
         $reportTitle = 'Waste Sheet — Reversal Audit';
         $dateFrom = \Carbon\Carbon::parse($request->date_from)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.waste-sheet-print', compact(
-            'data', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
     }
 
@@ -806,8 +843,10 @@ class AccountingReportController extends BaseReportController
         $user = Auth::user();
         $branchID = $request->branch_id ?? $user->BranchID;
         $data = $this->buildWasteSheet(
-            $request->date_from, $request->date_to,
-            $branchID, $request->username
+            $request->date_from,
+            $request->date_to,
+            $branchID,
+            $request->username
         );
 
         $spreadsheet = new Spreadsheet;
@@ -815,7 +854,8 @@ class AccountingReportController extends BaseReportController
         $sheet->setTitle('Waste Sheet');
 
         $this->buildExcelHeader(
-            $sheet, 'Waste Sheet — Reversal Audit',
+            $sheet,
+            'Waste Sheet — Reversal Audit',
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'I'
@@ -825,25 +865,25 @@ class AccountingReportController extends BaseReportController
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
         foreach ($data['query'] as $r) {
-            $sheet->setCellValue('A'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
-            $sheet->setCellValue('B'.$dataRow, $r->ReceiptNo ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $r->AccountName ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $r->Description ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->Dr);
-            $sheet->setCellValue('F'.$dataRow, $r->Cr);
-            $sheet->setCellValue('G'.$dataRow, $r->Username ?? '-');
-            $sheet->setCellValue('H'.$dataRow, $r->ReversedBy ?? '-');
-            $sheet->setCellValue('I'.$dataRow, $r->ReversedAt
+            $sheet->setCellValue('A' . $dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('B' . $dataRow, $r->ReceiptNo ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $r->AccountName ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $r->Description ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->Dr);
+            $sheet->setCellValue('F' . $dataRow, $r->Cr);
+            $sheet->setCellValue('G' . $dataRow, $r->Username ?? '-');
+            $sheet->setCellValue('H' . $dataRow, $r->ReversedBy ?? '-');
+            $sheet->setCellValue('I' . $dataRow, $r->ReversedAt
                 ? \Carbon\Carbon::parse($r->ReversedAt)->format('d M Y h:i A') : '-');
-            $sheet->getStyle('A'.$dataRow.':I'.$dataRow)
+            $sheet->getStyle('A' . $dataRow . ':I' . $dataRow)
                 ->getFont()->getColor()->setRGB('b91c1c');
             $dataRow++;
         }
 
-        $sheet->setCellValue('A'.$dataRow, 'TOTALS — '.$data['totals']['count'].' reversals');
-        $sheet->setCellValue('E'.$dataRow, $data['totals']['dr']);
-        $sheet->setCellValue('F'.$dataRow, $data['totals']['cr']);
-        $sheet->getStyle('A'.$dataRow.':I'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'TOTALS — ' . $data['totals']['count'] . ' reversals');
+        $sheet->setCellValue('E' . $dataRow, $data['totals']['dr']);
+        $sheet->setCellValue('F' . $dataRow, $data['totals']['cr']);
+        $sheet->getStyle('A' . $dataRow . ':I' . $dataRow)->getFont()->setBold(true);
 
         $widths = ['A' => 14, 'B' => 16, 'C' => 22, 'D' => 28, 'E' => 14, 'F' => 14, 'G' => 14, 'H' => 14, 'I' => 20];
         foreach ($widths as $c => $w) {
@@ -851,7 +891,7 @@ class AccountingReportController extends BaseReportController
         }
 
         $this->buildExcelBorders($sheet, 6, $dataRow, 'I');
-        $this->streamExcel($spreadsheet, 'waste-sheet-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'waste-sheet-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -869,8 +909,8 @@ class AccountingReportController extends BaseReportController
             ->where('j.Status', 1)
             ->where('j.Reversed', 0)
             ->whereBetween('j.Date', [$dateFrom, $dateTo])
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID))
-            ->when($username, fn ($q) => $q->where('j.Username', $username))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID))
+            ->when($username, fn($q) => $q->where('j.Username', $username))
             ->groupBy('j.ReceiptNo', 'j.Date', 'j.Username', 'j.BranchID', 'la.AccountName')
             ->orderBy('j.Date', 'asc')
             ->orderBy('j.ReceiptNo', 'asc')
@@ -906,16 +946,53 @@ class AccountingReportController extends BaseReportController
         $branchID = $request->branch_id ?? $user->BranchID;
 
         $data = $this->buildReceiptRegister(
-            $request->date_from, $request->date_to,
-            $branchID, $request->username
+            $request->date_from,
+            $request->date_to,
+            $branchID,
+            $request->username
         );
         $reportTitle = 'Receipt Register';
         $dateFrom = \Carbon\Carbon::parse($request->date_from)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.receipt-register-print', compact(
-            'data', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
+    }
+
+    public function receiptRegisterPdf(Request $request)
+    {
+        $request->validate([
+            'date_from' => ['required', 'date'],
+            'date_to' => ['required', 'date'],
+            'branch_id' => ['nullable', 'string'],
+            'username' => ['nullable', 'string'],
+        ]);
+
+        $user = Auth::user();
+        $branchID = $request->branch_id ?? $user->BranchID;
+
+        $data = $this->buildReceiptRegister(
+            $request->date_from,
+            $request->date_to,
+            $branchID,
+            $request->username
+        );
+        $reportTitle = 'Receipt Register';
+        $dateFrom = \Carbon\Carbon::parse($request->date_from)->format('d M Y');
+        $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
+
+        // $company is auto-shared by AppServiceProvider — do NOT query it here.
+
+        return app(PdfExportService::class)->stream(
+            'reports.accounting.receipt-register-print',
+            compact('data', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'),
+            'receipt-register-' . now()->format('Ymd') . '.pdf'
+        );
     }
 
     public function receiptRegisterExport(Request $request)
@@ -930,8 +1007,10 @@ class AccountingReportController extends BaseReportController
         $user = Auth::user();
         $branchID = $request->branch_id ?? $user->BranchID;
         $data = $this->buildReceiptRegister(
-            $request->date_from, $request->date_to,
-            $branchID, $request->username
+            $request->date_from,
+            $request->date_to,
+            $branchID,
+            $request->username
         );
 
         $spreadsheet = new Spreadsheet;
@@ -939,7 +1018,8 @@ class AccountingReportController extends BaseReportController
         $sheet->setTitle('Receipt Register');
 
         $this->buildExcelHeader(
-            $sheet, 'Receipt Register',
+            $sheet,
+            'Receipt Register',
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'F'
@@ -949,21 +1029,21 @@ class AccountingReportController extends BaseReportController
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
         foreach ($data['query'] as $i => $r) {
-            $sheet->setCellValue('A'.$dataRow, $i + 1);
-            $sheet->setCellValue('B'.$dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
-            $sheet->setCellValue('C'.$dataRow, $r->ReceiptNo ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $r->AccountName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $r->TotalDr);
-            $sheet->setCellValue('F'.$dataRow, $r->TotalCr);
-            $sheet->setCellValue('G'.$dataRow, $r->Lines);
-            $sheet->setCellValue('H'.$dataRow, $r->Username ?? '-');
+            $sheet->setCellValue('A' . $dataRow, $i + 1);
+            $sheet->setCellValue('B' . $dataRow, \Carbon\Carbon::parse($r->Date)->format('d M Y'));
+            $sheet->setCellValue('C' . $dataRow, $r->ReceiptNo ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $r->AccountName ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $r->TotalDr);
+            $sheet->setCellValue('F' . $dataRow, $r->TotalCr);
+            $sheet->setCellValue('G' . $dataRow, $r->Lines);
+            $sheet->setCellValue('H' . $dataRow, $r->Username ?? '-');
             $dataRow++;
         }
 
-        $sheet->setCellValue('A'.$dataRow, 'TOTALS — '.$data['totals']['count'].' receipts');
-        $sheet->setCellValue('E'.$dataRow, $data['totals']['dr']);
-        $sheet->setCellValue('F'.$dataRow, $data['totals']['cr']);
-        $sheet->getStyle('A'.$dataRow.':H'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'TOTALS — ' . $data['totals']['count'] . ' receipts');
+        $sheet->setCellValue('E' . $dataRow, $data['totals']['dr']);
+        $sheet->setCellValue('F' . $dataRow, $data['totals']['cr']);
+        $sheet->getStyle('A' . $dataRow . ':H' . $dataRow)->getFont()->setBold(true);
 
         $widths = ['A' => 5, 'B' => 14, 'C' => 16, 'D' => 26, 'E' => 16, 'F' => 16, 'G' => 8, 'H' => 14];
         foreach ($widths as $c => $w) {
@@ -971,8 +1051,10 @@ class AccountingReportController extends BaseReportController
         }
 
         $this->buildExcelBorders($sheet, 6, $dataRow, 'H');
-        $this->streamExcel($spreadsheet, 'receipt-register-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'receipt-register-' . now()->format('Ymd') . '.xlsx');
     }
+
+
 
     // ════════════════════════════════════════════════════════════════════════
     // REPORT 7 — ACCOUNT ACTIVITY
@@ -985,7 +1067,7 @@ class AccountingReportController extends BaseReportController
 
         $accounts = DB::table('ledger_account')
             ->where('Status', 1)
-            ->when($type !== 'ALL', fn ($q) => $q->where('Type', $type))
+            ->when($type !== 'ALL', fn($q) => $q->where('Type', $type))
             ->orderBy('AccountName')
             ->get(['AccountNo', 'AccountName', 'Type']);
 
@@ -1012,7 +1094,7 @@ class AccountingReportController extends BaseReportController
                 ->where('j.AccountID', $accountNo)
                 ->where('j.Status', 1)
                 ->where('j.Reversed', 0)
-                ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID));
+                ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID));
 
             $openingDr = (clone $baseQuery)->where('j.Date', '<', $dateFrom)->sum('j.Dr');
             $openingCr = (clone $baseQuery)->where('j.Date', '<', $dateFrom)->sum('j.Cr');
@@ -1022,16 +1104,27 @@ class AccountingReportController extends BaseReportController
                 ->leftJoin('ledger_account as sub', 'j.SubAccountID', '=', 'sub.AccountNo')
                 ->orderBy('j.Date')->orderBy('j.Time')
                 ->get([
-                    'j.ReceiptNo', 'j.Date', 'j.Description',
-                    'j.Mode', 'j.Dr', 'j.Cr', 'j.Username',
+                    'j.ReceiptNo',
+                    'j.Date',
+                    'j.Description',
+                    'j.Mode',
+                    'j.Dr',
+                    'j.Cr',
+                    'j.Username',
                     'sub.AccountName as SubAccountName',
                 ]);
         } else {
             // Income or Expenditure
             if (! $ieAccount) {
-                return ['account' => $account, 'accountNo' => $accountNo,
-                    'openingBalance' => 0, 'transactions' => collect(),
-                    'closingBalance' => 0, 'totalDr' => 0, 'totalCr' => 0];
+                return [
+                    'account' => $account,
+                    'accountNo' => $accountNo,
+                    'openingBalance' => 0,
+                    'transactions' => collect(),
+                    'closingBalance' => 0,
+                    'totalDr' => 0,
+                    'totalCr' => 0
+                ];
             }
 
             $baseQuery = DB::table('journal as j')
@@ -1039,7 +1132,7 @@ class AccountingReportController extends BaseReportController
                 ->where('j.SubAccountID', $accountNo)
                 ->where('j.Status', 1)
                 ->where('j.Reversed', 0)
-                ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID));
+                ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID));
 
             $openingDr = (clone $baseQuery)->where('j.Date', '<', $dateFrom)->sum('j.Dr');
             $openingCr = (clone $baseQuery)->where('j.Date', '<', $dateFrom)->sum('j.Cr');
@@ -1048,8 +1141,13 @@ class AccountingReportController extends BaseReportController
                 ->whereBetween('j.Date', [$dateFrom, $dateTo])
                 ->orderBy('j.Date')->orderBy('j.Time')
                 ->get([
-                    'j.ReceiptNo', 'j.Date', 'j.Description',
-                    'j.Mode', 'j.Dr', 'j.Cr', 'j.Username',
+                    'j.ReceiptNo',
+                    'j.Date',
+                    'j.Description',
+                    'j.Mode',
+                    'j.Dr',
+                    'j.Cr',
+                    'j.Username',
                 ]);
         }
 
@@ -1098,12 +1196,16 @@ class AccountingReportController extends BaseReportController
             $branchID,
             $request->account_type
         );
-        $reportTitle = 'Account Activity — '.($data['account']?->AccountName ?? '');
+        $reportTitle = 'Account Activity — ' . ($data['account']?->AccountName ?? '');
         $dateFrom = \Carbon\Carbon::parse($request->date_from)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.account-activity-print', compact(
-            'data', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
     }
 
@@ -1133,7 +1235,7 @@ class AccountingReportController extends BaseReportController
 
         $this->buildExcelHeader(
             $sheet,
-            'Account Activity — '.($data['account']?->AccountName ?? ''),
+            'Account Activity — ' . ($data['account']?->AccountName ?? ''),
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'G'
@@ -1142,29 +1244,29 @@ class AccountingReportController extends BaseReportController
         $headers = ['Date', 'Receipt No', 'Description', 'Sub Account', 'Dr (GH₵)', 'Cr (GH₵)', 'Balance (GH₵)'];
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
-        $sheet->setCellValue('A'.$dataRow, 'Opening Balance');
-        $sheet->setCellValue('G'.$dataRow, $data['openingBalance']);
-        $sheet->getStyle('A'.$dataRow.':G'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Opening Balance');
+        $sheet->setCellValue('G' . $dataRow, $data['openingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':G' . $dataRow)->getFont()->setBold(true);
         $dataRow++;
 
         foreach ($data['transactions'] as $tx) {
-            $sheet->setCellValue('A'.$dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
-            $sheet->setCellValue('B'.$dataRow, $tx->ReceiptNo ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $tx->Description ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $tx->SubAccountName ?? '-');
-            $sheet->setCellValue('E'.$dataRow, $tx->Dr);
-            $sheet->setCellValue('F'.$dataRow, $tx->Cr);
-            $sheet->setCellValue('G'.$dataRow, $tx->RunningBalance);
+            $sheet->setCellValue('A' . $dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
+            $sheet->setCellValue('B' . $dataRow, $tx->ReceiptNo ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $tx->Description ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $tx->SubAccountName ?? '-');
+            $sheet->setCellValue('E' . $dataRow, $tx->Dr);
+            $sheet->setCellValue('F' . $dataRow, $tx->Cr);
+            $sheet->setCellValue('G' . $dataRow, $tx->RunningBalance);
             $hex = $tx->RunningBalance >= 0 ? '15803d' : 'b91c1c';
-            $sheet->getStyle('G'.$dataRow)->getFont()->getColor()->setRGB($hex);
+            $sheet->getStyle('G' . $dataRow)->getFont()->getColor()->setRGB($hex);
             $dataRow++;
         }
 
-        $sheet->setCellValue('A'.$dataRow, 'Closing Balance');
-        $sheet->setCellValue('E'.$dataRow, $data['totalDr']);
-        $sheet->setCellValue('F'.$dataRow, $data['totalCr']);
-        $sheet->setCellValue('G'.$dataRow, $data['closingBalance']);
-        $sheet->getStyle('A'.$dataRow.':G'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Closing Balance');
+        $sheet->setCellValue('E' . $dataRow, $data['totalDr']);
+        $sheet->setCellValue('F' . $dataRow, $data['totalCr']);
+        $sheet->setCellValue('G' . $dataRow, $data['closingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':G' . $dataRow)->getFont()->setBold(true);
 
         $widths = ['A' => 14, 'B' => 16, 'C' => 30, 'D' => 24, 'E' => 16, 'F' => 16, 'G' => 18];
         foreach ($widths as $c => $w) {
@@ -1172,7 +1274,7 @@ class AccountingReportController extends BaseReportController
         }
 
         $this->buildExcelBorders($sheet, 6, $dataRow, 'G');
-        $this->streamExcel($spreadsheet, 'account-activity-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'account-activity-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -1190,7 +1292,7 @@ class AccountingReportController extends BaseReportController
             ->where('j.Date', '<=', $asAt)
             ->where('la.Type', 'GL')
             ->whereIn('j.Restricted', $allowedRestricted)
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID))
+            ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID))
             ->groupBy('j.AccountID', 'la.AccountName', 'la.Class', 'la.Type')
             ->orderBy('la.AccountName')
             ->get([
@@ -1233,7 +1335,11 @@ class AccountingReportController extends BaseReportController
         $asAtFormatted = \Carbon\Carbon::parse($asAt)->format('d M Y');
 
         return view('reports.accounting.balance-sheet-print', compact(
-            'data', 'vision', 'reportTitle', 'asAtFormatted', 'branchID'
+            'data',
+            'vision',
+            'reportTitle',
+            'asAtFormatted',
+            'branchID'
         ));
     }
 
@@ -1255,66 +1361,68 @@ class AccountingReportController extends BaseReportController
 
         $this->buildExcelHeader(
             $sheet,
-            'Balance Sheet — As At '.\Carbon\Carbon::parse($asAt)->format('d M Y'),
-            '', '', 'C'
+            'Balance Sheet — As At ' . \Carbon\Carbon::parse($asAt)->format('d M Y'),
+            '',
+            '',
+            'C'
         );
 
         $dataRow = 6;
 
         // ── Assets ───────────────────────────────────────────────────────────
-        $sheet->setCellValue('A'.$dataRow, 'ASSETS');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)
+        $sheet->setCellValue('A' . $dataRow, 'ASSETS');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)
             ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()->setRGB('eff6ff');
         $dataRow++;
 
         foreach ($data['assets'] as $r) {
-            $sheet->setCellValue('A'.$dataRow, $r->AccountID);
-            $sheet->setCellValue('B'.$dataRow, $r->AccountName);
-            $sheet->setCellValue('C'.$dataRow, $r->NetBalance);
-            $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB($r->NetBalance >= 0 ? '15803d' : 'b91c1c');
+            $sheet->setCellValue('A' . $dataRow, $r->AccountID);
+            $sheet->setCellValue('B' . $dataRow, $r->AccountName);
+            $sheet->setCellValue('C' . $dataRow, $r->NetBalance);
+            $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB($r->NetBalance >= 0 ? '15803d' : 'b91c1c');
             $dataRow++;
         }
 
-        $sheet->setCellValue('B'.$dataRow, 'TOTAL ASSETS');
-        $sheet->setCellValue('C'.$dataRow, $data['totalAssets']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('B' . $dataRow, 'TOTAL ASSETS');
+        $sheet->setCellValue('C' . $dataRow, $data['totalAssets']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
         $dataRow += 2;
 
         // ── Liabilities & Equity ─────────────────────────────────────────────
-        $sheet->setCellValue('A'.$dataRow, 'LIABILITIES & EQUITY');
-        $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)
+        $sheet->setCellValue('A' . $dataRow, 'LIABILITIES & EQUITY');
+        $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)
             ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()->setRGB('fef2f2');
         $dataRow++;
 
         foreach ($data['liabilities'] as $r) {
-            $sheet->setCellValue('A'.$dataRow, $r->AccountID);
-            $sheet->setCellValue('B'.$dataRow, $r->AccountName);
-            $sheet->setCellValue('C'.$dataRow, $r->NetBalance);
-            $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB($r->NetBalance >= 0 ? '15803d' : 'b91c1c');
+            $sheet->setCellValue('A' . $dataRow, $r->AccountID);
+            $sheet->setCellValue('B' . $dataRow, $r->AccountName);
+            $sheet->setCellValue('C' . $dataRow, $r->NetBalance);
+            $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB($r->NetBalance >= 0 ? '15803d' : 'b91c1c');
             $dataRow++;
         }
 
-        $sheet->setCellValue('B'.$dataRow, 'TOTAL LIABILITIES & EQUITY');
-        $sheet->setCellValue('C'.$dataRow, $data['totalLiabilities']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('B' . $dataRow, 'TOTAL LIABILITIES & EQUITY');
+        $sheet->setCellValue('C' . $dataRow, $data['totalLiabilities']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
         $dataRow += 2;
 
         // ── Difference ───────────────────────────────────────────────────────
-        $sheet->setCellValue('B'.$dataRow, 'DIFFERENCE (should be zero)');
-        $sheet->setCellValue('C'.$dataRow, $data['difference']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
-        $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB(abs($data['difference']) < 0.01 ? '15803d' : 'b91c1c');
+        $sheet->setCellValue('B' . $dataRow, 'DIFFERENCE (should be zero)');
+        $sheet->setCellValue('C' . $dataRow, $data['difference']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
+        $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB(abs($data['difference']) < 0.01 ? '15803d' : 'b91c1c');
 
         $widths = ['A' => 12, 'B' => 38, 'C' => 20];
         foreach ($widths as $c => $w) {
             $sheet->getColumnDimension($c)->setWidth($w);
         }
 
-        $this->streamExcel($spreadsheet, 'balance-sheet-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'balance-sheet-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -1345,13 +1453,13 @@ class AccountingReportController extends BaseReportController
                 continue;
             }
 
-            $baseQuery = fn () => DB::table('journal as j')
+            $baseQuery = fn() => DB::table('journal as j')
                 ->leftJoin('ledger_account as sub', 'j.SubAccountID', '=', 'sub.AccountNo')
                 ->where('j.AccountID', $accountNo)
                 ->where('j.Reversed', 0)
                 ->where('j.Status', 1)
                 ->whereBetween('j.Date', [$dateFrom, $dateTo])
-                ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID))
+                ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID))
                 ->groupBy('j.SubAccountID', 'sub.AccountName');
 
             $inflows = $baseQuery()
@@ -1412,7 +1520,11 @@ class AccountingReportController extends BaseReportController
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.cash-flow-print', compact(
-            'data', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
     }
 
@@ -1433,7 +1545,8 @@ class AccountingReportController extends BaseReportController
         $sheet->setTitle('Cash Flow');
 
         $this->buildExcelHeader(
-            $sheet, 'Cash Flow Statement',
+            $sheet,
+            'Cash Flow Statement',
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'C'
@@ -1442,70 +1555,70 @@ class AccountingReportController extends BaseReportController
         $dataRow = 6;
 
         foreach ($data['accounts'] as $account) {
-            $sheet->setCellValue('A'.$dataRow, $account->AccountName);
-            $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true)->setSize(11);
-            $sheet->getStyle('A'.$dataRow.':C'.$dataRow)
+            $sheet->setCellValue('A' . $dataRow, $account->AccountName);
+            $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true)->setSize(11);
+            $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)
                 ->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
                 ->getStartColor()->setRGB('eff6ff');
             $dataRow++;
 
-            $sheet->setCellValue('A'.$dataRow, 'INFLOWS');
-            $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
+            $sheet->setCellValue('A' . $dataRow, 'INFLOWS');
+            $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true);
             $dataRow++;
 
             foreach ($account->Inflows as $r) {
-                $sheet->setCellValue('B'.$dataRow, $r->SubAccountName ?? 'Account #'.$r->SubAccountID);
-                $sheet->setCellValue('C'.$dataRow, $r->Amount);
-                $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB('15803d');
+                $sheet->setCellValue('B' . $dataRow, $r->SubAccountName ?? 'Account #' . $r->SubAccountID);
+                $sheet->setCellValue('C' . $dataRow, $r->Amount);
+                $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB('15803d');
                 $dataRow++;
             }
 
-            $sheet->setCellValue('B'.$dataRow, 'Total Inflows');
-            $sheet->setCellValue('C'.$dataRow, $account->TotalInflows);
-            $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
+            $sheet->setCellValue('B' . $dataRow, 'Total Inflows');
+            $sheet->setCellValue('C' . $dataRow, $account->TotalInflows);
+            $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
             $dataRow++;
 
-            $sheet->setCellValue('A'.$dataRow, 'OUTFLOWS');
-            $sheet->getStyle('A'.$dataRow)->getFont()->setBold(true);
+            $sheet->setCellValue('A' . $dataRow, 'OUTFLOWS');
+            $sheet->getStyle('A' . $dataRow)->getFont()->setBold(true);
             $dataRow++;
 
             foreach ($account->Outflows as $r) {
-                $sheet->setCellValue('B'.$dataRow, $r->SubAccountName ?? 'Account #'.$r->SubAccountID);
-                $sheet->setCellValue('C'.$dataRow, $r->Amount);
-                $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB('b91c1c');
+                $sheet->setCellValue('B' . $dataRow, $r->SubAccountName ?? 'Account #' . $r->SubAccountID);
+                $sheet->setCellValue('C' . $dataRow, $r->Amount);
+                $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB('b91c1c');
                 $dataRow++;
             }
 
-            $sheet->setCellValue('B'.$dataRow, 'Total Outflows');
-            $sheet->setCellValue('C'.$dataRow, $account->TotalOutflows);
-            $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
+            $sheet->setCellValue('B' . $dataRow, 'Total Outflows');
+            $sheet->setCellValue('C' . $dataRow, $account->TotalOutflows);
+            $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
             $dataRow++;
 
-            $sheet->setCellValue('B'.$dataRow, 'Net Movement');
-            $sheet->setCellValue('C'.$dataRow, $account->NetMovement);
-            $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true)->setSize(11);
-            $sheet->getStyle('C'.$dataRow)->getFont()->getColor()
+            $sheet->setCellValue('B' . $dataRow, 'Net Movement');
+            $sheet->setCellValue('C' . $dataRow, $account->NetMovement);
+            $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true)->setSize(11);
+            $sheet->getStyle('C' . $dataRow)->getFont()->getColor()
                 ->setRGB($account->NetMovement >= 0 ? '15803d' : 'b91c1c');
             $dataRow += 2;
         }
 
         // Grand totals
-        $sheet->setCellValue('B'.$dataRow, 'TOTAL INFLOWS (ALL ACCOUNTS)');
-        $sheet->setCellValue('C'.$dataRow, $data['grandInflows']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true)->setSize(11);
-        $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB('15803d');
+        $sheet->setCellValue('B' . $dataRow, 'TOTAL INFLOWS (ALL ACCOUNTS)');
+        $sheet->setCellValue('C' . $dataRow, $data['grandInflows']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true)->setSize(11);
+        $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB('15803d');
         $dataRow++;
 
-        $sheet->setCellValue('B'.$dataRow, 'TOTAL OUTFLOWS (ALL ACCOUNTS)');
-        $sheet->setCellValue('C'.$dataRow, $data['grandOutflows']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true);
-        $sheet->getStyle('C'.$dataRow)->getFont()->getColor()->setRGB('b91c1c');
+        $sheet->setCellValue('B' . $dataRow, 'TOTAL OUTFLOWS (ALL ACCOUNTS)');
+        $sheet->setCellValue('C' . $dataRow, $data['grandOutflows']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true);
+        $sheet->getStyle('C' . $dataRow)->getFont()->getColor()->setRGB('b91c1c');
         $dataRow++;
 
-        $sheet->setCellValue('B'.$dataRow, 'NET CASH MOVEMENT');
-        $sheet->setCellValue('C'.$dataRow, $data['netMovement']);
-        $sheet->getStyle('A'.$dataRow.':C'.$dataRow)->getFont()->setBold(true)->setSize(12);
-        $sheet->getStyle('C'.$dataRow)->getFont()->getColor()
+        $sheet->setCellValue('B' . $dataRow, 'NET CASH MOVEMENT');
+        $sheet->setCellValue('C' . $dataRow, $data['netMovement']);
+        $sheet->getStyle('A' . $dataRow . ':C' . $dataRow)->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('C' . $dataRow)->getFont()->getColor()
             ->setRGB($data['netMovement'] >= 0 ? '15803d' : 'b91c1c');
 
         $widths = ['A' => 24, 'B' => 36, 'C' => 20];
@@ -1513,7 +1626,7 @@ class AccountingReportController extends BaseReportController
             $sheet->getColumnDimension($c)->setWidth($w);
         }
 
-        $this->streamExcel($spreadsheet, 'cash-flow-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'cash-flow-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -1570,12 +1683,12 @@ class AccountingReportController extends BaseReportController
             ->where('AccountNo', $accountNo)
             ->first(['AccountName', 'Class', 'Type']);
 
-        $baseQuery = fn () => DB::table('journal as j')
+        $baseQuery = fn() => DB::table('journal as j')
             ->where('j.AccountID', $ieAccount->AccountID)
             ->where('j.SubAccountID', $accountNo)
             ->where('j.Reversed', 0)
             ->where('j.Status', 1)
-            ->when($branchID !== 'ALL', fn ($q) => $q->where('j.BranchID', $branchID));
+            ->when($branchID !== 'ALL', fn($q) => $q->where('j.BranchID', $branchID));
 
         // Opening balance — all movements before dateFrom
         $openingDr = (clone $baseQuery())->where('j.Date', '<', $dateFrom)->sum('j.Dr');
@@ -1637,12 +1750,16 @@ class AccountingReportController extends BaseReportController
         $user = Auth::user();
         $branchID = $request->branch_id ?? $user->BranchID;
         $data = $this->buildIEStatement('INCOME', (int) $request->account_no, $request->date_from, $request->date_to, $branchID);
-        $reportTitle = 'Income Account Statement — '.($data['account']?->AccountName ?? '');
+        $reportTitle = 'Income Account Statement — ' . ($data['account']?->AccountName ?? '');
         $dateFrom = \Carbon\Carbon::parse($request->date_from)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.income-statement-print', compact(
-            'data', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
     }
 
@@ -1665,7 +1782,7 @@ class AccountingReportController extends BaseReportController
 
         $this->buildExcelHeader(
             $sheet,
-            'Income Account Statement — '.($data['account']?->AccountName ?? ''),
+            'Income Account Statement — ' . ($data['account']?->AccountName ?? ''),
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'F'
@@ -1674,27 +1791,27 @@ class AccountingReportController extends BaseReportController
         $headers = ['Date', 'Receipt No', 'Description', 'Dr (GH₵)', 'Cr (GH₵)', 'Balance (GH₵)'];
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
-        $sheet->setCellValue('A'.$dataRow, 'Opening Balance');
-        $sheet->setCellValue('F'.$dataRow, $data['openingBalance']);
-        $sheet->getStyle('A'.$dataRow.':F'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Opening Balance');
+        $sheet->setCellValue('F' . $dataRow, $data['openingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':F' . $dataRow)->getFont()->setBold(true);
         $dataRow++;
 
         foreach ($data['transactions'] as $tx) {
-            $sheet->setCellValue('A'.$dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
-            $sheet->setCellValue('B'.$dataRow, $tx->ReceiptNo ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $tx->Description ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $tx->Dr);
-            $sheet->setCellValue('E'.$dataRow, $tx->Cr);
-            $sheet->setCellValue('F'.$dataRow, $tx->RunningBalance);
-            $sheet->getStyle('F'.$dataRow)->getFont()->getColor()->setRGB($tx->RunningBalance >= 0 ? '15803d' : 'b91c1c');
+            $sheet->setCellValue('A' . $dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
+            $sheet->setCellValue('B' . $dataRow, $tx->ReceiptNo ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $tx->Description ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $tx->Dr);
+            $sheet->setCellValue('E' . $dataRow, $tx->Cr);
+            $sheet->setCellValue('F' . $dataRow, $tx->RunningBalance);
+            $sheet->getStyle('F' . $dataRow)->getFont()->getColor()->setRGB($tx->RunningBalance >= 0 ? '15803d' : 'b91c1c');
             $dataRow++;
         }
 
-        $sheet->setCellValue('A'.$dataRow, 'Closing Balance');
-        $sheet->setCellValue('D'.$dataRow, $data['totalDr']);
-        $sheet->setCellValue('E'.$dataRow, $data['totalCr']);
-        $sheet->setCellValue('F'.$dataRow, $data['closingBalance']);
-        $sheet->getStyle('A'.$dataRow.':F'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Closing Balance');
+        $sheet->setCellValue('D' . $dataRow, $data['totalDr']);
+        $sheet->setCellValue('E' . $dataRow, $data['totalCr']);
+        $sheet->setCellValue('F' . $dataRow, $data['closingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':F' . $dataRow)->getFont()->setBold(true);
 
         $widths = ['A' => 14, 'B' => 16, 'C' => 32, 'D' => 16, 'E' => 16, 'F' => 18];
         foreach ($widths as $c => $w) {
@@ -1702,7 +1819,7 @@ class AccountingReportController extends BaseReportController
         }
 
         $this->buildExcelBorders($sheet, 6, $dataRow, 'F');
-        $this->streamExcel($spreadsheet, 'income-statement-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'income-statement-' . now()->format('Ymd') . '.xlsx');
     }
 
     // ── Expenditure Statement ─────────────────────────────────────────────
@@ -1719,12 +1836,16 @@ class AccountingReportController extends BaseReportController
         $user = Auth::user();
         $branchID = $request->branch_id ?? $user->BranchID;
         $data = $this->buildIEStatement('EXPENDITURE', (int) $request->account_no, $request->date_from, $request->date_to, $branchID);
-        $reportTitle = 'Expenditure Account Statement — '.($data['account']?->AccountName ?? '');
+        $reportTitle = 'Expenditure Account Statement — ' . ($data['account']?->AccountName ?? '');
         $dateFrom = \Carbon\Carbon::parse($request->date_from)->format('d M Y');
         $dateTo = \Carbon\Carbon::parse($request->date_to)->format('d M Y');
 
         return view('reports.accounting.expenditure-statement-print', compact(
-            'data', 'reportTitle', 'dateFrom', 'dateTo', 'branchID'
+            'data',
+            'reportTitle',
+            'dateFrom',
+            'dateTo',
+            'branchID'
         ));
     }
 
@@ -1747,7 +1868,7 @@ class AccountingReportController extends BaseReportController
 
         $this->buildExcelHeader(
             $sheet,
-            'Expenditure Account Statement — '.($data['account']?->AccountName ?? ''),
+            'Expenditure Account Statement — ' . ($data['account']?->AccountName ?? ''),
             \Carbon\Carbon::parse($request->date_from)->format('d M Y'),
             \Carbon\Carbon::parse($request->date_to)->format('d M Y'),
             'F'
@@ -1756,27 +1877,27 @@ class AccountingReportController extends BaseReportController
         $headers = ['Date', 'Receipt No', 'Description', 'Dr (GH₵)', 'Cr (GH₵)', 'Balance (GH₵)'];
         $dataRow = $this->buildExcelColumnHeaders($sheet, 6, $headers);
 
-        $sheet->setCellValue('A'.$dataRow, 'Opening Balance');
-        $sheet->setCellValue('F'.$dataRow, $data['openingBalance']);
-        $sheet->getStyle('A'.$dataRow.':F'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Opening Balance');
+        $sheet->setCellValue('F' . $dataRow, $data['openingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':F' . $dataRow)->getFont()->setBold(true);
         $dataRow++;
 
         foreach ($data['transactions'] as $tx) {
-            $sheet->setCellValue('A'.$dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
-            $sheet->setCellValue('B'.$dataRow, $tx->ReceiptNo ?? '-');
-            $sheet->setCellValue('C'.$dataRow, $tx->Description ?? '-');
-            $sheet->setCellValue('D'.$dataRow, $tx->Dr);
-            $sheet->setCellValue('E'.$dataRow, $tx->Cr);
-            $sheet->setCellValue('F'.$dataRow, $tx->RunningBalance);
-            $sheet->getStyle('F'.$dataRow)->getFont()->getColor()->setRGB($tx->RunningBalance >= 0 ? '15803d' : 'b91c1c');
+            $sheet->setCellValue('A' . $dataRow, \Carbon\Carbon::parse($tx->Date)->format('d M Y'));
+            $sheet->setCellValue('B' . $dataRow, $tx->ReceiptNo ?? '-');
+            $sheet->setCellValue('C' . $dataRow, $tx->Description ?? '-');
+            $sheet->setCellValue('D' . $dataRow, $tx->Dr);
+            $sheet->setCellValue('E' . $dataRow, $tx->Cr);
+            $sheet->setCellValue('F' . $dataRow, $tx->RunningBalance);
+            $sheet->getStyle('F' . $dataRow)->getFont()->getColor()->setRGB($tx->RunningBalance >= 0 ? '15803d' : 'b91c1c');
             $dataRow++;
         }
 
-        $sheet->setCellValue('A'.$dataRow, 'Closing Balance');
-        $sheet->setCellValue('D'.$dataRow, $data['totalDr']);
-        $sheet->setCellValue('E'.$dataRow, $data['totalCr']);
-        $sheet->setCellValue('F'.$dataRow, $data['closingBalance']);
-        $sheet->getStyle('A'.$dataRow.':F'.$dataRow)->getFont()->setBold(true);
+        $sheet->setCellValue('A' . $dataRow, 'Closing Balance');
+        $sheet->setCellValue('D' . $dataRow, $data['totalDr']);
+        $sheet->setCellValue('E' . $dataRow, $data['totalCr']);
+        $sheet->setCellValue('F' . $dataRow, $data['closingBalance']);
+        $sheet->getStyle('A' . $dataRow . ':F' . $dataRow)->getFont()->setBold(true);
 
         $widths = ['A' => 14, 'B' => 16, 'C' => 32, 'D' => 16, 'E' => 16, 'F' => 18];
         foreach ($widths as $c => $w) {
@@ -1784,6 +1905,6 @@ class AccountingReportController extends BaseReportController
         }
 
         $this->buildExcelBorders($sheet, 6, $dataRow, 'F');
-        $this->streamExcel($spreadsheet, 'expenditure-statement-'.now()->format('Ymd').'.xlsx');
+        $this->streamExcel($spreadsheet, 'expenditure-statement-' . now()->format('Ymd') . '.xlsx');
     }
 }
