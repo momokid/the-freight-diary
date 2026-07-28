@@ -447,3 +447,471 @@ function initCollapsedFlyouts() {
 }
 
 document.addEventListener("DOMContentLoaded", initCollapsedFlyouts);
+
+window.CommandCenter = {
+    // ── Config ──
+    MIN_CHARS: 2,
+    DEBOUNCE_MS: 300,
+    RECENTS_KEY: "cc_recents",
+    RECENTS_MAX: 5,
+    SPEECH_LANG: "en-GB",
+
+    // ── State ──
+    open: false,
+    ready: false,
+    mode: "search", // 'search' | 'agent'
+    inputModality: "text", // 'text' | 'speech'  → passed to agent_runs later
+    rows: [], // flat list of currently rendered results
+    activeIndex: -1,
+    debounceTimer: null,
+    lastFocused: null,
+    recognition: null,
+    listening: false,
+
+    // ── Element cache ──
+    el: {},
+
+    init() {
+        this.el = {
+            overlay: document.getElementById("cc-overlay"),
+            panel: document.getElementById("cc-panel"),
+            input: document.getElementById("cc-input"),
+            badge: document.getElementById("cc-mode-badge"),
+            micBtn: document.getElementById("cc-mic-btn"),
+            micStatus: document.getElementById("cc-mic-status"),
+            micText: document.getElementById("cc-mic-status-text"),
+            body: document.getElementById("cc-body"),
+            stEmpty: document.getElementById("cc-state-empty"),
+            stResults: document.getElementById("cc-state-results"),
+            stThread: document.getElementById("cc-state-thread"),
+            stNone: document.getElementById("cc-state-none"),
+            recents: document.getElementById("cc-recents"),
+            noRecents: document.getElementById("cc-no-recents"),
+        };
+
+        if (!this.el.overlay) return; // partial not included on this page
+
+        this.ready = true;
+
+        this.el.input.addEventListener("input", () => this.onType());
+        this.el.input.addEventListener("keydown", (e) => this.onInputKey(e));
+
+        this.setupSpeech();
+    },
+
+    // ── Open / close ──────────────────────────────────────────
+
+    show() {
+        if (!this.ready) return;
+
+        if (this.open) {
+            this.el.input.focus();
+            return;
+        }
+        this.lastFocused = document.activeElement;
+        this.open = true;
+        this.el.overlay.classList.add("cc-open");
+        this.el.overlay.setAttribute("aria-hidden", "false");
+        this.renderRecents();
+        this.setState("empty");
+        this.el.input.focus();
+    },
+
+    close() {
+        if (!this.ready || !this.open) return;
+        if (this.listening) this.stopMic();
+
+        this.open = false;
+        this.el.overlay.classList.remove("cc-open");
+        this.el.overlay.setAttribute("aria-hidden", "true");
+        this.el.input.value = "";
+        this.rows = [];
+        this.activeIndex = -1;
+        this.inputModality = "text";
+        this.setMode("search");
+
+        // Restore focus to whatever the user was doing before
+        if (this.lastFocused && document.body.contains(this.lastFocused)) {
+            this.lastFocused.focus();
+        }
+        this.lastFocused = null;
+    },
+
+    // ── State switching ───────────────────────────────────────
+
+    setState(name) {
+        this.el.stEmpty.hidden = name !== "empty";
+        this.el.stResults.hidden = name !== "results";
+        this.el.stThread.hidden = name !== "thread";
+        this.el.stNone.hidden = name !== "none";
+    },
+
+    setMode(mode) {
+        this.mode = mode;
+        this.el.badge.dataset.mode = mode;
+        this.el.badge.textContent = mode === "agent" ? "Agent" : "Search";
+    },
+
+    /**
+     * Phase 1 heuristic only — replaced by real intent routing in Phase 3
+     * (agent_intent_cache + agent_verb_synonyms).
+     * Instruction-like = contains a known verb, or is a long multi-word phrase.
+     */
+    detectMode(q) {
+        const verbs =
+            /\b(draft|create|register|prepare|generate|send|show|list|what|how|check|update|make|add|breakdown|disburse)\b/i;
+        const words = q.trim().split(/\s+/).length;
+        return verbs.test(q) || words >= 4 ? "agent" : "search";
+    },
+
+    // ── Typing ────────────────────────────────────────────────
+
+    onType() {
+        const q = this.el.input.value.trim();
+
+        // Manual typing overrides a prior speech transcript
+        this.inputModality = "text";
+        this.setMode(this.detectMode(q));
+
+        clearTimeout(this.debounceTimer);
+
+        if (q.length < this.MIN_CHARS) {
+            this.rows = [];
+            this.activeIndex = -1;
+            this.setState("empty");
+            return;
+        }
+
+        this.debounceTimer = setTimeout(
+            () => this.runQuery(q),
+            this.DEBOUNCE_MS,
+        );
+    },
+
+    onInputKey(e) {
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            this.move(1);
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            this.move(-1);
+        } else if (e.key === "Enter") {
+            e.preventDefault();
+            this.commit();
+        }
+    },
+
+    move(delta) {
+        if (!this.rows.length) return;
+        this.activeIndex =
+            (this.activeIndex + delta + this.rows.length) % this.rows.length;
+        this.paintActive();
+    },
+
+    paintActive() {
+        const nodes = this.el.stResults.querySelectorAll(".cc-row");
+        nodes.forEach((n, i) =>
+            n.classList.toggle("cc-active", i === this.activeIndex),
+        );
+        const active = nodes[this.activeIndex];
+        if (active) active.scrollIntoView({ block: "nearest" });
+    },
+
+    commit() {
+        if (this.mode === "agent") {
+            this.stubThread(this.el.input.value.trim());
+            return;
+        }
+        const row = this.rows[this.activeIndex >= 0 ? this.activeIndex : 0];
+        if (row) this.go(row);
+    },
+
+    go(row) {
+        this.pushRecent(row);
+        window.location.href = row.url;
+    },
+
+    // ── Query (Phase 1: dummy data, no network) ───────────────
+
+    runQuery(q) {
+        const data = this.dummyResults(q);
+
+        if (!data.length) {
+            this.rows = [];
+            this.activeIndex = -1;
+            this.setState("none");
+            return;
+        }
+
+        this.rows = [];
+        let html = "";
+
+        data.forEach((group) => {
+            html += `<p class="cc-section-label">${this.esc(group.label)}</p>`;
+            group.items.forEach((item) => {
+                const idx = this.rows.length;
+                this.rows.push(item);
+                html += `
+                    <div class="cc-row" data-idx="${idx}"
+                         onclick="window.CommandCenter.go(window.CommandCenter.rows[${idx}])">
+                        <svg class="cc-row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${group.icon}" />
+                        </svg>
+                        <div class="cc-row-main">
+                            <div class="cc-row-title ${item.mono ? "cc-mono" : ""}">${this.esc(item.title)}</div>
+                            <div class="cc-row-meta">${this.esc(item.meta)}</div>
+                        </div>
+                    </div>`;
+            });
+        });
+
+        this.el.stResults.innerHTML = html;
+        this.activeIndex = 0;
+        this.setState("results");
+        this.paintActive();
+    },
+
+    dummyResults(q) {
+        const ICON_BOX =
+            "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4";
+        const ICON_USER =
+            "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z";
+        const ICON_DOC =
+            "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z";
+
+        return [
+            {
+                label: "Consignment",
+                icon: ICON_BOX,
+                items: [
+                    {
+                        title: "MSCU4421889",
+                        meta: "Pending — ETA 12 Jul 2026",
+                        mono: true,
+                        url: "#",
+                    },
+                    {
+                        title: "TGHU7781234",
+                        meta: "Gated Out — 3 containers",
+                        mono: true,
+                        url: "#",
+                    },
+                ],
+            },
+            {
+                label: "Consignee",
+                icon: ICON_USER,
+                items: [
+                    {
+                        title: "Adom Enterprise Ltd",
+                        meta: "4 active consignments",
+                        url: "#",
+                    },
+                ],
+            },
+            {
+                label: "Receipt",
+                icon: ICON_DOC,
+                items: [
+                    {
+                        title: "RCP-2026-0442",
+                        meta: "GH₵ 12,400.00 — 08 Jul 2026",
+                        mono: true,
+                        url: "#",
+                    },
+                ],
+            },
+        ];
+    },
+
+    // ── Agent thread (Phase 4 replaces this stub) ─────────────
+
+    stubThread(q) {
+        this.el.stThread.innerHTML = `
+            <div style="padding:16px;">
+                <p style="font-size:12px;font-weight:700;color:var(--text-muted);
+                          text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">
+                    You said
+                </p>
+                <p style="font-size:14px;color:var(--text-primary);margin-bottom:16px;">
+                    ${this.esc(q)}
+                </p>
+                <p style="font-size:13px;color:var(--text-muted);">
+                    Agent execution arrives in Phase 4. Input modality:
+                    <strong>${this.inputModality}</strong>.
+                </p>
+            </div>`;
+        this.setState("thread");
+    },
+
+    // ── Recents (localStorage) ────────────────────────────────
+
+    getRecents() {
+        try {
+            return JSON.parse(localStorage.getItem(this.RECENTS_KEY)) || [];
+        } catch (e) {
+            return [];
+        }
+    },
+
+    pushRecent(row) {
+        let list = this.getRecents().filter((r) => r.title !== row.title);
+        list.unshift({
+            title: row.title,
+            meta: row.meta,
+            url: row.url,
+            mono: !!row.mono,
+        });
+        list = list.slice(0, this.RECENTS_MAX);
+        try {
+            localStorage.setItem(this.RECENTS_KEY, JSON.stringify(list));
+        } catch (e) {
+            /* quota / private mode — non-fatal */
+        }
+    },
+
+    renderRecents() {
+        const list = this.getRecents();
+        this.el.noRecents.hidden = list.length > 0;
+
+        this.el.recents.innerHTML = list
+            .map(
+                (r, i) => `
+            <div class="cc-row" onclick="window.CommandCenter.goRecent(${i})">
+                <svg class="cc-row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="cc-row-main">
+                    <div class="cc-row-title ${r.mono ? "cc-mono" : ""}">${this.esc(r.title)}</div>
+                    <div class="cc-row-meta">${this.esc(r.meta)}</div>
+                </div>
+            </div>`,
+            )
+            .join("");
+    },
+
+    goRecent(i) {
+        const r = this.getRecents()[i];
+        if (r) window.location.href = r.url;
+    },
+
+    // ── Speech ────────────────────────────────────────────────
+
+    setupSpeech() {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SR) {
+            this.el.micBtn.style.display = "none"; // Firefox / unsupported
+            return;
+        }
+
+        const r = new SR();
+        r.lang = this.SPEECH_LANG;
+        r.continuous = false;
+        r.interimResults = true;
+
+        r.onstart = () => {
+            this.listening = true;
+            this.el.micBtn.dataset.listening = "1";
+            this.micState(
+                "listening",
+                "Listening — tap the mic again to stop.",
+            );
+        };
+
+        r.onresult = (e) => {
+            let text = "";
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                text += e.results[i][0].transcript;
+            }
+            // Transcript lands in the field for review — never auto-submits
+            this.el.input.value = text;
+            this.inputModality = "speech";
+            this.setMode(this.detectMode(text));
+        };
+
+        r.onerror = (e) => {
+            const msg =
+                {
+                    "not-allowed":
+                        "Microphone blocked. Allow access in your browser settings.",
+                    "service-not-allowed":
+                        "Microphone blocked. Allow access in your browser settings.",
+                    "no-speech": "No speech detected. Try again.",
+                    "audio-capture": "No microphone found.",
+                    network: "Speech service unreachable.",
+                }[e.error] || "Speech input failed. Try typing instead.";
+            this.micState("error", msg);
+        };
+
+        r.onend = () => {
+            this.listening = false;
+            this.el.micBtn.dataset.listening = "0";
+            if (this.el.micStatus.dataset.state === "listening") {
+                this.micState("idle", "");
+            }
+            // Fire the search now that dictation has settled
+            if (this.el.input.value.trim().length >= this.MIN_CHARS) {
+                this.onType();
+            }
+        };
+
+        this.recognition = r;
+    },
+
+    toggleMic() {
+        if (!this.recognition) return;
+        this.listening ? this.stopMic() : this.startMic();
+    },
+
+    startMic() {
+        this.micState("idle", "");
+        try {
+            this.recognition.start();
+        } catch (e) {
+            this.micState("error", "Could not start the microphone.");
+        }
+    },
+
+    stopMic() {
+        try {
+            this.recognition.stop();
+        } catch (e) {
+            /* already stopped */
+        }
+    },
+
+    micState(state, text) {
+        this.el.micStatus.dataset.state = state;
+        this.el.micText.textContent = text;
+    },
+
+    // ── Util ──────────────────────────────────────────────────
+
+    esc(s) {
+        const d = document.createElement("div");
+        d.textContent = s === null || s === undefined ? "" : String(s);
+        return d.innerHTML;
+    },
+};
+
+/* ── Global keyboard dispatcher ── */
+document.addEventListener("keydown", function (e) {
+    // Ctrl+K / Cmd+K — open (never toggles), fires regardless of focus
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        window.CommandCenter.show();
+        return;
+    }
+
+    // Escape — only when Command Center is the top layer
+    if (e.key === "Escape" && window.CommandCenter.open) {
+        e.preventDefault();
+        window.CommandCenter.close();
+    }
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+    setTimeout(() => window.CommandCenter.init(), 0);
+});
