@@ -464,6 +464,7 @@ window.CommandCenter = {
     rows: [], // flat list of currently rendered results
     activeIndex: -1,
     debounceTimer: null,
+    abortController: null,
     lastFocused: null,
     recognition: null,
     listening: false,
@@ -485,6 +486,7 @@ window.CommandCenter = {
             stResults: document.getElementById("cc-state-results"),
             stThread: document.getElementById("cc-state-thread"),
             stNone: document.getElementById("cc-state-none"),
+            stLoading: document.getElementById("cc-state-loading"),
             recents: document.getElementById("cc-recents"),
             noRecents: document.getElementById("cc-no-recents"),
         };
@@ -544,6 +546,7 @@ window.CommandCenter = {
         this.el.stResults.hidden = name !== "results";
         this.el.stThread.hidden = name !== "thread";
         this.el.stNone.hidden = name !== "none";
+        this.el.stLoading.hidden = name !== "loading";
     },
 
     setMode(mode) {
@@ -576,6 +579,7 @@ window.CommandCenter = {
         clearTimeout(this.debounceTimer);
 
         if (q.length < this.MIN_CHARS) {
+            if (this.abortController) this.abortController.abort();
             this.rows = [];
             this.activeIndex = -1;
             this.setState("empty");
@@ -633,12 +637,49 @@ window.CommandCenter = {
 
     // ── Query (Phase 1: dummy data, no network) ───────────────
 
-    runQuery(q) {
-        const data = this.dummyResults(q);
+    async runQuery(q) {
+        // Cancel any in-flight request so a slow reply can't overwrite a newer one
+        if (this.abortController) this.abortController.abort();
+        this.abortController = new AbortController();
 
-        if (!data.length) {
+        this.setState("loading");
+
+        let payload;
+
+        try {
+            const url =
+                window.CommandCenterConfig.resolveUrl +
+                "?q=" +
+                encodeURIComponent(q);
+
+            const res = await fetch(url, {
+                signal: this.abortController.signal,
+                headers: {
+                    Accept: "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+            });
+
+            payload = await res.json();
+        } catch (e) {
+            if (e.name === "AbortError") return; // superseded, do nothing
             this.rows = [];
             this.activeIndex = -1;
+            this.el.stNone.querySelector(".cc-hint-text").textContent =
+                "Search failed. Check your connection and try again.";
+            this.setState("none");
+            return;
+        }
+
+        this.render(payload.groups || []);
+    },
+
+    render(groups) {
+        if (!groups.length) {
+            this.rows = [];
+            this.activeIndex = -1;
+            this.el.stNone.querySelector(".cc-hint-text").textContent =
+                "No matching records.";
             this.setState("none");
             return;
         }
@@ -646,8 +687,9 @@ window.CommandCenter = {
         this.rows = [];
         let html = "";
 
-        data.forEach((group) => {
+        groups.forEach((group) => {
             html += `<p class="cc-section-label">${this.esc(group.label)}</p>`;
+
             group.items.forEach((item) => {
                 const idx = this.rows.length;
                 this.rows.push(item);
@@ -655,7 +697,8 @@ window.CommandCenter = {
                     <div class="cc-row" data-idx="${idx}"
                          onclick="window.CommandCenter.go(window.CommandCenter.rows[${idx}])">
                         <svg class="cc-row-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${group.icon}" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="${this.iconPath(group.icon)}" />
                         </svg>
                         <div class="cc-row-main">
                             <div class="cc-row-title ${item.mono ? "cc-mono" : ""}">${this.esc(item.title)}</div>
@@ -671,57 +714,17 @@ window.CommandCenter = {
         this.paintActive();
     },
 
-    dummyResults(q) {
-        const ICON_BOX =
-            "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4";
-        const ICON_USER =
-            "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z";
-        const ICON_DOC =
-            "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z";
+    /** Server sends an icon key; the SVG path stays client-side. */
+    iconPath(key) {
+        const paths = {
+            box: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+            doc: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+            user: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z",
+            receipt:
+                "M9 14h6m-6-4h6m-8 11l1.5-1.5L10 21l2-2 2 2 1.5-1.5L17 21V5a2 2 0 00-2-2H9a2 2 0 00-2 2v16z",
+        };
 
-        return [
-            {
-                label: "Consignment",
-                icon: ICON_BOX,
-                items: [
-                    {
-                        title: "MSCU4421889",
-                        meta: "Pending — ETA 12 Jul 2026",
-                        mono: true,
-                        url: "#",
-                    },
-                    {
-                        title: "TGHU7781234",
-                        meta: "Gated Out — 3 containers",
-                        mono: true,
-                        url: "#",
-                    },
-                ],
-            },
-            {
-                label: "Consignee",
-                icon: ICON_USER,
-                items: [
-                    {
-                        title: "Adom Enterprise Ltd",
-                        meta: "4 active consignments",
-                        url: "#",
-                    },
-                ],
-            },
-            {
-                label: "Receipt",
-                icon: ICON_DOC,
-                items: [
-                    {
-                        title: "RCP-2026-0442",
-                        meta: "GH₵ 12,400.00 — 08 Jul 2026",
-                        mono: true,
-                        url: "#",
-                    },
-                ],
-            },
-        ];
+        return paths[key] || paths.doc;
     },
 
     // ── Agent thread (Phase 4 replaces this stub) ─────────────

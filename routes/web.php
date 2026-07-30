@@ -45,6 +45,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MessagingCenterController;
 use App\Http\Controllers\ArrivalSmsController;
 use App\Services\PdfExportService;
+use App\Http\Controllers\CommandCenterController;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -64,6 +65,11 @@ Route::post('/webhook/whatsapp', [WhatsAppController::class, 'receive'])->name('
 
 // Authenticated Routes — accessible only when logged in
 Route::middleware('auth')->group(function () {
+
+
+    Route::get('/command-center/resolve', [CommandCenterController::class, 'resolve'])
+        ->name('command-center.resolve')
+        ->middleware('throttle:60,1');
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 

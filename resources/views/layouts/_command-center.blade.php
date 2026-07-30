@@ -1,3 +1,9 @@
+<script>
+    window.CommandCenterConfig = {
+        resolveUrl: '{{ route('command-center.resolve') }}',
+    };
+</script>
+
 <div id="cc-overlay" aria-hidden="true">
 
     <div id="cc-backdrop" onclick="window.CommandCenter.close()"></div>
@@ -53,6 +59,11 @@
 
             {{-- Thread state — Phase 4 agent conversation; stubbed for now --}}
             <div id="cc-state-thread" class="cc-state" hidden></div>
+
+            {{-- Loading --}}
+            <div id="cc-state-loading" class="cc-state" hidden>
+                <p class="cc-hint-text">Searching…</p>
+            </div>
 
             {{-- No matches --}}
             <div id="cc-state-none" class="cc-state" hidden>
