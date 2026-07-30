@@ -37,14 +37,14 @@ class UserAuth extends Model
         'UserPrivilege',
         'Hashing',
         'ReportVisibility',
-        'AccountingReport',
         'OperationsReport',
         'ClientReport',
         'DisbursementReport',
         'ManagementReport',
+        'AgentAutonomyControl',
+        'AgentViewAll',
         'MessagingCenter',
         'SendArrivalSms',
-        'Hashing',
         'ErrorLogTicket',
     ];
 

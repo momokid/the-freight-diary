@@ -59,6 +59,10 @@ class UserPrivilegeController extends Controller
                 'PendingGateOutDashboard' => 'Pending Gate Out',
                 'VehicleHubDashboard' => 'Vehicle Hub',
             ],
+            'Agent' => [
+                'AgentAutonomyControl' => 'Agent Autonomy Control',
+                'AgentViewAll'         => 'View All Agent Runs',
+            ],
             'Admin' => [
                 'UserPrivilege' => 'User Privilege',
                 'EditData' => 'Edit Data',
