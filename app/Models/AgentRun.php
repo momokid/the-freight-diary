@@ -44,6 +44,7 @@ class AgentRun extends Model
         'Autonomy',
         'RunStatus',
         'PlanJson',
+        'BagJson',
         'FailureReason',
         'Username',
         'BranchID',
@@ -54,6 +55,7 @@ class AgentRun extends Model
 
     protected $casts = [
         'PlanJson'    => 'array',
+        'BagJson'     => 'array',
         'StartedAt'   => 'datetime',
         'CompletedAt' => 'datetime',
     ];

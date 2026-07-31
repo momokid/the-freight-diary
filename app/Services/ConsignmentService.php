@@ -2,9 +2,15 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\DB;
+
 class ConsignmentService
 {
-    // Returns the SQL CASE block for consignment priority/stage.
+    // Consignment type — single source of truth for the LCL/FCL rule
+    public const TYPE_FCL         = 'FCL';
+    public const TYPE_LCL         = 'LCL';
+    public const TYPE_LCL_PENDING = 'LCL_AWAITING_BREAKDOWN';
+
     // Evaluation order: terminal Status flags first (0=Cleared, 3=Gated Out),
     // then ETA-driven logic for everything still active.
     // Aliases default to cm (container_main), da (disbursement_analysis)
@@ -94,5 +100,49 @@ class ConsignmentService
                     return priority !== 3 && priority !== 6;
                 }
             };";
+    }
+
+    /**
+     * Resolve whether a consignment is LCL, FCL, or LCL awaiting breakdown.
+     *
+     * CmdtTypeID = 1 is necessary but not sufficient for LCL — the presence of
+     * manifest breakdown rows is what confirms it. An LCL that has been
+     * registered but not yet broken down is a real and expected state, not an
+     * error: the agent flags it, the user decides whether breakdown is needed.
+     *
+     * This is the only place the rule should exist.
+     */
+    public function resolveType(int $consignmentId, string $bl): string
+    {
+        $cmdtTypeId = DB::table('container_main')
+            ->where('ConsignmentID', $consignmentId)
+            ->where('BL', $bl)
+            ->value('CmdtTypeID');
+
+        if ($cmdtTypeId === null) {
+            throw new \RuntimeException("Consignment not found: {$bl}");
+        }
+
+        if ((int) $cmdtTypeId !== 1) {
+            return self::TYPE_FCL;
+        }
+
+        $hasBreakdown = DB::table('manifestation_breakdown')
+            ->where('ConsignmentID', $consignmentId)
+            ->where('MainBL', $bl)
+            ->where('Status', 1)
+            ->exists();
+
+        return $hasBreakdown ? self::TYPE_LCL : self::TYPE_LCL_PENDING;
+    }
+
+    /** Display label for a resolved type. */
+    public function typeLabel(string $type): string
+    {
+        return match ($type) {
+            self::TYPE_LCL         => 'LCL',
+            self::TYPE_LCL_PENDING => 'LCL — awaiting breakdown',
+            default                => 'FCL',
+        };
     }
 }
