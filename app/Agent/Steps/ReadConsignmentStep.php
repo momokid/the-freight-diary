@@ -117,7 +117,7 @@ class ReadConsignmentStep implements AgentStep
         // ── Derived arrival ──
         $eta          = $row->ETA ? Carbon::parse($row->ETA)->startOfDay() : null;
         $today        = Carbon::now()->startOfDay();
-        $daysSinceEta = $eta ? $today->diffInDays($eta, false) * -1 : null;
+        $daysSinceEta = $eta ? (int) round($today->diffInDays($eta, false) * -1) : null;
         $hasArrived   = $eta ? $eta->lessThanOrEqualTo($today) : false;
 
         // Stored status still says Not Arrived, but the ETA has passed

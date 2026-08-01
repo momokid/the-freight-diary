@@ -22,6 +22,8 @@ class AgentPlaybook extends Model
         'Description',
         'IntentExamples',
         'StepsJson',
+        'ParamsJson',
+        'GatesJson',
         'Autonomy',
         'IsSystem',
         'Version',
@@ -34,6 +36,8 @@ class AgentPlaybook extends Model
 
     protected $casts = [
         'StepsJson' => 'array',
+        'ParamsJson' => 'array',
+        'GatesJson'  => 'array',
         'IsSystem'  => 'boolean',
         'CreatedAt' => 'datetime',
         'UpdatedAt' => 'datetime',
