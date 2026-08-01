@@ -553,20 +553,37 @@ window.CommandCenter = {
         this.mode = mode;
         this.el.badge.dataset.mode = mode;
         this.el.badge.textContent = mode === "agent" ? "Agent" : "Search";
-    },
 
+        const hint = document.getElementById("cc-enter-hint");
+        if (hint) hint.textContent = mode === "agent" ? "run" : "open";
+    },
     /**
      * Phase 1 heuristic only — replaced by real intent routing in Phase 3
      * (agent_intent_cache + agent_verb_synonyms).
      * Instruction-like = contains a known verb, or is a long multi-word phrase.
      */
+    /**
+     * Search vs Agent. Verbs come from agent_verb_synonyms via the server,
+     * so the dictionary has one source of truth.
+     */
     detectMode(q) {
-        const verbs =
-            /\b(draft|create|register|prepare|generate|send|show|list|what|how|check|update|make|add|breakdown|disburse)\b/i;
-        const words = q.trim().split(/\s+/).length;
-        return verbs.test(q) || words >= 4 ? "agent" : "search";
-    },
+        const text = (q || "").trim().toLowerCase();
+        if (!text) return "search";
 
+        const verbs = window.CommandCenterConfig.verbs || [];
+        const words = text.split(/\s+/);
+
+        // Any recognised verb makes it an instruction
+        if (words.some((w) => verbs.includes(w.replace(/[^a-z]/g, "")))) {
+            return "agent";
+        }
+
+        // Several words with no reference-looking token is probably an instruction
+        const hasRef = words.some(
+            (w) => /[a-z]/.test(w) && /\d/.test(w) && w.length >= 4,
+        );
+        return words.length >= 3 && !hasRef ? "agent" : "search";
+    },
     // ── Typing ────────────────────────────────────────────────
 
     onType() {
@@ -579,10 +596,18 @@ window.CommandCenter = {
         clearTimeout(this.debounceTimer);
 
         if (q.length < this.MIN_CHARS) {
-            if (this.abortController) this.abortController.abort();
             this.rows = [];
             this.activeIndex = -1;
             this.setState("empty");
+            return;
+        }
+
+        // Agent mode never searches — it waits for Enter
+        if (this.mode === "agent") {
+            this.rows = [];
+            this.activeIndex = -1;
+            this.el.stResults.innerHTML = `<p class="cc-hint-text">Press <kbd class="cc-kbd">Enter</kbd> to run this instruction.</p>`;
+            this.setState("results");
             return;
         }
 
@@ -623,7 +648,7 @@ window.CommandCenter = {
 
     commit() {
         if (this.mode === "agent") {
-            this.stubThread(this.el.input.value.trim());
+            this.runAgent(this.el.input.value.trim());
             return;
         }
         const row = this.rows[this.activeIndex >= 0 ? this.activeIndex : 0];
@@ -729,21 +754,104 @@ window.CommandCenter = {
 
     // ── Agent thread (Phase 4 replaces this stub) ─────────────
 
-    stubThread(q) {
-        this.el.stThread.innerHTML = `
-            <div style="padding:16px;">
-                <p style="font-size:12px;font-weight:700;color:var(--text-muted);
-                          text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">
-                    You said
-                </p>
-                <p style="font-size:14px;color:var(--text-primary);margin-bottom:16px;">
-                    ${this.esc(q)}
-                </p>
-                <p style="font-size:13px;color:var(--text-muted);">
-                    Agent execution arrives in Phase 4. Input modality:
-                    <strong>${this.inputModality}</strong>.
-                </p>
-            </div>`;
+    // ── Agent ─────────────────────────────────────────────────────────────
+
+    async runAgent(instruction) {
+        if (!instruction) return;
+
+        const modality = this.inputModality;
+
+        this.renderThread(`
+            <p class="cc-thread-you">${this.esc(instruction)}</p>
+            <p class="cc-thread-working">Working…</p>
+        `);
+
+        let data;
+        try {
+            const res = await fetch(window.CommandCenterConfig.runUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    "X-CSRF-TOKEN": window.CommandCenterConfig.csrf,
+                },
+                body: JSON.stringify({
+                    instruction: instruction,
+                    modality: modality,
+                }),
+            });
+
+            data = await res.json();
+
+            if (res.status === 429) {
+                this.renderThread(
+                    this.threadYou(instruction) +
+                        `<p class="cc-thread-error">Too many requests. Wait a moment.</p>`,
+                );
+                return;
+            }
+        } catch (err) {
+            this.renderThread(
+                this.threadYou(instruction) +
+                    `<p class="cc-thread-error">Could not reach the server.</p>`,
+            );
+            return;
+        }
+
+        // Bare reference — treat it as a search after all
+        if (data.outcome === "search") {
+            this.el.input.value = data.query;
+            this.setMode("search");
+            this.runQuery(data.query);
+            return;
+        }
+
+        if (
+            data.outcome === "unresolved" ||
+            data.outcome === "error" ||
+            data.outcome === "failed"
+        ) {
+            this.renderThread(
+                this.threadYou(instruction) +
+                    `<p class="cc-thread-error">${this.esc(data.message || "That did not work.")}</p>`,
+            );
+            return;
+        }
+
+        this.renderThread(this.threadYou(instruction) + this.threadReply(data));
+    },
+
+    threadYou(text) {
+        return `<p class="cc-thread-you">${this.esc(text)}</p>`;
+    },
+
+    threadReply(data) {
+        let html = "";
+
+        if (data.delayed) {
+            html += `<p class="cc-thread-flag">Delayed</p>`;
+        }
+
+        if (data.reply) {
+            html += `<p class="cc-thread-reply">${this.esc(data.reply).replace(/\n/g, "<br>")}</p>`;
+        }
+
+        const facts = data.facts || {};
+        const keys = Object.keys(facts);
+
+        if (keys.length) {
+            html += '<dl class="cc-facts">';
+            keys.forEach((k) => {
+                html += `<dt>${this.esc(k)}</dt><dd>${this.esc(facts[k])}</dd>`;
+            });
+            html += "</dl>";
+        }
+
+        return html;
+    },
+
+    renderThread(html) {
+        this.el.stThread.innerHTML = `<div class="cc-thread">${html}</div>`;
         this.setState("thread");
     },
 

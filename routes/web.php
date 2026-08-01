@@ -46,6 +46,7 @@ use App\Http\Controllers\MessagingCenterController;
 use App\Http\Controllers\ArrivalSmsController;
 use App\Services\PdfExportService;
 use App\Http\Controllers\CommandCenterController;
+use App\Http\Controllers\AgentController;
 
 // Guest Routes — accessible only when NOT logged in
 Route::middleware('guest')->group(function () {
@@ -70,6 +71,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/command-center/resolve', [CommandCenterController::class, 'resolve'])
         ->name('command-center.resolve')
         ->middleware('throttle:60,1');
+
+    Route::post('/command-center/run', [AgentController::class, 'run'])
+        ->name('command-center.run')
+        ->middleware('throttle:20,1');
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 

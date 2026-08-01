@@ -1,6 +1,9 @@
 <script>
     window.CommandCenterConfig = {
         resolveUrl: '{{ route('command-center.resolve') }}',
+        runUrl: '{{ route('command-center.run') }}',
+        csrf: '{{ csrf_token() }}',
+        verbs: @json(\App\Services\AgentVerbService::forJs()),
     };
 </script>
 
@@ -75,7 +78,7 @@
         {{-- ── Footer hints ── --}}
         <div id="cc-footer">
             <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-            <span><kbd>↵</kbd> open</span>
+            <span><kbd>↵</kbd> <span id="cc-enter-hint">open</span></span>
             <span><kbd>esc</kbd> close</span>
         </div>
 
@@ -103,6 +106,7 @@
     }
 
     #cc-panel {
+        --cc-scale: 1.3;
         position: relative;
         width: 640px;
         max-width: calc(100vw - 32px);
@@ -113,6 +117,16 @@
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
         overflow: hidden;
         animation: cc-in 0.12s ease-out;
+    }
+
+    .cc-kbd {
+        display: inline-block;
+        padding: 1px 5px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--content-bg);
+        font-family: inherit;
+        font-size: 11px;
     }
 
     @keyframes cc-in {
@@ -323,6 +337,71 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    /* ── Thread ── */
+    .cc-thread {
+        padding: 14px 16px;
+    }
+
+    .cc-thread-you {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+    }
+
+    .cc-thread-you::before {
+        content: 'You: ';
+        font-weight: 600;
+    }
+
+    .cc-thread-working {
+        font-size: 13px;
+        color: var(--text-muted);
+    }
+
+    .cc-thread-reply {
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+    }
+
+    .cc-thread-error {
+        font-size: 13px;
+        color: #b91c1c;
+    }
+
+    .cc-thread-flag {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(185, 28, 28, 0.1);
+        color: #b91c1c;
+        margin-bottom: 8px;
+    }
+
+    .cc-facts {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 14px;
+        font-size: 12px;
+        padding-top: 10px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .cc-facts dt {
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .cc-facts dd {
+        color: var(--text-primary);
+        margin: 0;
     }
 
     /* ── Footer ── */
