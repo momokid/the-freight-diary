@@ -108,9 +108,9 @@
     #cc-panel {
         --cc-scale: 1.3;
         position: relative;
-        width: 640px;
+        width: 1000px;
         max-width: calc(100vw - 32px);
-        margin: 10vh auto 0;
+        margin: 6vh auto 0;
         background: var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 12px;
@@ -267,7 +267,7 @@
 
     /* ── Body ── */
     #cc-body {
-        max-height: 52vh;
+        max-height: 68vh;
         overflow-y: auto;
         padding: 8px 0;
     }
@@ -383,6 +383,19 @@
         background: rgba(185, 28, 28, 0.1);
         color: #b91c1c;
         margin-bottom: 8px;
+    }
+
+    .cc-thread-fix {
+        display: inline-block;
+        font-size: calc(13px * var(--cc-scale));
+        font-weight: 600;
+        color: #185FA5;
+        text-decoration: none;
+        margin-bottom: 10px;
+    }
+
+    .cc-thread-fix:hover {
+        text-decoration: underline;
     }
 
     .cc-facts {

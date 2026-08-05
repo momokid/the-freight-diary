@@ -10,6 +10,7 @@ use App\Models\AgentRun;
 use App\Models\UserAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Agent\WorkflowGateException;
 
 class AgentController extends Controller
 {
@@ -82,6 +83,19 @@ class AgentController extends Controller
             );
 
             $run = $this->runner->execute($run);
+        } catch (WorkflowGateException $e) {
+
+            // Not an error — the workflow guard doing its job
+            return response()->json([
+                'outcome'      => 'blocked',
+                'message'      => $e->getMessage(),
+                'currentStage' => $e->currentStage,
+                'failures'     => array_map(fn($f) => [
+                    'message' => $f['message'],
+                    'label'   => $f['fix']['label'] ?? null,
+                    'url'     => $this->fixUrl($f['fix']['route'] ?? null),
+                ], $e->failures),
+            ]);
         } catch (\Exception $e) {
             report($e);
 
@@ -115,5 +129,20 @@ class AgentController extends Controller
                 'ms'     => $a->DurationMs,
             ])->all(),
         ];
+    }
+
+    /** Route name to URL, tolerating a name that no longer exists. */
+    private function fixUrl(?string $routeName): ?string
+    {
+        if ($routeName === null) {
+            return null;
+        }
+
+        try {
+            return route($routeName);
+        } catch (\Throwable $e) {
+            report($e);
+            return null;
+        }
     }
 }

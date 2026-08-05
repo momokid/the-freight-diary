@@ -358,6 +358,102 @@ class ConsignmentController extends Controller
         }
     }
 
+    /**
+     * Stage cargo lines extracted from the BL.
+     *
+     * Held against the user and BL until the consignment is saved, mirroring
+     * how container_temp works. Abandoned extractions leave staged rows that
+     * are replaced on the next attempt for the same BL.
+     */
+    private function stageCargoLines(array $lines, string $bl, string $username): void
+    {
+        $bl = strtoupper(trim($bl));
+
+        if ($bl === '') {
+            return;   // no BL yet — nothing to key against
+        }
+
+        // Replace any earlier staging for this user and BL
+        DB::table('consignment_cargo_lines')
+            ->where('Username', $username)
+            ->where('BL', $bl)
+            ->where('IsStaged', 1)
+            ->delete();
+
+        if (empty($lines)) {
+            return;
+        }
+
+        $now  = now()->toDateTimeString();
+        $rows = [];
+        $no   = 1;
+
+        foreach ($lines as $line) {
+            $description = trim((string) ($line['Description'] ?? ''));
+            $vin         = strtoupper(trim((string) ($line['VIN'] ?? '')));
+
+            if ($description === '' && $vin === '') {
+                continue;   // nothing usable
+            }
+
+            $rows[] = [
+                'ConsignmentID' => 0,
+                'BL'            => $bl,
+                'ContainerNo'   => strtoupper(trim((string) ($line['ContainerNo'] ?? ''))) ?: null,
+                'LineNo'        => $no++,
+                'VIN'           => $vin !== '' ? $vin : null,
+                'Description'   => $description !== '' ? mb_substr($description, 0, 255) : null,
+                'Make'          => trim((string) ($line['Make'] ?? '')) ?: null,
+                'Model'         => trim((string) ($line['Model'] ?? '')) ?: null,
+                'Year'          => preg_match('/^\d{4}$/', trim((string) ($line['Year'] ?? ''))) ? trim($line['Year']) : null,
+                'Weight'        => is_numeric($line['Weight'] ?? null) ? (float) $line['Weight'] : null,
+                'ItemTypeGuess' => $this->guessItemType($description, $vin),
+                'Confidence'    => null,
+                'Source'        => 'ocr',
+                'IsStaged'      => 1,
+                'UsedInManifest' => 0,
+                'Username'      => $username,
+                'CreatedAt'     => $now,
+                'Status'        => 1,
+            ];
+        }
+
+        if ($rows) {
+            DB::table('consignment_cargo_lines')->insert($rows);
+        }
+    }
+
+    /**
+     * Item type from the description.
+     *
+     * Bike words are checked first because Honda and Suzuki make both cars and
+     * motorbikes, so the make alone cannot decide it. A 17-character VIN is
+     * treated as vehicular evidence when the description is uninformative.
+     */
+    private function guessItemType(string $description, string $vin): string
+    {
+        $text = mb_strtoupper($description);
+
+        if (preg_match('/\b(BIKE|MOTORBIKE|MOTORCYCLE|SCOOTER|MOPED|TRICYCLE|APSONIC|HAOJUE)\b/', $text)) {
+            return 'MOTORBIKE';
+        }
+
+        $makes = 'TOYOTA|HYUNDAI|KIA|HONDA|NISSAN|FORD|MAZDA|MERCEDES|BENZ|BMW|AUDI|VOLKSWAGEN|VW|'
+            . 'CHEVROLET|CHEVY|JEEP|DODGE|LEXUS|ACURA|INFINITI|SUBARU|MITSUBISHI|SUZUKI|LAND ROVER|'
+            . 'RANGE ROVER|VOLVO|PEUGEOT|RENAULT|CHRYSLER|CADILLAC|GMC|BUICK|TESLA|PORSCHE|MINI|FIAT';
+
+        if (preg_match('/\b(' . $makes . ')\b/', $text)) {
+            return 'VEHICLE';
+        }
+
+        // A full-length VIN with no other signal still indicates a vehicle
+        if (strlen($vin) === 17) {
+            return 'VEHICLE';
+        }
+
+        return 'GOODS';
+    }
+
     //extract from BL for container_main fields
     public function extractFromBL(Request $request)
     {
@@ -377,6 +473,14 @@ class ConsignmentController extends Controller
         if ($cached) {
             DB::table('ocr_cache')->where('ID', $cached->ID)->increment('HitCount');
             $result = json_decode($cached->Result, true);
+
+            // Staging must happen on the cached path too — the user still needs
+            // these rows even though no extraction ran.
+            $this->stageCargoLines(
+                $result['fields']['CargoLines'] ?? [],
+                $result['fields']['MainBL']['value'] ?? '',
+                Auth::user()->ID
+            );
 
             return response()->json(array_merge($result, ['cached' => true]));
         }
@@ -407,6 +511,11 @@ class ConsignmentController extends Controller
         $containers  = $result['fields']['Containers'] ?? [];
         $totalWeight = $result['fields']['TotalGrossWeight']['value'] ?? '';
 
+        $this->stageCargoLines(
+            $result['fields']['CargoLines'] ?? [],
+            $result['fields']['MainBL']['value'] ?? '',
+            Auth::user()->ID
+        );
         if (count($containers) === 1 && empty($containers[0]['Weight']['value']) && $totalWeight !== '') {
             $result['fields']['Containers'][0]['Weight'] = [
                 'value'      => $totalWeight,

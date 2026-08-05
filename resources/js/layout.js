@@ -798,6 +798,21 @@ window.CommandCenter = {
             return;
         }
 
+        if (data.outcome === "blocked") {
+            let html = this.threadYou(instruction);
+            html += `<p class="cc-thread-flag">Cannot run yet</p>`;
+
+            (data.failures || []).forEach((f) => {
+                html += `<p class="cc-thread-reply">${this.esc(f.message)}</p>`;
+                if (f.url && f.label) {
+                    html += `<p><a class="cc-thread-fix" href="${this.esc(f.url)}">${this.esc(f.label)} →</a></p>`;
+                }
+            });
+
+            this.renderThread(html);
+            return;
+        }
+
         // Bare reference — treat it as a search after all
         if (data.outcome === "search") {
             this.el.input.value = data.query;

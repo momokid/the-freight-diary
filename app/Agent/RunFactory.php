@@ -7,6 +7,8 @@ use App\Models\AgentPlaybook;
 use App\Models\AgentRun;
 use App\Models\UserAuth;
 use Carbon\Carbon;
+use App\Services\WorkflowService;
+
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -20,7 +22,8 @@ use RuntimeException;
 class RunFactory
 {
     public function __construct(
-        private StepRegistry $registry
+        private StepRegistry $registry,
+        private WorkflowService $workflow,
     ) {}
 
     /**
@@ -42,6 +45,7 @@ class RunFactory
         }
 
         $this->assertPermitted($steps, $userAuth);
+        $this->assertWorkflowAllows($playbook, $seed);
 
         return DB::transaction(function () use ($playbook, $userAuth, $branchId, $seed, $meta, $steps) {
 
@@ -87,6 +91,46 @@ class RunFactory
         });
     }
 
+    /**
+     * Refuse tasks attempted out of workflow order.
+     *
+     * A 'stop' failure throws — there is no override. The remedy is to do the
+     * missing step, not to bypass the check. A 'warn' failure is surfaced to
+     * the caller, which pauses and asks the user whether to proceed.
+     */
+    private function assertWorkflowAllows(AgentPlaybook $playbook, array $seed): void
+    {
+        $gates = $playbook->GatesJson ?? [];
+
+        if (empty($gates)) {
+            return;   // read-only playbooks declare none
+        }
+
+        $reference = $seed['Reference'] ?? null;
+
+        if (empty($reference)) {
+            return;   // nothing to check against; the resolve step will fail loudly
+        }
+
+        $match = DB::table('container_main')
+            ->where('BL', strtoupper(trim($reference)))
+            ->where('Status', '<>', 9)
+            ->first(['ConsignmentID', 'BL']);
+
+        if (! $match) {
+            return;   // let ResolveConsignmentStep produce the not-found message
+        }
+
+        $state = $this->workflow->state($match->ConsignmentID, $match->BL);
+        $check = $this->workflow->check($gates, $state);
+
+        if ($check['result'] === WorkflowService::RESULT_STOP) {
+            throw new WorkflowGateException(
+                $check['failures'],
+                $this->workflow->currentStage($state)
+            );
+        }
+    }
     // ── Plan-time checks ────────────────────────────────────────────────────
 
     private function assertPermitted(array $steps, UserAuth $userAuth): void

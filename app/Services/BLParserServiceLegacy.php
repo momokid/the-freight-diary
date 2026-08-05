@@ -287,22 +287,9 @@ class BLParserService
             '(e.g. "40HC" → "40", "20\'GP" → "20", "45HQ" → "45"). ' .
             'Item description may also be labeled differently — look for "Description of Goods", "Commodity", ' .
             '"Cargo Description", "Said to Contain", or similar. If the description is given once for the whole shipment ' .
-            'rather than per container, repeat that same description for every container in the Containers array. ' .
-            'For the CargoLines array, extract one object per individually identifiable item listed on the document — ' .
-            'typically vehicles listed with a chassis or VIN number. A VIN is 17 characters of letters and digits, ' .
-            'and may be labelled "VIN", "Chassis No", "Chassis Number" or "Frame No". ' .
-            'Copy VINs character for character and never guess a missing character. ' .
-            'If the document describes cargo only in bulk, with no per-item listing, return an empty CargoLines array. ' .
-            'Never invent lines to match a package count. ' .
-            'For ShipmentTypeGuess, judge whether this is a full-container shipment (FCL) or a consolidation ' .
-            'carrying cargo for multiple parties (LCL). Indicators of LCL: the description itemises separate ' .
-            'consignments, house bill references appear per line, or several distinct consignees are named. ' .
-            'Indicators of FCL: one consignee, one description covering the whole shipment, and cargo stated ' .
-            'as whole containers. Note that "Shipper\'s Load Stow and Count" and "Said to Contain" appear on ' .
-            'both types and are not decisive on their own. ' .
-            'State your reasoning in one short sentence, and use "UNKNOWN" when the document does not show enough.' .
+            'rather than per container, repeat that same description for every container in the Containers array.' .
             "\n\nReturn exactly this JSON structure:\n" .
-            '{
+            '{triggerConsigneeOcrSearch
                 "MainBL": "Master Bill of Lading number",
                 "VesselName": "name of the vessel or ship",
                 "ShippingLine": "the carrier/shipping line company name if explicitly stated on the document (e.g. Maersk, MSC, CMA CGM, ONE) — leave empty string if only the vessel name is given and no separate carrier/line name appears",
@@ -328,10 +315,6 @@ class BLParserService
                 "MarksAndNumbers": "marks and numbers on cargo if stated",
                 "FreightTerms": "PREPAID or COLLECT",
                 "ContractNo": "contract or booking reference number if stated",
-               "FreightTerms": "PREPAID or COLLECT",
-                "ContractNo": "contract or booking reference number if stated",
-                "ShipmentTypeGuess": "FCL, LCL or UNKNOWN",
-                "ShipmentTypeReason": "one short sentence explaining the judgement",
                 "Containers": [
                     {
                         "ContainerNo": "container number",
@@ -339,17 +322,6 @@ class BLParserService
                         "Size": "container size e.g. 20, 40, 40HQ, 40HC",
                         "Weight": "this specific container weight as number only in KG, or empty string if only a combined total is given",
                         "ItemDetails": "description of goods/cargo for this container"
-                    }
-                ],
-                "CargoLines": [
-                    {
-                        "VIN": "17-character VIN or chassis number exactly as printed, or empty string",
-                        "Description": "the item as described on the document",
-                        "Make": "manufacturer if identifiable e.g. TOYOTA, HYUNDAI",
-                        "Model": "model if identifiable e.g. COROLLA, SANTAFE",
-                        "Year": "4-digit year if stated, otherwise empty string",
-                        "Weight": "weight of this item as number only in KG if stated per item, otherwise empty string",
-                        "ContainerNo": "container this item is in, if the document states it per item"
                     }
                 ]
             }';
@@ -360,9 +332,6 @@ class BLParserService
 
         $containers = $fields['Containers'] ?? [];
         unset($fields['Containers']);
-
-        $cargoLines = $fields['CargoLines'] ?? [];
-        unset($fields['CargoLines']);
 
         $scored     = [];
         $critical   = ['MainBL', 'ConsigneeName', 'POL', 'POD'];
@@ -410,12 +379,8 @@ class BLParserService
             ];
         }
 
-
         // ── Score each container separately ─────────────────────────────────
         $scored['Containers'] = $this->scoreContainers($containers);
-
-        // ── Cargo lines pass through unscored ───────────────────────────────
-        $scored['CargoLines'] = is_array($cargoLines) ? array_values($cargoLines) : [];
 
         return $scored;
     }
