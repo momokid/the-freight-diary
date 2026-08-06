@@ -307,6 +307,14 @@ Route::middleware('auth')->group(function () {
                 ->name('search-bl')
                 ->middleware('throttle:60,1');
             Route::get('/manifest-breakdown/{bl}', [ManifestController::class, 'report'])->name('manifest.breakdown');
+            Route::get('/extracted-lines', [ManifestController::class, 'extractedLines'])
+                ->name('extracted-lines');
+            Route::post('/stage-extracted', [ManifestController::class, 'stageExtracted'])
+                ->name('stage-extracted');
+            Route::delete('/dismiss-extracted', [ManifestController::class, 'dismissExtracted'])
+                ->name('dismiss-extracted');
+            Route::delete('/dismiss-extracted', [ManifestController::class, 'dismissExtracted'])
+                ->name('dismiss-extracted');
         });
 
         // // Consignment Cmdts routes

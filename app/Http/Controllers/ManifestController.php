@@ -8,6 +8,7 @@ use App\Models\ManifestTemp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\ManifestValidator;
 
 class ManifestController extends Controller
 {
@@ -43,7 +44,7 @@ class ManifestController extends Controller
     }
 
     // Search consignment by Main BL
-   public function search(Request $request)
+    public function search(Request $request)
     {
         $request->validate([
             'BL' => ['nullable', 'string', 'max:50'],
@@ -307,6 +308,14 @@ class ManifestController extends Controller
         }
 
         $bl = $entry->MainBL;
+
+        // Return the extracted line to the grid rather than losing it
+        if ($entry->CargoLineID) {
+            DB::table('consignment_cargo_lines')
+                ->where('ID', $entry->CargoLineID)
+                ->update(['UsedInManifest' => 0]);
+        }
+
         //use query delete instead of model instance delete — no primary key on this table
         ManifestTemp::where('Username', $user->ID)
             ->where('HouseBL', $request->HouseBL)
@@ -331,10 +340,42 @@ class ManifestController extends Controller
         ]);
     }
 
-    // Clear all temp entries
+    // Put extracted lines back in the grid when their staged row is removed.
+    private function releaseCargoLines(array $houseBls, string $bl): void
+    {
+        if (empty($houseBls)) {
+            return;
+        }
+
+        $lineIds = DB::table('consignment_cargo_lines as cl')
+            ->join('temp_manifestation_breakdown as t', function ($j) {
+                $j->on('t.VIN', '=', 'cl.VIN');
+            })
+            ->whereIn('t.HouseBL', $houseBls)
+            ->where('cl.BL', $bl)
+            ->pluck('cl.ID');
+
+        DB::table('consignment_cargo_lines')
+            ->whereIn('ID', $lineIds)
+            ->update(['UsedInManifest' => 0]);
+    }
+
     public function clearEntries()
     {
-        ManifestTemp::where('Username', Auth::user()->ID)->delete();
+        $user = Auth::user();
+
+        $lineIds = ManifestTemp::where('Username', $user->ID)
+            ->whereNotNull('CargoLineID')
+            ->pluck('CargoLineID');
+
+        if ($lineIds->isNotEmpty()) {
+            DB::table('consignment_cargo_lines')
+                ->whereIn('ID', $lineIds)
+                ->update(['UsedInManifest' => 0]);
+        }
+
+        ManifestTemp::where('Username', $user->ID)->delete();
+
         return response()->json(['success' => true, 'message' => 'Staging cleared.']);
     }
 
@@ -496,5 +537,236 @@ class ManifestController extends Controller
             'containers',
             'entries'
         ));
+    }
+
+    public function extractedLines(Request $request)
+    {
+        $request->validate([
+            'MainBL' => ['required', 'string', 'max:30'],
+        ]);
+
+        $bl = strtoupper(trim($request->MainBL));
+
+        $consignment = DB::table('container_main')
+            ->where('BL', $bl)
+            ->where('Status', '<>', 9)
+            ->first(['ConsignmentID', 'ContainerNo']);
+
+        if (! $consignment) {
+            return response()->json(['success' => false, 'message' => 'Consignment not found.'], 404);
+        }
+
+        $lines = DB::table('consignment_cargo_lines')
+            ->where('ConsignmentID', $consignment->ConsignmentID)
+            ->where('BL', $bl)
+            ->where('IsStaged', 0)
+            ->where('UsedInManifest', 0)
+            ->where('Status', 1)
+            ->orderBy('LineNo')
+            ->get();
+
+        if ($lines->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'rows'    => [],
+                'message' => 'No cargo lines were extracted from this BL.',
+            ]);
+        }
+
+        $validator = app(ManifestValidator::class);
+
+        $total  = $validator->containerWeight($consignment->ConsignmentID);
+        $staged = (float) \App\Models\ManifestTemp::where('Username', Auth::user()->ID)
+            ->where('MainBL', $bl)
+            ->sum('Weight');
+
+        $remaining = round($total - $staged, 3);
+
+        // Even split across rows with no stated weight, as a starting point
+        $withoutWeight = $lines->filter(fn($l) => $l->Weight === null || (float) $l->Weight <= 0)->count();
+        $statedWeight  = $lines->sum(fn($l) => (float) ($l->Weight ?? 0));
+        $toSplit       = max(0, round($remaining - $statedWeight, 3));
+        $perRow        = $withoutWeight > 0 ? round($toSplit / $withoutWeight, 3) : 0;
+
+        $houseBls = $this->nextHouseBls($bl, $lines->count());
+
+        $rows = [];
+        $i    = 0;
+
+        foreach ($lines as $line) {
+            $weight = ($line->Weight !== null && (float) $line->Weight > 0)
+                ? (float) $line->Weight
+                : $perRow;
+
+            $rows[] = [
+                'CargoLineID'  => $line->ID,
+                'HouseBL'      => $houseBls[$i] ?? '',
+                'ContainerNo'  => $line->ContainerNo ?: $consignment->ContainerNo,
+                'CosigneeID'   => null,
+                'Cosignee2_ID' => null,
+                'Description'  => $line->Description,
+                'ItemType'     => $line->ItemTypeGuess ?: 'GOODS',
+                'VIN'          => $line->VIN,
+                'OtherInfo'    => '',
+                'Weight'       => $weight,
+                'Package'      => 1,
+                'Unit'         => 'UNIT',
+            ];
+
+            $i++;
+        }
+
+        // Rounding leaves a few grams — put them on the last row
+        if ($rows && $perRow > 0) {
+            $allocated = round(array_sum(array_column($rows, 'Weight')), 3);
+            $drift     = round($remaining - $allocated, 3);
+
+            if (abs($drift) > 0) {
+                $rows[count($rows) - 1]['Weight'] = round($rows[count($rows) - 1]['Weight'] + $drift, 3);
+            }
+        }
+
+        return response()->json([
+            'success'       => true,
+            'ConsignmentID' => $consignment->ConsignmentID,
+            'MainBL'        => $bl,
+            'rows'          => $rows,
+            'summary'       => [
+                'total'     => round($total, 3),
+                'staged'    => round($staged, 3),
+                'remaining' => $remaining,
+            ],
+        ]);
+    }
+
+    // Validate the whole grid, then write all rows or none.
+    public function stageExtracted(Request $request, ManifestValidator $validator)
+    {
+        $request->validate([
+            'ConsignmentID' => ['required', 'integer'],
+            'MainBL'        => ['required', 'string', 'max:30'],
+            'rows'          => ['required', 'array', 'min:1'],
+        ]);
+
+        $user = Auth::user();
+        $bl   = strtoupper(trim($request->MainBL));
+
+        $check = $validator->validateBatch(
+            $request->rows,
+            (int) $request->ConsignmentID,
+            $bl,
+            $user->ID
+        );
+
+        if (! $check['valid']) {
+            return response()->json([
+                'success' => false,
+                'message' => $check['summary']['message'] ?? 'Some rows need attention.',
+                'rows'    => $check['rows'],
+                'summary' => $check['summary'],
+            ], 422);
+        }
+
+        $cargoLineIds = collect($request->rows)->pluck('CargoLineID')->filter()->all();
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($check['rows'] as $checked) {
+                $row = $checked['row'];
+
+                ManifestTemp::create([
+                    'ConsignmentID' => (int) $request->ConsignmentID,
+                    'MainBL'        => $bl,
+                    'ContainerNo'   => $row['ContainerNo'],
+                    'HouseBL'       => $row['HouseBL'],
+                    'CosigneeID'    => $row['CosigneeID'],
+                    'Cosignee2_ID'  => $row['Cosignee2_ID'],
+                    'Description'   => $row['Description'],
+                    'ItemType'      => $row['ItemType'],
+                    'VIN'           => $row['VIN'],
+                    'OtherInfo'     => $row['OtherInfo'],
+                    'Weight'        => $row['Weight'],
+                    'Package'       => $row['Package'],
+                    'Unit'          => $row['Unit'],
+                    'Username'      => $user->ID,
+                    'Time'          => now()->toDateTimeString(),
+                    'CargoLineID'   => $request->rows[$checked['index']]['CargoLineID'] ?? null,
+                ]);
+            }
+
+            if ($cargoLineIds) {
+                DB::table('consignment_cargo_lines')
+                    ->whereIn('ID', $cargoLineIds)
+                    ->update(['UsedInManifest' => 1]);
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not stage the entries. Nothing was saved.',
+                'debug'   => app()->environment('local') ? $e->getMessage() : null,
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => count($check['rows']) . ' entries staged.',
+        ]);
+    }
+
+    // Hard delete — the user has chosen to enter these manually.
+    public function dismissExtracted(Request $request)
+    {
+        $request->validate([
+            'MainBL' => ['required', 'string', 'max:30'],
+        ]);
+
+        $bl = strtoupper(trim($request->MainBL));
+
+        $deleted = DB::table('consignment_cargo_lines')
+            ->where('BL', $bl)
+            ->where('IsStaged', 0)
+            ->where('UsedInManifest', 0)
+            ->delete();
+
+        return response()->json(['success' => true, 'deleted' => $deleted]);
+    }
+
+    private function nextHouseBls(string $mainBl, int $count): array
+    {
+        $bl     = strtoupper(trim($mainBl));
+        $prefix = config('services.manifest.hbl_prefix', 'PSIL');
+        $last4  = substr($bl, -4);
+
+        $increment = ManifestTemp::where('MainBL', $bl)->count()
+            + ManifestBreakdown::where('MainBL', $bl)->count()
+            + 1;
+
+        $out  = [];
+        $seen = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            $houseBL = $prefix . $last4 . $increment;
+
+            while (
+                isset($seen[$houseBL]) ||
+                ManifestTemp::where('HouseBL', $houseBL)->exists() ||
+                ManifestBreakdown::where('HouseBL', $houseBL)->exists()
+            ) {
+                $increment++;
+                $houseBL = $prefix . $last4 . $increment;
+            }
+
+            $seen[$houseBL] = true;
+            $out[] = $houseBL;
+            $increment++;
+        }
+
+        return $out;
     }
 }

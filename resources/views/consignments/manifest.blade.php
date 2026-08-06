@@ -22,7 +22,7 @@
             </div>
             <button onclick="clearEntries()"
                 style="margin-left: auto; padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(234,179,8,0.4); background: transparent; color: #92400e; font-size: 0.75rem; cursor: pointer;">
-                Clear & Start New
+                Clear &amp; Start New
             </button>
         </div>
     @endif
@@ -43,7 +43,7 @@
                 </div>
                 <p id="search-error" class="form-error"></p>
 
-                {{-- Consignment Info (shown after search) --}}
+                {{-- Consignment Info --}}
                 <div id="consignment-info" style="display: none;">
                     <div
                         style="background: var(--content-bg); border-radius: 8px; padding: 12px; border: 1px solid var(--border-color);">
@@ -103,7 +103,6 @@
                         Manifest Breakdown
                     </p>
 
-                    {{-- House BL --}}
                     <div class="form-group">
                         <label class="form-label">House BL# <span style="color: #ef4444;">*</span></label>
                         <div style="display: flex; gap: 6px;">
@@ -121,7 +120,6 @@
                         </div>
                     </div>
 
-                    {{-- Container No (if multiple containers) --}}
                     <div class="form-group" id="container-select-group" style="display: none;">
                         <label class="form-label">Container <span style="color: #ef4444;">*</span></label>
                         <select id="container-no" class="form-input">
@@ -130,7 +128,6 @@
                         <p id="container-error" class="form-error"></p>
                     </div>
 
-                    {{-- Consignee --}}
                     <div class="form-group">
                         <label class="form-label">Consignee <span style="color: #ef4444;">*</span>
                             <button type="button" onclick="openQuickAddConsignee('consignee')"
@@ -145,7 +142,6 @@
                         <p id="consignee-error" class="form-error"></p>
                     </div>
 
-                    {{-- Notify Party --}}
                     <div class="form-group">
                         <label class="form-label">Notify Party <span style="color: #ef4444;">*</span>
                             <button type="button" onclick="openQuickAddConsignee('notify')"
@@ -161,16 +157,17 @@
                         <p id="notify-error" class="form-error"></p>
                     </div>
 
-                    {{-- Weight, Package, Unit --}}
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Weight (KG) <span style="color: #ef4444;">*</span></label>
-                            <input type="number" id="weight" min="0.001" step="0.001" class="form-input">
+                            <input type="text" id="weight" inputmode="decimal" class="form-input"
+                                oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1')">
                             <p id="weight-error" class="form-error"></p>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Package <span style="color: #ef4444;">*</span></label>
-                            <input type="number" id="package" min="1" step="1" class="form-input">
+                            <input type="text" id="package" inputmode="numeric" class="form-input"
+                                oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                             <p id="package-error" class="form-error"></p>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
@@ -186,7 +183,6 @@
                         </div>
                     </div>
 
-                    {{-- Item Type --}}
                     <div class="form-group" style="margin-top: 0.75rem;">
                         <label class="form-label">Item Type <span style="color: #ef4444;">*</span></label>
                         <select id="item-type" class="form-input" onchange="onItemTypeChange()">
@@ -198,14 +194,12 @@
                         <p id="item-type-error" class="form-error"></p>
                     </div>
 
-                    {{-- Description --}}
                     <div class="form-group">
                         <label class="form-label">Description <span style="color: #ef4444;">*</span></label>
                         <textarea id="description" rows="2" class="form-input" style="resize: none;"></textarea>
                         <p id="description-error" class="form-error"></p>
                     </div>
 
-                    {{-- VIN (vehicles only) --}}
                     <div class="form-group" id="vin-group" style="display: none;">
                         <label class="form-label">VIN <span style="color: #ef4444;">*</span></label>
                         <input type="text" id="vin" class="form-input"
@@ -213,7 +207,6 @@
                         <p id="vin-error" class="form-error"></p>
                     </div>
 
-                    {{-- Other Info --}}
                     <div class="form-group">
                         <label class="form-label">Other Info <span style="color: var(--text-muted);"
                                 id="other-info-label">optional</span></label>
@@ -233,7 +226,6 @@
         <div class="flex-1 min-w-0" style="min-height: 0;">
             <div class="card h-full flex flex-col">
 
-                {{-- Header --}}
                 <div class="flex items-center justify-between mb-4 flex-shrink-0">
                     <div>
                         <p class="form-title">Staged Manifest Entries</p>
@@ -248,11 +240,54 @@
                     </div>
                 </div>
 
-                {{-- Save error/success --}}
                 <p id="save-error" class="form-error" style="margin-bottom: 8px; text-align: center;"></p>
                 <p id="save-success" class="form-success" style="margin-bottom: 8px; text-align: center;"></p>
 
-                {{-- Table --}}
+                {{-- Extracted cargo lines from the BL --}}
+                <div id="extracted-grid-wrap" style="display: none; margin-bottom: 1rem;">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <p class="form-title" style="font-size: 0.875rem;">From the Bill of Lading</p>
+                            <p id="extracted-count"
+                                style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;"></p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="dismissExtracted()" class="btn-secondary"
+                                style="padding: 6px 12px; font-size: 0.8rem;">Dismiss</button>
+                            <button onclick="stageExtracted()" id="stage-extracted-btn" class="btn-primary"
+                                style="padding: 6px 32px; font-size: 0.8rem;min-width: 140px;font-weight:bold">Stage
+                                all</button>
+                        </div>
+                    </div>
+
+                    <p id="extracted-error" class="form-error" style="margin-bottom: 8px;"></p>
+
+                    <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                            <thead>
+                                <tr style="background: var(--content-bg);">
+                                    <th style="padding: 8px; text-align: left; font-weight: 600;">House BL</th>
+                                    <th style="padding: 8px; text-align: left; font-weight: 600;">Consignee</th>
+                                    <th style="padding: 8px; text-align: left; font-weight: 600;">Description</th>
+                                    <th style="padding: 8px; text-align: left; font-weight: 600;">Type</th>
+                                    <th style="padding: 8px; text-align: left; font-weight: 600;">VIN</th>
+                                    <th style="padding: 8px; text-align: right; font-weight: 600;">Weight</th>
+                                    <th style="padding: 8px; text-align: right; font-weight: 600;">Pkg</th>
+                                    <th style="padding: 8px; text-align: left; font-weight: 600;">Unit</th>
+                                    <th style="padding: 8px; width: 28px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="extracted-rows"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex items-center justify-between"
+                        style="margin-top: 8px; font-size: 0.75rem; color: var(--text-muted);">
+                        <span>Allocated: <span id="grid-allocated" style="font-weight: 600;">0.000</span> KG</span>
+                        <span>Unallocated: <span id="grid-unallocated" style="font-weight: 600;">0.000</span> KG</span>
+                    </div>
+                </div>
+
                 <div class="flex-1 overflow-y-auto" style="min-height: 0;">
                     <div id="staged-table">
                         <div
@@ -265,6 +300,28 @@
             </div>
         </div>
 
+    </div>
+
+    {{-- Shared consignee picker for the extracted grid --}}
+    <div id="modal-grid-consignee"
+        style="display: none; position: fixed; inset: 0; z-index: 50; align-items: center; justify-content: center; background: rgba(0,0,0,0.5);">
+        <div class="card" style="width: 100%; max-width: 440px; margin: 1rem;">
+            <div class="flex items-center justify-between mb-4">
+                <p class="form-title" id="grid-consignee-title">Select Consignee</p>
+                <button onclick="closeGridConsignee()"
+                    style="background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.2rem;">✕</button>
+            </div>
+            <div class="form-group" style="position: relative;">
+                <input type="text" id="grid-consignee-search" placeholder="Search consignee..." class="form-input">
+                <div id="grid-consignee-dropdown"
+                    style="display: none; position: absolute; z-index: 60; width: 100%; margin-top: 4px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; max-height: 220px; overflow-y: auto;">
+                </div>
+                <input type="hidden" id="grid-consignee-id">
+            </div>
+            <button onclick="openQuickAddConsignee('grid')" class="btn-secondary" style="width: 100%;">
+                Consignee not listed — add new
+            </button>
+        </div>
     </div>
 
     {{-- Quick Add Consignee Modal --}}
@@ -307,9 +364,9 @@
         let currentConsignment = null;
         let currentContainers = [];
         let totalWeight = 0;
-        let quickAddTarget = 'consignee'; // 'consignee' or 'notify'
+        let quickAddTarget = 'consignee'; // 'consignee', 'notify' or 'grid'
 
-        // ── Generate House BL ──
+        // ── House BL ──
         function generateHouseBL() {
             if (!currentConsignment) return;
 
@@ -324,8 +381,10 @@
                 });
         }
 
+        function refreshHouseBL() {
+            generateHouseBL();
+        }
 
-        // ── Update weight display ──
         function updateWeightDisplay(staged, remaining, total) {
             document.getElementById('staged-weight').textContent = parseFloat(staged).toFixed(3);
             document.getElementById('remaining-weight').textContent = parseFloat(remaining).toFixed(3);
@@ -333,15 +392,259 @@
             document.getElementById('weight-progress').style.width = Math.min(pct, 100) + '%';
         }
 
-        // ── Item type change ──
         function onItemTypeChange() {
             const type = document.getElementById('item-type').value;
-            const vinGroup = document.getElementById('vin-group');
-            const otherLabel = document.getElementById('other-info-label');
-
-            vinGroup.style.display = (type === 'VEHICLE') ? 'block' : 'none';
-            otherLabel.textContent = (type === 'MOTORBIKE') ? 'optional' : 'required if package > 1';
+            document.getElementById('vin-group').style.display = (type === 'VEHICLE') ? 'block' : 'none';
+            document.getElementById('other-info-label').textContent =
+                (type === 'MOTORBIKE') ? 'optional' : 'required if package > 1';
         }
+
+        // ══ Extracted cargo lines grid ══
+        let gridRows = [];
+        let gridConsigneeTarget = null;
+
+        function loadExtractedLines(bl) {
+            fetch(`{{ route('manifest.extracted-lines') }}?MainBL=${encodeURIComponent(bl)}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.rows || !data.rows.length) {
+                        document.getElementById('extracted-grid-wrap').style.display = 'none';
+                        return;
+                    }
+                    gridRows = data.rows;
+                    document.getElementById('extracted-grid-wrap').style.display = 'block';
+                    renderGrid();
+                })
+                .catch(() => {
+                    document.getElementById('extracted-grid-wrap').style.display = 'none';
+                });
+        }
+
+        function renderGrid() {
+            const tbody = document.getElementById('extracted-rows');
+            const esc = s => {
+                const d = document.createElement('div');
+                d.textContent = s ?? '';
+                return d.innerHTML;
+            };
+
+            tbody.innerHTML = gridRows.map((r, i) => `
+                <tr style="border-top: 1px solid var(--border-color);" data-row="${i}">
+                    <td style="padding: 6px 8px; font-family: ui-monospace, monospace;">${esc(r.HouseBL)}</td>
+                    <td style="padding: 6px 8px;">
+                        <button onclick="openGridConsignee(${i})"
+                            style="background: none; border: none; cursor: pointer; text-align: left; padding: 0; font-size: 0.8rem; color: ${r.CosigneeID ? 'var(--text-primary)' : '#b91c1c'};">
+                            ${r.CosigneeID ? esc(r.ConsigneeName) : 'Select…'}
+                        </button>
+                    </td>
+                    <td style="padding: 6px 8px;">
+                        <input type="text" value="${esc(r.Description)}" onchange="gridEdit(${i},'Description',this.value)"
+                            style="width: 100%; border: none; background: transparent; font-size: 0.8rem; color: var(--text-primary);">
+                    </td>
+                    <td style="padding: 6px 8px;">
+                        <select onchange="gridEdit(${i},'ItemType',this.value)"
+                            style="border: none; background: transparent; font-size: 0.8rem; color: var(--text-primary);">
+                            <option value="GOODS" ${r.ItemType === 'GOODS' ? 'selected' : ''}>GOODS</option>
+                            <option value="VEHICLE" ${r.ItemType === 'VEHICLE' ? 'selected' : ''}>VEHICLE</option>
+                            <option value="MOTORBIKE" ${r.ItemType === 'MOTORBIKE' ? 'selected' : ''}>MOTORBIKE</option>
+                        </select>
+                    </td>
+                    <td style="padding: 6px 8px;">
+                        <input type="text" value="${esc(r.VIN)}" onchange="gridEdit(${i},'VIN',this.value)"
+                            style="width: 150px; border: none; background: transparent; font-family: ui-monospace, monospace; font-size: 0.75rem; color: var(--text-primary);">
+                    </td>
+                    <td style="padding: 6px 8px; text-align: right;">
+                        <input type="text" inputmode="decimal" value="${r.Weight ?? ''}"
+                            oninput="this.value = this.value.replace(/[^0-9.]/g, '').replace(/(\\..*)\\./g, '$1')"
+                            onchange="gridWeightChanged(${i}, this.value)"
+                            style="width: 90px; border: none; background: transparent; text-align: right; font-size: 0.8rem; color: ${r.weightTouched ? 'var(--text-primary)' : 'var(--text-muted)'};">
+                    </td>
+                    <td style="padding: 6px 8px; text-align: right;">
+                        <input type="text" inputmode="numeric" value="${r.Package ?? 1}"
+                            oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                            onchange="gridEdit(${i},'Package',this.value)"
+                            style="width: 50px; border: none; background: transparent; text-align: right; font-size: 0.8rem; color: var(--text-primary);">
+                    </td>
+                    <td style="padding: 6px 8px;">
+                        <select onchange="gridEdit(${i},'Unit',this.value)"
+                            style="border: none; background: transparent; font-size: 0.8rem; color: var(--text-primary);">
+                            ${['UNIT','PKG','PLT','LOT'].map(u => `<option value="${u}" ${r.Unit === u ? 'selected' : ''}>${u}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td style="padding: 6px 8px; text-align: center;">
+                        <button onclick="removeGridRow(${i})" title="Remove"
+                            style="background: none; border: none; cursor: pointer; color: var(--text-muted);">✕</button>
+                    </td>
+                </tr>
+                ${r.errors ? `<tr data-err="${i}"><td colspan="9" style="padding: 4px 8px 8px; color: #b91c1c; font-size: 0.75rem;">${esc(Object.values(r.errors).join(' '))}</td></tr>` : ''}
+            `).join('');
+
+            document.getElementById('extracted-count').textContent =
+                `${gridRows.length} line${gridRows.length === 1 ? '' : 's'} found`;
+
+            updateGridTotals();
+        }
+
+        function updateGridTotals() {
+            const allocated = gridRows.reduce((s, r) => s + (parseFloat(r.Weight) || 0), 0);
+            document.getElementById('grid-allocated').textContent = allocated.toFixed(3);
+
+            const unallocated = totalWeight - allocated;
+            const el = document.getElementById('grid-unallocated');
+            el.textContent = unallocated.toFixed(3);
+            el.style.color = unallocated < 0 ? '#b91c1c' : 'var(--text-muted)';
+        }
+
+        function gridEdit(i, field, value) {
+            gridRows[i][field] = value;
+        }
+
+        function gridWeightChanged(i, value) {
+            const w = parseFloat(value);
+            gridRows[i].Weight = isNaN(w) ? 0 : w;
+            gridRows[i].weightTouched = true;
+
+            redistributeWeights();
+            renderGrid();
+        }
+
+        // Rows the user has set keep their figure. The rest split what's left.
+        function redistributeWeights() {
+            const touched = gridRows.filter(r => r.weightTouched);
+            const free = gridRows.filter(r => !r.weightTouched);
+
+            if (!free.length) return;
+
+            const used = touched.reduce((s, r) => s + (parseFloat(r.Weight) || 0), 0);
+            const remaining = Math.max(0, totalWeight - used);
+            const each = Math.floor((remaining / free.length) * 1000) / 1000;
+
+            free.forEach(r => {
+                r.Weight = each;
+            });
+
+            const allocated = gridRows.reduce((s, r) => s + (parseFloat(r.Weight) || 0), 0);
+            const drift = Math.round((totalWeight - allocated) * 1000) / 1000;
+
+            if (drift !== 0) {
+                const last = free[free.length - 1];
+                last.Weight = Math.round((last.Weight + drift) * 1000) / 1000;
+            }
+        }
+
+        function removeGridRow(i) {
+            gridRows.splice(i, 1);
+            redistributeWeights();
+            renderGrid();
+        }
+
+        function dismissExtracted() {
+            const n = gridRows.length;
+            if (!confirm(`Remove ${n} extracted line${n === 1 ? '' : 's'}? You'll need to enter them manually.`)) return;
+
+            fetch('{{ route('manifest.dismiss-extracted') }}', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                    },
+                    body: JSON.stringify({
+                        MainBL: currentConsignment.MainBL
+                    }),
+                })
+                .then(res => res.json())
+                .then(() => {
+                    gridRows = [];
+                    document.getElementById('extracted-grid-wrap').style.display = 'none';
+                })
+                .catch(() => {
+                    document.getElementById('extracted-error').textContent = 'Could not remove the lines.';
+                });
+        }
+
+        // ── Shared consignee picker ──
+        function openGridConsignee(i) {
+            gridConsigneeTarget = i;
+            document.getElementById('grid-consignee-search').value = '';
+            document.getElementById('grid-consignee-id').value = '';
+            document.getElementById('modal-grid-consignee').style.display = 'flex';
+            setTimeout(() => document.getElementById('grid-consignee-search').focus(), 50);
+        }
+
+        function closeGridConsignee() {
+            document.getElementById('modal-grid-consignee').style.display = 'none';
+            gridConsigneeTarget = null;
+        }
+
+        function applyGridConsignee(id, name) {
+            if (gridConsigneeTarget === null) return;
+            gridRows[gridConsigneeTarget].CosigneeID = id;
+            gridRows[gridConsigneeTarget].Cosignee2_ID = id;
+            gridRows[gridConsigneeTarget].ConsigneeName = name;
+            closeGridConsignee();
+            renderGrid();
+        }
+
+        function stageExtracted() {
+            const btn = document.getElementById('stage-extracted-btn');
+            const err = document.getElementById('extracted-error');
+            err.textContent = '';
+            btn.disabled = true;
+            btn.textContent = 'Staging…';
+
+            fetch('{{ route('manifest.stage-extracted') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF,
+                    },
+                    body: JSON.stringify({
+                        ConsignmentID: currentConsignment.ConsignmentID,
+                        MainBL: currentConsignment.MainBL,
+                        rows: gridRows,
+                    }),
+                })
+                .then(res => res.json())
+                .then(data => {
+                    btn.disabled = false;
+                    btn.textContent = 'Stage all';
+
+                    if (!data.success) {
+                        if (data.rows) {
+                            data.rows.forEach((r, i) => {
+                                if (gridRows[i]) gridRows[i].errors = r.errors;
+                            });
+                            renderGrid();
+                        }
+                        err.textContent = data.message || 'Fix the errors below and try again.';
+                        return;
+                    }
+
+                    gridRows = [];
+                    document.getElementById('extracted-grid-wrap').style.display = 'none';
+                    loadConsignment(currentConsignment.MainBL);
+                })
+                .catch(() => {
+                    btn.disabled = false;
+                    btn.textContent = 'Stage all';
+                    err.textContent = 'Could not reach the server.';
+                });
+        }
+
+        window.loadExtractedLines = loadExtractedLines;
+        window.gridEdit = gridEdit;
+        window.gridWeightChanged = gridWeightChanged;
+        window.removeGridRow = removeGridRow;
+        window.dismissExtracted = dismissExtracted;
+        window.openGridConsignee = openGridConsignee;
+        window.closeGridConsignee = closeGridConsignee;
+        window.applyGridConsignee = applyGridConsignee;
+        window.stageExtracted = stageExtracted;
+        window.refreshHouseBL = refreshHouseBL;
 
         document.addEventListener('DOMContentLoaded', function() {
             window.blSearch = new SearchDropdown({
@@ -374,7 +677,18 @@
                 subKey: 'TelNo',
                 valueKey: 'ConsigneeID',
             });
-        })
+
+            window.gridConsigneeSearch = new SearchDropdown({
+                inputId: 'grid-consignee-search',
+                dropdownId: 'grid-consignee-dropdown',
+                hiddenId: 'grid-consignee-id',
+                url: '{{ route('manifest.consignee-search') }}',
+                labelKey: 'FullName',
+                subKey: 'TelNo',
+                valueKey: 'ConsigneeID',
+                onSelect: (id, label) => applyGridConsignee(id, label),
+            });
+        });
 
         function loadConsignment(bl) {
             const errorEl = document.getElementById('search-error');
@@ -407,6 +721,8 @@
                     document.getElementById('consignment-info').style.display = 'block';
                     document.getElementById('manifest-form').style.display = 'block';
 
+                    loadExtractedLines(data.consignment.MainBL);
+
                     if (data.containers.length > 1) {
                         const select = document.getElementById('container-no');
                         select.innerHTML = '<option value="">Select container...</option>';
@@ -432,7 +748,6 @@
                 });
         }
 
-
         // ── Add entry to staging ──
         function addEntry() {
             const btn = document.getElementById('add-entry-btn');
@@ -453,7 +768,6 @@
             const vin = document.getElementById('vin').value.trim();
             const otherInfo = document.getElementById('other-info').value.trim();
 
-            // Validate
             let valid = true;
             const checks = [
                 [!consigneeId, 'consignee-error', 'Please select a consignee.'],
@@ -514,7 +828,6 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        // Clear form fields
                         window.consigneeSearch?.clear();
                         window.notifySearch?.clear();
                         document.getElementById('weight').value = '';
@@ -528,8 +841,6 @@
 
                         updateWeightDisplay(data.staged, data.remaining, data.total);
                         renderStagedTable(data.items, data.staged, data.total);
-
-                        // Generate next House BL
                         generateHouseBL();
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to add entry.';
@@ -562,40 +873,40 @@
                 return;
             }
 
-            wrapper.innerHTML = `
-        <table class="data-table">
-            <thead>
+            const rows = items.map(item => `
                 <tr>
-                    <th>House BL</th>
-                    <th>Consignee</th>
-                    <th>Notify Party</th>
-                    <th style="width: 80px;">Type</th>
-                    <th style="width: 80px;">Weight</th>
-                    <th style="width: 60px;">Pkg</th>
-                    <th style="width: 60px;">Unit</th>
-                    <th style="width: 60px; text-align: center;">Remove</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${items.map(item => `
-                                                            <tr>
-                                                                <td class="td-mono">${item.HouseBL}</td>
-                                                                <td style="font-weight: 500; color: var(--text-primary); font-size: 0.8rem;">${item.consignee?.FullName ?? '—'}</td>
-                                                                <td class="td-muted" style="font-size: 0.8rem;">${item.notify_party?.FullName ?? '—'}</td>
-                                                                <td class="td-muted">${item.ItemType}</td>
-                                                                <td class="td-mono">${parseFloat(item.Weight).toFixed(3)}</td>
-                                                                <td class="td-muted">${item.Package}</td>
-                                                                <td class="td-muted">${item.Unit}</td>
-                                                                <td style="text-align: center;">
-                                                                    <button onclick="removeEntry('${item.HouseBL}')" class="btn-icon btn-icon-danger" title="Remove">
-                                                                        <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                                        </svg>
-                                                                    </button>
-                                                                </td>
-                                                            </tr>`).join('')}
-            </tbody>
-        </table>`;
+                    <td class="td-mono">${item.HouseBL}</td>
+                    <td style="font-weight: 500; color: var(--text-primary); font-size: 0.8rem;">${item.consignee?.FullName ?? '—'}</td>
+                    <td class="td-muted" style="font-size: 0.8rem;">${item.notify_party?.FullName ?? '—'}</td>
+                    <td class="td-muted">${item.ItemType}</td>
+                    <td class="td-mono">${parseFloat(item.Weight).toFixed(3)}</td>
+                    <td class="td-muted">${item.Package}</td>
+                    <td class="td-muted">${item.Unit}</td>
+                    <td style="text-align: center;">
+                        <button onclick="removeEntry('${item.HouseBL}')" class="btn-icon btn-icon-danger" title="Remove">
+                            <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>`).join('');
+
+            wrapper.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>House BL</th>
+                            <th>Consignee</th>
+                            <th>Notify Party</th>
+                            <th style="width: 80px;">Type</th>
+                            <th style="width: 80px;">Weight</th>
+                            <th style="width: 60px;">Pkg</th>
+                            <th style="width: 60px;">Unit</th>
+                            <th style="width: 60px; text-align: center;">Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>`;
         }
 
         // ── Remove entry ──
@@ -617,6 +928,8 @@
                         updateWeightDisplay(data.staged, data.remaining, data.total);
                         renderStagedTable(data.items, data.staged, data.total);
                         generateHouseBL();
+                        // The removed line goes back to the grid
+                        if (currentConsignment) loadExtractedLines(currentConsignment.MainBL);
                     }
                 })
                 .catch(() => alert('Something went wrong.'));
@@ -637,6 +950,8 @@
                 .then(data => {
                     if (data.success) {
                         currentConsignment = null;
+                        gridRows = [];
+                        document.getElementById('extracted-grid-wrap').style.display = 'none';
                         document.getElementById('consignment-info').style.display = 'none';
                         document.getElementById('manifest-form').style.display = 'none';
                         document.getElementById('staged-table').innerHTML =
@@ -680,16 +995,15 @@
                         successEl.textContent = data.message;
                         successEl.classList.add('visible');
 
-                        // CHANGED: open report in new tab then reset form
                         const reportBL = currentConsignment.MainBL;
                         setTimeout(() => {
-                            // Open report in new tab
                             window.open(
                                 `{{ url('manifest/manifest-breakdown') }}/${encodeURIComponent(reportBL)}`,
                                 '_blank');
 
-                            // Reset form
                             currentConsignment = null;
+                            gridRows = [];
+                            document.getElementById('extracted-grid-wrap').style.display = 'none';
                             document.getElementById('consignment-info').style.display = 'none';
                             document.getElementById('manifest-form').style.display = 'none';
                             document.getElementById('search-bl').value = '';
@@ -717,8 +1031,8 @@
         // ── Quick Add Consignee ──
         function openQuickAddConsignee(target) {
             quickAddTarget = target;
-            document.getElementById('quick-consignee-title').textContent = target === 'consignee' ? 'New Consignee' :
-                'New Notify Party';
+            document.getElementById('quick-consignee-title').textContent =
+                target === 'notify' ? 'New Notify Party' : 'New Consignee';
             document.getElementById('modal-quick-consignee').style.display = 'flex';
         }
 
@@ -779,8 +1093,10 @@
                     if (data.success) {
                         if (quickAddTarget === 'consignee') {
                             window.consigneeSearch?.setValue(data.ConsigneeID, data.FullName);
-                        } else {
+                        } else if (quickAddTarget === 'notify') {
                             window.notifySearch?.setValue(data.ConsigneeID, data.FullName);
+                        } else if (quickAddTarget === 'grid') {
+                            applyGridConsignee(data.ConsigneeID, data.FullName);
                         }
                         closeQuickAddConsignee();
                     } else {

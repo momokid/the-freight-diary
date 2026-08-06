@@ -16,6 +16,7 @@ class ManifestTemp extends Model
         'MainBL',
         'ContainerNo',
         'HouseBL',
+        'CargoLineID',
         'CosigneeID',
         'Cosignee2_ID',
         'Description',
