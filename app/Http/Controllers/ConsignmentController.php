@@ -335,6 +335,8 @@ class ConsignmentController extends Controller
             }
 
             // 4. Clear temp table
+            $this->commitCargoLines($consignmentID, strtoupper(trim($request->BL)), $user->ID);
+
             ContainerTemp::where('Username', $user->ID)->delete();
 
             DB::commit();
@@ -358,13 +360,33 @@ class ConsignmentController extends Controller
         }
     }
 
-    /**
-     * Stage cargo lines extracted from the BL.
-     *
-     * Held against the user and BL until the consignment is saved, mirroring
-     * how container_temp works. Abandoned extractions leave staged rows that
-     * are replaced on the next attempt for the same BL.
-     */
+
+    private function commitCargoLines(int $consignmentID, string $bl, string $username): void
+    {
+        $query = DB::table('consignment_cargo_lines')
+            ->where('Username', $username)
+            ->where('IsStaged', 1);
+
+        $matched = (clone $query)->where('BL', $bl)->count();
+
+        if ($matched === 0) {
+            // BL was edited after extraction — adopt this user's staged rows
+            (clone $query)->update(['BL' => $bl]);
+        } else {
+            // Discard staging for any other BL left behind by an earlier attempt
+            (clone $query)->where('BL', '<>', $bl)->delete();
+        }
+
+        DB::table('consignment_cargo_lines')
+            ->where('Username', $username)
+            ->where('BL', $bl)
+            ->where('IsStaged', 1)
+            ->update([
+                'ConsignmentID' => $consignmentID,
+                'IsStaged'      => 0,
+            ]);
+    }
+
     private function stageCargoLines(array $lines, string $bl, string $username): void
     {
         $bl = strtoupper(trim($bl));
