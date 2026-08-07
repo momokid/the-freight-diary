@@ -2,28 +2,11 @@
 
 return [
 
-    /*
-    |---------------------------------------------------------------------------
-    | Step registry
-    |---------------------------------------------------------------------------
-    | The complete list of operations the agent can perform. Explicit by design:
-    | nothing becomes executable by being placed in a folder. Admins compose
-    | playbooks from these keys — they cannot author new ones.
-    */
-
     'steps' => [
         'consignment.resolve' => \App\Agent\Steps\ResolveConsignmentStep::class,
         'consignment.read'    => \App\Agent\Steps\ReadConsignmentStep::class,
         'reply.compose'       => \App\Agent\Steps\ComposeReplyStep::class,
     ],
-
-    /*
-    |---------------------------------------------------------------------------
-    | Task vocabulary
-    |---------------------------------------------------------------------------
-    | Every playbook must declare one of these as its TaskType, so admin-composed
-    | tasks land in an existing reporting bucket instead of inventing their own.
-    */
 
     'tasks' => [
         'lookup.status'               => 'Status lookup',
@@ -41,16 +24,6 @@ return [
         'receipt.generate'            => 'Receipt generation',
     ],
 
-    /*
-    |---------------------------------------------------------------------------
-    | Stage thresholds (days)
-    |---------------------------------------------------------------------------
-    | Placeholders. Arrival is derived: ETA in the past and unchanged means the
-    | consignment has landed. Each figure is the tolerated gap before a stage is
-    | flagged as stalled. Move these to system_settings when the monitor is built
-    | so they can be tuned without a deploy.
-    */
-
     'thresholds' => [
         'arrival_to_manifest'      => 2,
         'manifest_to_disbursement' => 2,
@@ -58,4 +31,52 @@ return [
         'gateout_to_return'        => 5,
     ],
 
+    /*
+    |---------------------------------------------------------------------------
+    | LLM adapter
+    |---------------------------------------------------------------------------
+    | Layer 3 of intent routing. Set AGENT_LLM_DRIVER to swap providers — any
+    | endpoint speaking the OpenAI /chat/completions shape needs only an entry
+    | here, no new class. Set it to 'none' to disable Layer 3 without a deploy.
+    */
+
+    'llm' => [
+
+        'driver' => env('AGENT_LLM_DRIVER', 'glm'),
+
+        'drivers' => [
+
+            'glm' => [
+                'adapter'      => \App\Agent\Llm\ChatCompletionsAdapter::class,
+                'base_url'     => env('GLM_BASE_URL', 'https://api.z.ai/api/openai/v1'),
+                'key'          => env('GLM_API_KEY', ''),
+                'model'        => env('GLM_MODEL', 'glm-4.5-flash'),
+                'timeout'      => (int) env('GLM_TIMEOUT', 10),
+                'requires_key' => true,
+            ],
+
+            // Local dev. No key by design.
+            'ollama' => [
+                'adapter'      => \App\Agent\Llm\ChatCompletionsAdapter::class,
+                'base_url'     => env('OLLAMA_CHAT_URL', 'http://127.0.0.1:11434/v1'),
+                'key'          => env('OLLAMA_API_KEY', ''),
+                'model'        => env('OLLAMA_CHAT_MODEL', 'llama3.1'),
+                'timeout'      => (int) env('OLLAMA_TIMEOUT', 30),
+                'requires_key' => false,
+            ],
+
+            'claude' => [
+                'adapter'      => \App\Agent\Llm\ChatCompletionsAdapter::class,
+                'base_url'     => env('CLAUDE_CHAT_URL', 'https://api.anthropic.com/v1'),
+                'key'          => env('ANTHROPIC_API_KEY', ''),
+                'model'        => env('AGENT_CLAUDE_MODEL', 'claude-haiku-4-5'),
+                'timeout'      => (int) env('AGENT_CLAUDE_TIMEOUT', 15),
+                'requires_key' => true,
+            ],
+
+            'none' => [
+                'adapter' => \App\Agent\Llm\NullAdapter::class,
+            ],
+        ],
+    ],
 ];
