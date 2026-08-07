@@ -1041,3 +1041,89 @@ document.addEventListener("keydown", function (e) {
 document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => window.CommandCenter.init(), 0);
 });
+
+let bellLoaded = false;
+
+function toggleBell() {
+    const menu = document.getElementById("bell-menu");
+    const open = menu.style.display !== "none";
+
+    menu.style.display = open ? "none" : "block";
+
+    if (!open && !bellLoaded) loadBell();
+}
+
+function loadBell() {
+    if (!window.BELL_URL) return;
+
+    fetch(window.BELL_URL, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+    })
+        .then((r) => r.json())
+        .then((d) => {
+            bellLoaded = true;
+            renderBell(d);
+        })
+        .catch(() => {
+            const body = document.getElementById("bell-body");
+            if (body) body.textContent = "Could not load.";
+        });
+}
+
+function renderBell(d) {
+    const rows = [];
+
+    if (d.unclaimed)
+        rows.push(
+            bellRow(d.stallUrl, d.unclaimed + " need someone", "#b91c1c"),
+        );
+    if (d.quiet)
+        rows.push(
+            bellRow(d.stallUrl, d.quiet + " claimed but gone quiet", "#b45309"),
+        );
+    if (d.resets)
+        rows.push(
+            bellRow(
+                d.resetUrl,
+                d.resets + " password reset request(s)",
+                "var(--text-primary)",
+            ),
+        );
+
+    const body = document.getElementById("bell-body");
+    if (body)
+        body.innerHTML = rows.length
+            ? rows.join("")
+            : "Nothing needs attention.";
+
+    const total = (d.unclaimed || 0) + (d.quiet || 0) + (d.resets || 0);
+    const badge = document.getElementById("bell-badge");
+    if (badge) {
+        badge.textContent = total;
+        badge.style.display = total ? "flex" : "none";
+    }
+}
+
+function bellRow(url, text, colour) {
+    return (
+        '<a href="' +
+        url +
+        '" style="display:block;padding:8px 0;color:' +
+        colour +
+        ';font-size:0.8rem;text-decoration:none;border-bottom:1px solid var(--border-color);">' +
+        text +
+        "</a>"
+    );
+}
+
+document.addEventListener("click", function (e) {
+    const wrap = document.getElementById("bell-wrapper");
+    const menu = document.getElementById("bell-menu");
+    if (wrap && menu && !wrap.contains(e.target)) {
+        menu.style.display = "none";
+    }
+});
+
+window.toggleBell = toggleBell;
+
+setTimeout(loadBell, 0);

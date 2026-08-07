@@ -69,12 +69,21 @@
                                 {{ $item['Days'] }}d
                             </td>
                             <td style="padding: 10px 18px; text-align: right; white-space: nowrap;">
-                                <span class="claim-slot" data-key="{{ $item['ConsignmentID'] }}-{{ $stage }}">
+                                <span class="claim-slot" data-key="{{ $item['ConsignmentID'] }}-{{ $stage }}"
+                                    data-bl="{{ $item['BL'] }}" data-cid="{{ $item['ConsignmentID'] }}"
+                                    data-stage="{{ $stage }}">
                                     @if ($item['ClaimedBy'])
                                         <span
                                             style="font-size: 0.75rem; color: {{ $item['GoneQuiet'] ? '#b45309' : 'var(--text-muted)' }};">
                                             {{ $item['ClaimedBy'] }}{{ $item['GoneQuiet'] ? ' — gone quiet' : '' }}
                                         </span>
+                                        @if ($item['CanRelease'])
+                                            <button
+                                                onclick="releaseStall({{ $item['ConsignmentID'] }}, '{{ $item['BL'] }}', '{{ $stage }}')"
+                                                style="margin-left: 6px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--border-color); background: transparent; color: var(--text-muted); font-size: 0.75rem; cursor: pointer;">
+                                                Release
+                                            </button>
+                                        @endif
                                     @else
                                         <button
                                             onclick="claimStall({{ $item['ConsignmentID'] }}, '{{ $item['BL'] }}', '{{ $stage }}')"
@@ -117,8 +126,10 @@
     <script>
         const STALL = {
             claim: '{{ route('stalled.claim') }}',
+            release: '{{ route('stalled.release') }}',
             run: '{{ route('command-center.run') }}',
             csrf: '{{ csrf_token() }}',
+            me: '{{ auth()->user()->ID }}',
         };
 
         const PER_PAGE = 10;
@@ -178,11 +189,52 @@
                 .then(r => r.json())
                 .then(d => {
                     slot.innerHTML = d.success ?
-                        `<span style="font-size:0.75rem;color:var(--text-muted);">${d.ClaimedBy}</span>` :
+                        claimedMarkup(d.ClaimedBy, consignmentId, bl, stage) :
                         '<span style="font-size:0.75rem;color:#b91c1c;">Could not save</span>';
                 })
                 .catch(() => {
                     slot.innerHTML = '<span style="font-size:0.75rem;color:#b91c1c;">Could not save</span>';
+                });
+        };
+
+        function claimedMarkup(who, consignmentId, bl, stage) {
+            return '<span style="font-size:0.75rem;color:var(--text-muted);">' + escapeHtml(who) + '</span>' +
+                '<button onclick="releaseStall(' + consignmentId + ', \'' + bl + '\', \'' + stage + '\')" ' +
+                'style="margin-left:6px;padding:5px 11px;border-radius:6px;border:1px solid var(--border-color);' +
+                'background:transparent;color:var(--text-muted);font-size:0.75rem;cursor:pointer;">Release</button>';
+        }
+
+        window.releaseStall = function(consignmentId, bl, stage) {
+            const slot = document.querySelector(`.claim-slot[data-key="${consignmentId}-${stage}"]`);
+            slot.innerHTML = '<span style="font-size:0.75rem;color:var(--text-muted);">Releasing…</span>';
+
+            fetch(STALL.release, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': STALL.csrf,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        ConsignmentID: consignmentId,
+                        BL: bl,
+                        Stage: stage
+                    }),
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        slot.innerHTML = '<button onclick="claimStall(' + consignmentId + ', \'' + bl +
+                            '\', \'' + stage + '\')" ' +
+                            'style="padding:5px 11px;border-radius:6px;border:1px solid var(--border-color);' +
+                            'background:transparent;color:var(--text-primary);font-size:0.75rem;cursor:pointer;">I\'m on this</button>';
+                    } else {
+                        slot.innerHTML = '<span style="font-size:0.75rem;color:#b91c1c;">' +
+                            escapeHtml(d.message || 'Could not release') + '</span>';
+                    }
+                })
+                .catch(() => {
+                    slot.innerHTML = '<span style="font-size:0.75rem;color:#b91c1c;">Could not release</span>';
                 });
         };
 

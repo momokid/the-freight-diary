@@ -81,7 +81,8 @@ Route::middleware('auth')->group(function () {
     Route::prefix('stalled')->name('stalled.')->group(function () {
         Route::get('/', [StallController::class, 'index'])->name('index');
         Route::get('/counts', [StallController::class, 'counts'])->name('counts');
-        Route::post('/claim', [StallController::class, 'claim'])->name('claim');
+        Route::post('/claim', [StallController::class, 'claim'])->name('claim')->middleware('throttle:30,1');
+        Route::post('/release', [StallController::class, 'release'])->name('release')->middleware('throttle:30,1');
     });
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

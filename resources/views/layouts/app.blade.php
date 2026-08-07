@@ -574,8 +574,8 @@
                 </button>
 
                 {{-- Notifications --}}
-                <div style="position: relative;">
-                    <button
+                <div style="position: relative;" id="bell-wrapper">
+                    <button onclick="toggleBell()"
                         style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--topbar-btn-border); background: var(--topbar-btn-bg); color: var(--topbar-text); cursor: pointer;">
                         <svg style="width: 16px; height: 16px;" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
@@ -583,15 +583,16 @@
                                 d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                         </svg>
                     </button>
-                    @if (isset($pendingResetCount) &&
-                            $pendingResetCount > 0 &&
-                            isset($userAuth) &&
-                            $userAuth->hasPermission('UserPrivilege'))
-                        <span
-                            style="position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; border-radius: 50%; background: #ef4444; color: white; font-size: 0.6rem; font-weight: 700; display: flex; align-items: center; justify-content: center;">
-                            {{ $pendingResetCount }}
-                        </span>
-                    @endif
+
+                    <span id="bell-badge"
+                        style="display: none; position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #ef4444; color: white; font-size: 0.6rem; font-weight: 700; align-items: center; justify-content: center;"></span>
+
+                    <div id="bell-menu"
+                        style="display: none; position: absolute; right: 0; margin-top: 8px; width: 280px; z-index: 50; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.12);">
+                        <div id="bell-body" style="padding: 14px 16px; font-size: 0.8rem; color: var(--text-muted);">
+                            Loading…
+                        </div>
+                    </div>
                 </div>
 
                 {{-- User dropdown --}}
@@ -645,7 +646,10 @@
 
     <script>
         {!! app(\App\Services\ConsignmentService::class)->priorityBadgeJs() !!}
+        window.BELL_URL = '{{ route('stalled.counts') }}';
     </script>
+
+    @stack('scripts')
 
     @stack('scripts')
 

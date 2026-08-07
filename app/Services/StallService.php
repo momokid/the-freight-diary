@@ -4,7 +4,7 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-
+use Illuminate\Support\Facades\Auth;
 
 class StallService
 {
@@ -212,6 +212,10 @@ class StallService
             'Days'          => (int) $since->diffInDays($today, false),
             'ClaimedBy'     => $claim->Username ?? null,
             'ClaimedAt'     => $claim->ClaimedAt ?? null,
+            'CanRelease'    => $claim && (
+                $claim->Username === Auth::id()
+                || Auth::user()?->Nature === 'Admin-0'
+            ),
             'GoneQuiet'     => $quiet,
             'Phrase'        => $this->phrase($stage, $r->BL),
         ];
@@ -245,6 +249,16 @@ class StallService
             ['ConsignmentID' => $consignmentId, 'BL' => $bl, 'Stage' => $stage],
             ['Username' => $username, 'ClaimedAt' => Carbon::now()]
         );
+    }
+
+    /** Deleted, not flagged — the item goes straight back to unclaimed. */
+    public function release(int $consignmentId, string $bl, string $stage): void
+    {
+        DB::table('stall_claims')
+            ->where('ConsignmentID', $consignmentId)
+            ->where('BL', $bl)
+            ->where('Stage', $stage)
+            ->delete();
     }
 
     // ── Bell ────────────────────────────────────────────────────────────────
