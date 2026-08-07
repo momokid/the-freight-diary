@@ -238,6 +238,20 @@
                 </div>
             </div>
 
+            {{-- Stalled Consignments --}}
+            <div class="nav-item-wrapper">
+                <a href="{{ route('stalled.index') }}"
+                    class="nav-link {{ request()->routeIs('stalled.*') ? 'active' : '' }}">
+                    <svg style="width: 16px; height: 16px; flex-shrink: 0;" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span class="nav-label">Stalled Consignments</span>
+                </a>
+                <div class="tooltip">Stalled Consignments</div>
+            </div>
+
             {{-- General Transactions --}}
             <div class="nav-section-label">General Transactions</div>
 
