@@ -595,6 +595,17 @@ class BLParserService
         $status = $best['score'] >= self::HIGH   ? 'ok'
             : ($best['score'] >= self::MEDIUM ? 'review' : 'low');
 
+
+        if ($status === 'low') {
+            return [
+                'id'         => null,
+                'label'      => null,
+                'confidence' => round($best['score'], 2),
+                'status'     => 'low',
+                'guess'      => $best['label'],
+            ];
+        }
+
         return [
             'id'         => $best['id'],
             'label'      => $best['label'],

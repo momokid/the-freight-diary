@@ -47,6 +47,7 @@ class EditConsignmentController extends Controller
 
         $results = DB::table('container_main as cm')
             ->join('shipper_main as s', 'cm.ShipperID', '=', 's.ShipperID')
+            ->where('cm.Status', '<>', 9)
             ->where('cm.BL', 'like', "%{$q}%")
             ->select('cm.ConsignmentID', 'cm.BL', 'cm.VesselName', 's.ShipperName')
             ->orderByDesc('cm.ConsignmentID')
@@ -65,7 +66,9 @@ class EditConsignmentController extends Controller
 
         $bl = strtoupper(trim($request->BL));
 
-        $consignment = ContainerMain::where('BL', $bl)->first();
+        $consignment = ContainerMain::where('BL', $bl)
+            ->where('Status', '<>', 9)
+            ->first();
 
         if (! $consignment) {
             return response()->json([
