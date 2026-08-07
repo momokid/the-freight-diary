@@ -216,6 +216,13 @@ class ManifestController extends Controller
         $user = Auth::user();
         $bl   = strtoupper(trim($request->MainBL));
 
+        if ($other = $this->pendingOtherBl($user->ID, $bl)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have entries staged for BL# ' . $other . '. Save or clear that manifest before starting another.',
+            ], 409);
+        }
+
         // VIN validation
         if ($request->ItemType === 'GOODS' && $request->VIN) {
             return response()->json(['success' => false, 'message' => 'VIN is only for VEHICLE item type.'], 422);
@@ -340,24 +347,12 @@ class ManifestController extends Controller
         ]);
     }
 
-    // Put extracted lines back in the grid when their staged row is removed.
-    private function releaseCargoLines(array $houseBls, string $bl): void
+    // One BL per user in staging. Returns the BL already open, or null.
+    private function pendingOtherBl(string $username, string $bl): ?string
     {
-        if (empty($houseBls)) {
-            return;
-        }
-
-        $lineIds = DB::table('consignment_cargo_lines as cl')
-            ->join('temp_manifestation_breakdown as t', function ($j) {
-                $j->on('t.VIN', '=', 'cl.VIN');
-            })
-            ->whereIn('t.HouseBL', $houseBls)
-            ->where('cl.BL', $bl)
-            ->pluck('cl.ID');
-
-        DB::table('consignment_cargo_lines')
-            ->whereIn('ID', $lineIds)
-            ->update(['UsedInManifest' => 0]);
+        return ManifestTemp::where('Username', $username)
+            ->where('MainBL', '<>', $bl)
+            ->value('MainBL');
     }
 
     public function clearEntries()
@@ -417,12 +412,6 @@ class ManifestController extends Controller
             ], 422);
         }
 
-        // Check all items are under same BL
-        $distinctBLs = $items->pluck('MainBL')->unique()->count();
-        if ($distinctBLs > 1) {
-            return response()->json(['success' => false, 'message' => 'Multiple BLs detected in staging. Please reset.'], 422);
-        }
-
         DB::beginTransaction();
 
         try {
@@ -460,7 +449,9 @@ class ManifestController extends Controller
             ]);
 
             // Clear temp table
-            ManifestTemp::where('Username', $user->ID)->delete();
+            ManifestTemp::where('Username', $user->ID)
+                ->where('MainBL', $bl)
+                ->delete();
 
             DB::commit();
 
@@ -470,10 +461,12 @@ class ManifestController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+            report($e);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to save manifest. Please try again.',
-                'error'   => $e->getMessage(),
+                'debug'   => app()->environment('local') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -650,6 +643,13 @@ class ManifestController extends Controller
 
         $user = Auth::user();
         $bl   = strtoupper(trim($request->MainBL));
+
+        if ($other = $this->pendingOtherBl($user->ID, $bl)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have entries staged for BL# ' . $other . '. Save or clear that manifest before starting another.',
+            ], 409);
+        }
 
         $check = $validator->validateBatch(
             $request->rows,

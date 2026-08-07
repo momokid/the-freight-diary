@@ -365,6 +365,7 @@
         let currentContainers = [];
         let totalWeight = 0;
         let quickAddTarget = 'consignee'; // 'consignee', 'notify' or 'grid'
+        let pendingBL = @json($pendingBOL);
 
         // ── House BL ──
         function generateHouseBL() {
@@ -694,6 +695,14 @@
             const errorEl = document.getElementById('search-error');
             errorEl.classList.remove('visible');
 
+            if (pendingBL && pendingBL.toUpperCase() !== bl.toUpperCase()) {
+                errorEl.textContent = 'You have entries staged for BL# ' + pendingBL +
+                    '. Save or clear that manifest before starting another.';
+                errorEl.classList.add('visible');
+                document.getElementById('search-bl').value = pendingBL;
+                return;
+            }
+
             fetch(`{{ route('manifest.search') }}?BL=${encodeURIComponent(bl)}`, {
                     headers: {
                         'X-Requested-With': 'XMLHttpRequest'
@@ -863,6 +872,9 @@
             const countEl = document.getElementById('staged-count');
             const saveBtn = document.getElementById('save-manifest-btn');
 
+            // Staging owns a BL until it is empty again
+            pendingBL = items.length ? (currentConsignment?.MainBL ?? pendingBL) : null;
+
             countEl.textContent = items.length + ' entry(s) staged — ' + parseFloat(staged).toFixed(3) + ' KG of ' +
                 parseFloat(total).toFixed(3) + ' KG';
             saveBtn.style.display = items.length > 0 ? 'block' : 'none';
@@ -950,7 +962,9 @@
                 .then(data => {
                     if (data.success) {
                         currentConsignment = null;
+                        pendingBL = null;
                         gridRows = [];
+
                         document.getElementById('extracted-grid-wrap').style.display = 'none';
                         document.getElementById('consignment-info').style.display = 'none';
                         document.getElementById('manifest-form').style.display = 'none';
@@ -1002,7 +1016,9 @@
                                 '_blank');
 
                             currentConsignment = null;
+                            pendingBL = null;
                             gridRows = [];
+
                             document.getElementById('extracted-grid-wrap').style.display = 'none';
                             document.getElementById('consignment-info').style.display = 'none';
                             document.getElementById('manifest-form').style.display = 'none';
