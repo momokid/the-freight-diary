@@ -5,13 +5,7 @@ namespace App\Agent;
 use App\Agent\Steps\AgentStep;
 use InvalidArgumentException;
 
-/**
- * The list of operations the agent can perform.
- *
- * Reads config/agent.php. Nothing becomes executable by living in a folder —
- * a class must be registered by key. This is the enforcement point for
- * "admins compose playbooks, they do not author steps".
- */
+
 class StepRegistry
 {
     private array $steps;
@@ -37,10 +31,7 @@ class StepRegistry
         return array_keys($this->steps);
     }
 
-    /**
-     * Every step described for the admin composition UI and the planner.
-     * Static methods, so nothing is instantiated.
-     */
+
     public function describeAll(): array
     {
         $out = [];
@@ -70,11 +61,27 @@ class StepRegistry
         ];
     }
 
-    /**
-     * Validate the registry itself. Catches the mistakes that would otherwise
-     * surface mid-run: a missing class, a class that does not implement the
-     * contract, or a key that disagrees with the class it points at.
-     */
+
+    public function requirementsFor(array $steps): array
+    {
+        $out = [];
+
+        foreach ($steps as $step) {
+            $key   = $step['key'] ?? '';
+            $class = $this->classFor($key);
+
+            $out[] = [
+                'key'        => $key,
+                'known'      => $class !== null,
+                'label'      => $class ? $class::label() : null,
+                'permission' => $class ? $class::permission() : null,
+                'isWrite'    => $class ? $class::isWrite() : null,
+            ];
+        }
+
+        return $out;
+    }
+
     public function validate(): array
     {
         $problems = [];

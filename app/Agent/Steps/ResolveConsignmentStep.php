@@ -43,7 +43,11 @@ class ResolveConsignmentStep implements AgentStep
     public static function inputs(): array
     {
         return [
-            'Reference' => ['type' => 'string', 'required' => true],
+            'Reference' => [
+                'type'        => 'string',
+                'required'    => true,
+                'description' => 'A Main BL, House BL or container number identifying the consignment.',
+            ],
         ];
     }
 

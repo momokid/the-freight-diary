@@ -756,7 +756,7 @@ window.CommandCenter = {
 
     // ── Agent ─────────────────────────────────────────────────────────────
 
-    async runAgent(instruction) {
+    async runAgent(instruction, playbook = null) {
         if (!instruction) return;
 
         const modality = this.inputModality;
@@ -778,6 +778,7 @@ window.CommandCenter = {
                 body: JSON.stringify({
                     instruction: instruction,
                     modality: modality,
+                    playbook: playbook,
                 }),
             });
 
@@ -821,6 +822,21 @@ window.CommandCenter = {
             return;
         }
 
+        // Not confident enough to act — let the user choose
+        if (data.outcome === "suggest") {
+            this.renderSuggestions(instruction, data);
+            return;
+        }
+
+        if (data.outcome === "awaiting_approval") {
+            this.renderThread(
+                this.threadYou(instruction) +
+                    `<p class="cc-thread-flag">Waiting for approval</p>` +
+                    `<p class="cc-thread-reply">${this.esc(data.taskLabel || "This task")} is ready but needs approval before it writes anything.</p>`,
+            );
+            return;
+        }
+
         if (
             data.outcome === "unresolved" ||
             data.outcome === "error" ||
@@ -844,11 +860,23 @@ window.CommandCenter = {
         let html = "";
 
         if (data.delayed) {
-            html += `<p class="cc-thread-flag">Delayed</p>`;
+            html += `<p class="cc-thread-flag cc-flag-warn">Delayed</p>`;
         }
 
+        // The reply is three lines doing three jobs: who and what, where it
+        // stands, and what is owed next. Flat text buries the third.
         if (data.reply) {
-            html += `<p class="cc-thread-reply">${this.esc(data.reply).replace(/\n/g, "<br>")}</p>`;
+            const lines = data.reply.split("\n").filter((l) => l.trim() !== "");
+
+            if (lines.length) {
+                html += `<p class="cc-thread-head">${this.esc(lines[0])}</p>`;
+            }
+            if (lines.length > 1) {
+                html += `<p class="cc-thread-sub">${this.esc(lines[1])}</p>`;
+            }
+            if (lines.length > 2) {
+                html += `<p class="cc-thread-action">${this.esc(lines.slice(2).join(" "))}</p>`;
+            }
         }
 
         const facts = data.facts || {};
@@ -857,12 +885,81 @@ window.CommandCenter = {
         if (keys.length) {
             html += '<dl class="cc-facts">';
             keys.forEach((k) => {
-                html += `<dt>${this.esc(k)}</dt><dd>${this.esc(facts[k])}</dd>`;
+                html += `<dt>${this.esc(k)}</dt><dd${this.factClass(k, facts[k])}>${this.esc(facts[k])}</dd>`;
             });
             html += "</dl>";
         }
 
         return html;
+    },
+
+    /** Identifiers read better in mono; status carries its own colour. */
+    factClass(label, value) {
+        if (label === "Status") {
+            const tone = this.statusTone(String(value));
+            return tone ? ` class="cc-status cc-status-${tone}"` : "";
+        }
+
+        return ["BL", "Vessel", "Containers", "House BLs"].includes(label)
+            ? ' class="cc-mono"'
+            : "";
+    },
+
+    /** Mirrors the consignment badge palette used across the app. */
+    statusTone(label) {
+        const map = {
+            Cleared: "gray",
+            "Gated Out": "amber",
+            Pending: "purple",
+            "Not Arrived": "blue",
+        };
+
+        return map[label] || null;
+    },
+
+    /**
+     * Below the confidence floor. The pick is the training signal — the server
+     * caches the mapping only after the chosen task actually runs.
+     */
+    renderSuggestions(instruction, data) {
+        this.suggestions = data.suggestions || [];
+
+        if (!this.suggestions.length) {
+            this.renderThread(
+                this.threadYou(instruction) +
+                    `<p class="cc-thread-error">I don't know how to do that yet.</p>`,
+            );
+            return;
+        }
+
+        let html = this.threadYou(instruction);
+        html += `<p class="cc-thread-flag">${this.esc(data.message || "Did you mean one of these?")}</p>`;
+
+        this.suggestions.forEach((s, i) => {
+            html += `
+                <div class="cc-row cc-suggest" data-index="${i}" role="button" tabindex="0">
+                    <div class="cc-row-body">
+                        <div class="cc-row-title">${this.esc(s.title)}</div>
+                    </div>
+                </div>`;
+        });
+
+        this.renderThread(html);
+
+        this.el.stThread.querySelectorAll(".cc-suggest").forEach((row) => {
+            const pick = () => {
+                const choice = this.suggestions[Number(row.dataset.index)];
+                if (choice) this.runAgent(instruction, choice.key);
+            };
+
+            row.addEventListener("click", pick);
+            row.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    pick();
+                }
+            });
+        });
     },
 
     renderThread(html) {

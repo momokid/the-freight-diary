@@ -198,6 +198,8 @@ class AgentRunner
     /**
      * Audit rows record what happened, not a second copy of your data.
      * Scalars are kept; arrays and long strings are reduced to a shape note.
+     * Strings are also repaired — legacy rows carry bytes that are not valid
+     * UTF-8 and would fail the JSON cast on save.
      */
     private function summarise(array $output): array
     {
@@ -210,8 +212,14 @@ class AgentRunner
 
             if (is_array($value)) {
                 $summary[$key] = '[' . count($value) . ' items]';
-            } elseif (is_string($value) && strlen($value) > 200) {
-                $summary[$key] = substr($value, 0, 200) . '…';
+            } elseif (is_string($value)) {
+                $clean = mb_check_encoding($value, 'UTF-8')
+                    ? $value
+                    : mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
+
+                $summary[$key] = mb_strlen($clean) > 200
+                    ? mb_substr($clean, 0, 200) . '…'
+                    : $clean;
             } else {
                 $summary[$key] = $value;
             }

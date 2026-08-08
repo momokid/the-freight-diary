@@ -5,6 +5,8 @@ namespace App\Agent\Steps;
 use App\Agent\AgentContext;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\WorkflowService;
+use App\Services\ConsignmentService;
 use RuntimeException;
 
 /**
@@ -39,8 +41,16 @@ class ReadConsignmentStep implements AgentStep
     public static function inputs(): array
     {
         return [
-            'ConsignmentID' => ['type' => 'int',    'required' => true],
-            'BL'            => ['type' => 'string', 'required' => true],
+            'ConsignmentID' => [
+                'type'        => 'int',
+                'required'    => true,
+                'description' => 'Internal consignment identifier, normally resolved from a reference by an earlier step.',
+            ],
+            'BL'            => [
+                'type'        => 'string',
+                'required'    => true,
+                'description' => 'The Main BL of the consignment to read.',
+            ],
         ];
     }
 
@@ -49,6 +59,8 @@ class ReadConsignmentStep implements AgentStep
         return [
             'Status',
             'StatusLabel',
+            'Stage',
+            'StageLabel',
             'RegisteredOn',
             'ETA',
             'DaysSinceEta',
@@ -123,9 +135,27 @@ class ReadConsignmentStep implements AgentStep
         // Stored status still says Not Arrived, but the ETA has passed
         $statusDisagrees = ($hasArrived && (int) $row->Status === 1);
 
+        // Where it actually is, derived — the stored Status is only what
+        // somebody last typed, and on old consignments it is often stale.
+        $type  = $context->get('ConsignmentType');
+        $stage = app(WorkflowService::class)->currentStage([
+            'HasArrived'     => $hasArrived,
+            'IsLcl'          => in_array($type, [
+                ConsignmentService::TYPE_LCL,
+                ConsignmentService::TYPE_LCL_PENDING,
+            ], true),
+            'BreakdownCount' => $breakdownCount,
+            'Stamps'         => $stamps,
+            'ContainerCount' => $containers->count(),
+            'GatedOutCount'  => $containers->whereNotNull('GateOutDate')->count(),
+            'ReturnedCount'  => $containers->whereNotNull('ReturnDate')->count(),
+        ]);
+
         return [
             'Status'             => (int) $row->Status,
             'StatusLabel'        => $this->statusLabel((int) $row->Status),
+            'Stage'              => $stage,
+            'StageLabel'         => $this->stageLabel($stage),
             'RegisteredOn'       => $row->Date,
             'ETA'                => $row->ETA,
             'DaysSinceEta'       => $daysSinceEta,
@@ -152,6 +182,20 @@ class ReadConsignmentStep implements AgentStep
             3 => 'Gated Out',
             9 => 'Deleted',
             default => 'Unknown',
+        };
+    }
+
+    /** Derived workflow position, phrased as what is owed next. */
+    private function stageLabel(string $stage): string
+    {
+        return match ($stage) {
+            WorkflowService::STAGE_REGISTERED => 'Registered — awaiting arrival',
+            WorkflowService::STAGE_ARRIVED    => 'Arrived — awaiting manifest breakdown',
+            WorkflowService::STAGE_MANIFESTED => 'Manifested — awaiting disbursement',
+            WorkflowService::STAGE_DISBURSED  => 'Disbursed — awaiting gate out',
+            WorkflowService::STAGE_GATED_OUT  => 'Gated out — awaiting container return',
+            WorkflowService::STAGE_RETURNED   => 'Complete — containers returned',
+            default                           => 'Unknown',
         };
     }
 }

@@ -3,14 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Agent\AgentRunner;
+use App\Agent\Intent\IntentNormaliser;
 use App\Agent\Intent\IntentRouter;
+use App\Agent\PlaybookCatalogue;
 use App\Agent\RunFactory;
+use App\Agent\WorkflowGateException;
 use App\Models\AgentPlaybook;
 use App\Models\AgentRun;
 use App\Models\UserAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Agent\WorkflowGateException;
 
 class AgentController extends Controller
 {
@@ -18,6 +20,8 @@ class AgentController extends Controller
         private IntentRouter $router,
         private RunFactory $factory,
         private AgentRunner $runner,
+        private PlaybookCatalogue $catalogue,
+        private IntentNormaliser $normaliser,
     ) {}
 
     public function run(Request $request)
@@ -25,10 +29,12 @@ class AgentController extends Controller
         $validated = $request->validate([
             'instruction' => ['required', 'string', 'max:500'],
             'modality'    => ['nullable', 'in:text,speech,document'],
+            'playbook'    => ['nullable', 'string', 'max:60'],
         ]);
 
         $instruction = trim($validated['instruction']);
         $modality    = $validated['modality'] ?? AgentRun::INPUT_TEXT;
+        $chosen      = $validated['playbook'] ?? null;
 
         $user     = Auth::user();
         $userAuth = UserAuth::where('Username', $user->ID)->first();
@@ -40,7 +46,17 @@ class AgentController extends Controller
             ], 403);
         }
 
-        $decision = $this->router->route($instruction);
+        // A pick from the suggestion list replaces resolution entirely.
+        $decision = $chosen
+            ? $this->fromChoice($chosen, $instruction, $userAuth)
+            : $this->router->route($instruction, $userAuth);
+
+        if ($decision === null) {
+            return response()->json([
+                'outcome' => 'unresolved',
+                'message' => 'That task is not available.',
+            ]);
+        }
 
         // ── Bare reference: let the Command Center search instead ──
         if ($decision['decision'] === IntentRouter::SEARCH) {
@@ -50,7 +66,17 @@ class AgentController extends Controller
             ]);
         }
 
-        // ── Nothing matched: Layer 3 will handle this once GLM is wired ──
+        // ── Below the confidence floor: let the user pick rather than guess ──
+        if ($decision['decision'] === IntentRouter::SUGGEST) {
+            return response()->json([
+                'outcome'     => 'suggest',
+                'message'     => 'Did you mean one of these?',
+                'suggestions' => $decision['suggestions'],
+                'instruction' => $instruction,
+            ]);
+        }
+
+        // ── Nothing matched at any layer ──
         if ($decision['decision'] === IntentRouter::UNRESOLVED) {
             return response()->json([
                 'outcome' => 'unresolved',
@@ -73,16 +99,28 @@ class AgentController extends Controller
                 $playbook,
                 $userAuth,
                 $user->BranchID ?? '',
-                ['Reference' => $decision['references'][0] ?? null],
+                array_merge(
+                    $decision['params'] ?? [],
+                    ['Reference' => $decision['reference'] ?? ($decision['references'][0] ?? null)]
+                ),
                 [
                     'RawInstruction'  => $instruction,
                     'InputModality'   => $modality,
                     'IntentKey'       => $decision['intentKey'],
                     'ResolutionLayer' => $decision['resolutionLayer'],
+                    'LLMProvider'     => $decision['llm']['provider'] ?? null,
+                    'LLMModel'        => $decision['llm']['model'] ?? null,
                 ]
             );
 
             $run = $this->runner->execute($run);
+
+            // A Layer 3 guess earns its cache row only once the run succeeds.
+            if (($decision['resolutionLayer'] ?? null) === 3
+                && $run->RunStatus === AgentRun::STATUS_COMPLETED
+            ) {
+                $this->router->confirm($instruction, $playbook, $decision['confidence'] ?? 0.0);
+            }
         } catch (WorkflowGateException $e) {
 
             // Not an error — the workflow guard doing its job
@@ -109,13 +147,53 @@ class AgentController extends Controller
         return response()->json($this->present($run));
     }
 
+    /**
+     * The user picked from the suggestion list. Their choice replaces
+     * resolution — but only from playbooks they are actually permitted, so a
+     * forged key from the browser cannot reach RunFactory.
+     */
+    private function fromChoice(string $key, string $instruction, UserAuth $userAuth): ?array
+    {
+        $permitted = array_column($this->catalogue->forPrompt($userAuth), 'key');
+
+        if (! in_array($key, $permitted, true)) {
+            return null;
+        }
+
+        $playbook = AgentPlaybook::active()->where('PlaybookKey', $key)->first();
+
+        if (! $playbook) {
+            return null;
+        }
+
+        $n = $this->normaliser->normalise($instruction);
+
+        return [
+            'decision'        => IntentRouter::AGENT,
+            'intentKey'       => $playbook->PlaybookKey,
+            'playbookId'      => $playbook->ID,
+            'resolutionLayer' => 3,
+            'confidence'      => 1.0,   // the user told us directly
+            'params'          => [],
+            'reference'       => $n['references'][0] ?? null,
+            'references'      => $n['references'],
+            'pattern'         => $n['pattern'],
+            'fingerprint'     => $n['fingerprint'],
+            'llm'             => null,
+        ];
+    }
+
     /** Shape a finished run for the thread view. */
     private function present(AgentRun $run): array
     {
         $bag = $run->BagJson ?? [];
 
         return [
-            'outcome'   => $run->RunStatus === AgentRun::STATUS_FAILED ? 'failed' : 'done',
+            'outcome'   => match ($run->RunStatus) {
+                AgentRun::STATUS_FAILED   => 'failed',
+                AgentRun::STATUS_AWAITING => 'awaiting_approval',
+                default                   => 'done',
+            },
             'runId'     => $run->ID,
             'taskLabel' => $run->TaskLabel,
             'status'    => $run->RunStatus,

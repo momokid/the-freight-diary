@@ -45,12 +45,12 @@ return [
     ],
 
     'manifest' => [
-        'hbl_prefix' => env('MANIFEST_HBL_PREFIX', 'PSIL'),
+        'hbl_prefix' => env('MANIFEST_HBL_PREFIX'),
     ],
 
     'arkesel' => [
         'api_key'   => env('ARKESEL_API_KEY'),
-        'sender_id' => env('ARKESEL_SENDER_ID', 'PSIL'),
+        'sender_id' => env('MANIFEST_HBL_PREFIX'),
         'sms_url'   => env('ARKESEL_SMS_URL'),
         'sandbox'   => env('ARKESEL_SANDBOX', false),
     ],

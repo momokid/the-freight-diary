@@ -91,13 +91,7 @@ class RunFactory
         });
     }
 
-    /**
-     * Refuse tasks attempted out of workflow order.
-     *
-     * A 'stop' failure throws — there is no override. The remedy is to do the
-     * missing step, not to bypass the check. A 'warn' failure is surfaced to
-     * the caller, which pauses and asks the user whether to proceed.
-     */
+
     private function assertWorkflowAllows(AgentPlaybook $playbook, array $seed): void
     {
         $gates = $playbook->GatesJson ?? [];
@@ -137,17 +131,14 @@ class RunFactory
     {
         $denied = [];
 
-        foreach ($steps as $step) {
-            $class = $this->registry->classFor($step['key'] ?? '');
+        foreach ($this->registry->requirementsFor($steps) as $req) {
 
-            if ($class === null) {
-                throw new RuntimeException("Playbook refers to an unknown step: " . ($step['key'] ?? '?'));
+            if (! $req['known']) {
+                throw new RuntimeException("Playbook refers to an unknown step: " . ($req['key'] ?: '?'));
             }
 
-            $permission = $class::permission();
-
-            if ($permission !== null && ! $userAuth->hasPermission($permission)) {
-                $denied[] = $class::label();
+            if ($req['permission'] !== null && ! $userAuth->hasPermission($req['permission'])) {
+                $denied[] = $req['label'];
             }
         }
 
@@ -157,7 +148,6 @@ class RunFactory
             );
         }
     }
-
     /** Playbook may force approval on; it may never turn it off for a write step. */
     private function approvalFor(array $step, string $class): bool
     {

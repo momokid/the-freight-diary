@@ -15,6 +15,9 @@ use App\Services\ConsignmentService;
  */
 class ComposeReplyStep implements AgentStep
 {
+    /** Above this, the header counts consignees instead of naming them. */
+    private const MAX_NAMED_CONSIGNEES = 4;
+
     public static function key(): string
     {
         return 'reply.compose';
@@ -38,8 +41,16 @@ class ComposeReplyStep implements AgentStep
     public static function inputs(): array
     {
         return [
-            'BL'     => ['type' => 'string', 'required' => true],
-            'Status' => ['type' => 'int',    'required' => true],
+            'BL'     => [
+                'type'        => 'string',
+                'required'    => true,
+                'description' => 'The Main BL the reply is about.',
+            ],
+            'Status' => [
+                'type'        => 'int',
+                'required'    => true,
+                'description' => 'Stored consignment status code, produced by an earlier read step.',
+            ],
         ];
     }
 
@@ -57,7 +68,7 @@ class ComposeReplyStep implements AgentStep
         $isDelayed = $this->isDelayed($b);
 
         $lines = [];
-        $lines[] = trim(($b['ConsigneeName'] ?? 'Unknown consignee') . ' — ' . $b['BL']);
+        $lines[] = $this->headerLine($b);
         $lines[] = $this->statusLine($b);
         $lines[] = $next;
 
@@ -67,6 +78,33 @@ class ComposeReplyStep implements AgentStep
             'NextAction' => $next,
             'IsDelayed'  => $isDelayed,
         ];
+    }
+
+    /**
+     * An LCL has no single consignee — they sit per house BL. Naming one would
+     * be wrong, and "Unknown consignee" is misleading when there is simply
+     * more than one.
+     */
+    private function headerLine(array $b): string
+    {
+        $bl      = $b['BL'] ?? '';
+        $entries = $b['Entries'] ?? [];
+        $count   = (int) ($b['EntryCount'] ?? 0);
+
+        if ($count === 0) {
+            return trim(($b['ConsigneeName'] ?? 'Unknown consignee') . ' — ' . $bl);
+        }
+
+        $names = array_values(array_filter(array_column($entries, 'ConsigneeName')));
+        $label = $count . ' ' . $this->plural($count, 'consignee');
+
+        // Only name them when every entry has one — a short list with a silent
+        // gap in it reads as complete when it is not.
+        if ($count <= self::MAX_NAMED_CONSIGNEES && count($names) === $count) {
+            return $bl . ' — ' . $label . ': ' . implode(', ', $names);
+        }
+
+        return $bl . ' — ' . $label . ' (ask for the breakdown to list them)';
     }
 
     /** Type, status and timing on one line, so they cannot contradict each other. */
@@ -99,7 +137,7 @@ class ComposeReplyStep implements AgentStep
         $days       = $b['DaysSinceEta'] ?? null;
         $arrived    = $b['HasArrived'] ?? false;
         $type       = $b['ConsignmentType'] ?? null;
-        $breakdown  = $b['BreakdownCount'] ?? 0;
+        $breakdown  = $this->houseBlCount($b);
         $stamps     = $b['DisbursementStamps'] ?? [];
         $containers = $b['ContainerCount'] ?? 0;
         $gatedOut   = $b['GatedOutCount'] ?? 0;
@@ -169,9 +207,12 @@ class ComposeReplyStep implements AgentStep
     /** Structured pairs for the thread view to render as a table. */
     private function facts(array $b): array
     {
+        $houseBls = $this->houseBlCount($b);
+
         $facts = [
             'BL'        => $b['BL'] ?? null,
-            'Consignee' => $b['ConsigneeName'] ?? null,
+            // On an LCL the consignees are in the header line, not here.
+            'Consignee' => $houseBls > 0 ? null : ($b['ConsigneeName'] ?? null),
             'Type'      => $b['ConsignmentTypeLabel'] ?? null,
             'Status'    => $b['StatusLabel'] ?? null,
             'Carrier'   => $b['CarrierName'] ?? null,
@@ -184,8 +225,8 @@ class ComposeReplyStep implements AgentStep
                 ' (' . $b['GatedOutCount'] . ' gated out, ' . $b['ReturnedCount'] . ' returned)';
         }
 
-        if (($b['BreakdownCount'] ?? 0) > 0) {
-            $facts['House BLs'] = $b['BreakdownCount'];
+        if ($houseBls > 0) {
+            $facts['House BLs'] = $houseBls;
         }
 
         if (! empty($b['DisbursementStamps'])) {
@@ -197,6 +238,16 @@ class ComposeReplyStep implements AgentStep
         }
 
         return array_filter($facts, fn($v) => $v !== null && $v !== '');
+    }
+
+    /**
+     * Distinct house BLs. EntryCount comes from manifest.read and is already
+     * grouped; BreakdownCount counts table rows, which runs higher whenever an
+     * entry is split across containers. Prefer the former where present.
+     */
+    private function houseBlCount(array $b): int
+    {
+        return (int) ($b['EntryCount'] ?? $b['BreakdownCount'] ?? 0);
     }
 
     private function ago(?int $days): string

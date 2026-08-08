@@ -91,11 +91,7 @@ class IntentNormaliser
 
     // ── References ──────────────────────────────────────────────────────────
 
-    /**
-     * Deliberately loose: any token mixing letters and digits, four or more
-     * characters. Catches MEDUY9898550, ONEYSH6AC2926400 and NEWBL3 alike.
-     * A wrong guess is cheap — ResolveConsignmentStep rejects it cleanly.
-     */
+
     private function extractReferences(string $text): array
     {
         preg_match_all('/\b[A-Za-z0-9\-\/]{4,}\b/', $text, $matches);

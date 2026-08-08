@@ -5,7 +5,9 @@ return [
     'steps' => [
         'consignment.resolve' => \App\Agent\Steps\ResolveConsignmentStep::class,
         'consignment.read'    => \App\Agent\Steps\ReadConsignmentStep::class,
+        'manifest.read'       => \App\Agent\Steps\ManifestBreakdownStep::class,
         'reply.compose'       => \App\Agent\Steps\ComposeReplyStep::class,
+        'reply.manifest'      => \App\Agent\Steps\ComposeManifestReplyStep::class,
     ],
 
     'tasks' => [
@@ -42,13 +44,20 @@ return [
 
     'llm' => [
 
-        'driver' => env('AGENT_LLM_DRIVER', 'glm'),
+        'driver' => env('AGENT_LLM_DRIVER', 'none'),
+
+        /*
+        | Below this, Layer 3 stops and offers ranked suggestions instead of
+        | running. Raise it after watching real traffic — it is deliberately
+        | config so it moves without a deploy.
+        */
+        'confidence_floor' => (float) env('AGENT_CONFIDENCE_FLOOR', 0.70),
 
         'drivers' => [
 
             'glm' => [
                 'adapter'      => \App\Agent\Llm\ChatCompletionsAdapter::class,
-                'base_url'     => env('GLM_BASE_URL', 'https://api.z.ai/api/openai/v1'),
+                'base_url'     => env('GLM_BASE_URL', 'https://api.z.ai/api/paas/v4'),
                 'key'          => env('GLM_API_KEY', ''),
                 'model'        => env('GLM_MODEL', 'glm-4.5-flash'),
                 'timeout'      => (int) env('GLM_TIMEOUT', 10),

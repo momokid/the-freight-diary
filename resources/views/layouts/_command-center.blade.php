@@ -355,6 +355,92 @@
         font-weight: 600;
     }
 
+    /* ── Reply: three lines, three jobs ── */
+    .cc-thread-head {
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: var(--text-primary);
+        margin-bottom: 3px;
+    }
+
+    .cc-thread-sub {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+    }
+
+    /* The sentence the user acts on — everything else is context */
+    .cc-thread-action {
+        font-size: 13.5px;
+        font-weight: 500;
+        line-height: 1.5;
+        color: var(--text-primary);
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        border-left: 3px solid #185FA5;
+        border-radius: 0 6px 6px 0;
+        background: rgba(24, 95, 165, 0.05);
+    }
+
+    /* Amber warning, distinct from the red used for genuine errors */
+    .cc-thread-flag.cc-flag-warn {
+        background: rgba(146, 64, 14, 0.1);
+        color: #92400e;
+    }
+
+    /* ── Fact values ── */
+    .cc-facts dd.cc-mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        letter-spacing: 0.02em;
+    }
+
+    .cc-facts dd.cc-status {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 2px 8px;
+        border-radius: 999px;
+    }
+
+    .cc-status-gray {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    .cc-status-blue {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .cc-status-amber {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .cc-status-purple {
+        background: #f3e8ff;
+        color: #7e22ce;
+    }
+
+    .cc-status-green {
+        background: #dcfce7;
+        color: #15803d;
+    }
+
+    .cc-status-teal {
+        background: #ccfbf1;
+        color: #0f766e;
+    }
+
+    .cc-status-red {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
     .cc-thread-working {
         font-size: 13px;
         color: var(--text-muted);

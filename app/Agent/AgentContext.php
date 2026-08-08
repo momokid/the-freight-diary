@@ -36,19 +36,30 @@ class AgentContext
         return array_key_exists($key, $this->bag);
     }
 
-    /**
-     * Merge a step's outputs into the bag.
-     * Last writer wins — collisions are validated at composition time,
-     * not silently reconciled here.
-     */
     public function merge(array $values): void
     {
         foreach ($values as $key => $value) {
             if (str_starts_with($key, '_')) {
                 continue; // reserved: _targetTable, _targetKey
             }
-            $this->bag[$key] = $value;
+            $this->bag[$key] = $this->clean($value);
         }
+    }
+
+
+    private function clean($value)
+    {
+        if (is_string($value)) {
+            return mb_check_encoding($value, 'UTF-8')
+                ? $value
+                : mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
+        }
+
+        if (is_array($value)) {
+            return array_map(fn($v) => $this->clean($v), $value);
+        }
+
+        return $value;
     }
 
     /** Whole bag — for logging and for building the plan preview. */
