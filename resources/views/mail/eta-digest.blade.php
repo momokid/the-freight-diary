@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PSIL Daily ETA Digest</title>
+    <title>{{ $company->InstName ?? '' }} Daily ETA Digest</title>
 </head>
 
 <body style="margin:0;padding:0;background:#f4f6f8;font-family:Arial,sans-serif;font-size:14px;color:#1a1a1a;">
@@ -19,7 +19,7 @@
                     <tr>
                         <td style="background:#185FA5;padding:20px 28px;">
                             <p style="margin:0;color:#ffffff;font-size:18px;font-weight:bold;">
-                                {{ $company->InstName ?? 'PSIL' }} | The Freight Diary
+                                {{ $company->InstName ?? '' }} | The Freight Diary
                             </p>
                             <p style="margin:4px 0 0;color:#cce0f5;font-size:13px;">
                                 Daily ETA Digest &mdash; {{ now()->format('d M Y') }}
@@ -177,7 +177,7 @@
                             <table width="100%" cellpadding="0" cellspacing="0">
                                 <tr>
                                     <td style="color:#9ca3af;font-size:11px;">
-                                        Confidential &mdash; PSIL internal use only.
+                                        Confidential &mdash; {{ $company->InstName ?? '' }} internal use only.
                                     </td>
                                     <td align="right" style="color:#9ca3af;font-size:11px;white-space:nowrap;">
                                         Freight Diary v2.0 &middot; {{ now()->format('d M Y, H:i') }}

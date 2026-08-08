@@ -13,15 +13,24 @@ class EtaDigestMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    // Public — Laravel makes this available in the Blade view automatically
-    public function __construct(public array $digest) {}
+    // Public — Laravel makes these available in the Blade view automatically
+    public array $digest;
+    public ?object $company;
+
+    public function __construct(array $digest)
+    {
+        $this->digest = $digest;
+
+        // No logged-in user on a scheduled send, so the view composer that
+        // normally shares $company never runs.
+        $this->company = CompanyService::institution();
+    }
 
     public function envelope(): Envelope
     {
-        $company = CompanyService::get();
-
         return new Envelope(
-            subject: ($company->InstName ?? 'PSIL') . ' Daily ETA Digest — ' . now()->format('d M Y'),
+            subject: trim(($this->company->InstName ?? '') . ' Daily ETA Digest')
+                . ' — ' . now()->format('d M Y'),
         );
     }
 
