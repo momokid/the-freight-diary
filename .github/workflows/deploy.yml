@@ -37,7 +37,7 @@ jobs:
           echo "APP_KEY=${{ secrets.APP_KEY }}" >> .env
           echo "APP_DEBUG=false" >> .env
           echo "APP_URL=${{ secrets.APP_URL }}" >> .env
-          echo "MANIFEST_HBL_PREFIX=PSIL" >> .env
+          echo "MANIFEST_HBL_PREFIX=${{ secrets.MANIFEST_HBL_PREFIX }}" >> .env
           echo "COMPANY_LOGO=\"images/logo.png\"" >> .env
           echo "DB_CONNECTION=mysql" >> .env
           echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
@@ -54,6 +54,12 @@ jobs:
           echo "BL_PARSER_PROVIDER=claude" >> .env
           echo "HS_CODE_MODEL=claude-sonnet-4-6" >> .env
           echo "HS_CODE_FALLBACK_MODEL=claude-haiku-4-5" >> .env
+          echo "GLM_API_KEY=${{ secrets.GLM_API_KEY }}" >> .env
+          echo "GLM_BASE_URL=https://api.z.ai/api/paas/v4" >> .env
+          echo "GLM_MODEL=glm-4.5-flash" >> .env
+          echo "GLM_TIMEOUT=10" >> .env
+          echo "AGENT_LLM_DRIVER=claude" >> .env
+          echo "AGENT_CONFIDENCE_FLOOR=0.70" >> .env
           echo "META_WHATSAPP_TOKEN=${{ secrets.META_WHATSAPP_TOKEN }}" >> .env
           echo "META_PHONE_NUMBER_ID=${{ secrets.META_PHONE_NUMBER_ID }}" >> .env
           echo "META_WABA_ID=${{ secrets.META_WABA_ID }}" >> .env
@@ -75,11 +81,10 @@ jobs:
           echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
           echo "MAIL_FROM_ADDRESS=\"${{ secrets.MAIL_FROM_ADDRESS }}\"" >> .env
 
-      - name: Cache config and routes
-        run: |
-          php artisan config:cache
-          php artisan route:cache
-          php artisan view:cache
+      # No config:cache / route:cache / view:cache here.
+      # Caching on the runner bakes /home/runner/... paths into
+      # bootstrap/cache/config.php, which breaks every request on the server.
+      # Deployment is FTP-only, so artisan cannot run remotely.
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -91,6 +96,11 @@ jobs:
           exclude: |
             **/.git*
             **/.git*/**
+            **/.github/**
             **/node_modules/**
             **/tests/**
             **/storage/logs/**
+            **/storage/framework/cache/**
+            **/storage/framework/sessions/**
+            **/storage/framework/views/**
+            **/bootstrap/cache/*.php
