@@ -61,11 +61,19 @@ jobs:
           echo "META_WHATSAPP_API_URL=https://graph.facebook.com/v19.0" >> .env
           echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> .env
           echo "GROQ_MODEL=llama-3.2-90b-vision-preview" >> .env
+          echo "ALERT_ETA_ENABLED=true" >> .env
+          echo "ALERT_DIGEST_EMAILS=${{ secrets.ALERT_DIGEST_EMAILS }}" >> .env
           echo "SESSION_DRIVER=file" >> .env
           echo "SESSION_LIFETIME=120" >> .env
           echo "CACHE_STORE=file" >> .env
           echo "QUEUE_CONNECTION=sync" >> .env
-          echo "MAIL_MAILER=log" >> .env
+          echo "MAIL_MAILER=smtp" >> .env
+          echo "MAIL_SCHEME=smtps" >> .env
+          echo "MAIL_HOST=${{ secrets.MAIL_HOST }}" >> .env
+          echo "MAIL_PORT=465" >> .env
+          echo "MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}" >> .env
+          echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
+          echo "MAIL_FROM_ADDRESS=\"${{ secrets.MAIL_FROM_ADDRESS }}\"" >> .env
 
       - name: Cache config and routes
         run: |
