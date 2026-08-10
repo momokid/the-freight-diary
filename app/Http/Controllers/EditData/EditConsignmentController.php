@@ -87,6 +87,7 @@ class EditConsignmentController extends Controller
             'consignment' => $consignment,
             'containers' => $containers,
             'isLCL' => $consignment->isLCL(),
+            'typeConfirmed' => $consignment->IsLCL !== null,
         ]);
     }
 
@@ -115,6 +116,7 @@ class EditConsignmentController extends Controller
             'Destination' => ['nullable', 'string'],
             'ContWeight' => ['nullable', 'numeric', 'min:0'],
             'Charges' => ['nullable', 'numeric', 'min:0'],
+            'IsLCL' => ['required', 'in:0,1'],
         ]);
 
         $consignment = ContainerMain::findOrFail($request->ConsignmentID);
@@ -154,6 +156,7 @@ class EditConsignmentController extends Controller
             'Destination' => trim($request->Destination ?? ''),
             'ContWeight' => $request->ContWeight ?? 0,
             'Charges' => $request->Charges ?? 0,
+            'IsLCL' => (int) $request->IsLCL,
         ]);
 
         $etaChanged = $oldEta !== $request->ETA;

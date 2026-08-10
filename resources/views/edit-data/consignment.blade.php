@@ -185,6 +185,16 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 1rem;">
 
                     <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label">Cargo Type <span style="color:#ef4444">*</span></label>
+                        <select id="cns-islcl" class="form-input">
+                            <option value="">— Not confirmed —</option>
+                            <option value="1">LCL</option>
+                            <option value="0">FCL</option>
+                        </select>
+                        <p id="cns-islcl-error" class="form-error"></p>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label">Container Size</label>
                         <input type="text" id="cns-container-size" class="form-input"
                             style="text-transform: uppercase;" placeholder="e.g. 40">
@@ -502,6 +512,7 @@
             document.getElementById('cns-rotation').value = c.Rotation ?? '';
             document.getElementById('cns-weight').value = c.ContWeight ?? '';
             document.getElementById('cns-charges').value = c.Charges ?? '';
+            document.getElementById('cns-islcl').value = c.IsLCL === null ? '' : String(Number(c.IsLCL));
             document.getElementById('cns-agent-contact').value = c.AgentContact ?? '';
 
             // For FCL: disable fields that loaded as empty or zero
@@ -628,6 +639,7 @@
                         AgentContact: document.getElementById('cns-agent-contact').value,
                         ContWeight: document.getElementById('cns-weight').value,
                         Charges: document.getElementById('cns-charges').value,
+                        IsLCL: document.getElementById('cns-islcl').value,
                     }),
                 })
                 .then(res => res.json())

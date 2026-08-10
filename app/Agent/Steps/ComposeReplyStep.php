@@ -92,7 +92,9 @@ class ComposeReplyStep implements AgentStep
         $count   = (int) ($b['EntryCount'] ?? 0);
 
         if ($count === 0) {
-            return trim(($b['ConsigneeName'] ?? 'Unknown consignee') . ' — ' . $bl);
+            return empty($b['ConsigneeName'])
+                ? $bl
+                : trim($b['ConsigneeName'] . ' — ' . $bl);
         }
 
         $names = array_values(array_filter(array_column($entries, 'ConsigneeName')));
@@ -166,6 +168,10 @@ class ComposeReplyStep implements AgentStep
             return $days === null
                 ? 'No ETA recorded — set one so arrival can be tracked.'
                 : 'Awaiting arrival — ETA in ' . abs($days) . ' ' . $this->plural(abs($days), 'day') . '.';
+        }
+
+        if (! app(ConsignmentService::class)->isConfirmed($type)) {
+            return 'Cargo type not confirmed — set it so the system knows whether a breakdown is due.';
         }
 
         if ($type === ConsignmentService::TYPE_LCL_PENDING) {

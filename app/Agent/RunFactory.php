@@ -161,7 +161,7 @@ class RunFactory
             return false;
         }
 
-        return ($step['approval'] ?? null) === false ? true : true;
+        return true;
     }
 
     private function literalsFor(array $step): ?array

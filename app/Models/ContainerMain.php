@@ -43,6 +43,7 @@ class ContainerMain extends Model
         'Time',
         'Status',
         'CmdtTypeID',
+        'IsLCL',
         'ConsigneeID',
         'ReleaseType',
         'Ownership',
@@ -57,6 +58,7 @@ class ContainerMain extends Model
         'ContWeight' => 'float',
         'Charges' => 'float',
         'CmdtTypeID' => 'integer',
+        'IsLCL' => 'boolean',
         'ConsigneeID' => 'integer',
         'Status' => 'integer',
     ];
@@ -87,9 +89,15 @@ class ContainerMain extends Model
         return $this->hasMany(ContainerDetails::class, 'ConsignmentID', 'ConsignmentID');
     }
 
-    // CmdtTypeID = 1 means LCL, anything else is FCL
     public function isLCL(): bool
     {
-        return $this->CmdtTypeID === 1;
+        $type = app(\App\Services\ConsignmentService::class)
+            ->resolveType($this->ConsignmentID, $this->BL);
+
+        return in_array($type, [
+            \App\Services\ConsignmentService::TYPE_LCL,
+            \App\Services\ConsignmentService::TYPE_LCL_PENDING,
+            \App\Services\ConsignmentService::TYPE_UNCONFIRMED_LCL,
+        ], true);
     }
 }

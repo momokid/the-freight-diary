@@ -437,6 +437,12 @@ class ManifestController extends Controller
                 ]);
             }
 
+            // A breakdown proves LCL — settle the flag if it was never confirmed
+            DB::table('container_main')
+                ->where('ConsignmentID', $consignmentID)
+                ->where('BL', $bl)
+                ->update(['IsLCL' => 1]);
+
             // Insert into eta_web_track
             DB::table('eta_web_track')->insert([
                 'ConsignmentID' => $consignmentID,

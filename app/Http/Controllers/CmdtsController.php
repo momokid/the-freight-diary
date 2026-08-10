@@ -183,6 +183,7 @@ class CmdtsController extends Controller
                 'Time'          => now()->toDateTimeString(),
                 'Status'        => 1,
                 'CmdtTypeID'    => $request->CmdtTypeID,
+                'IsLCL'         => 0,
                 'ConsigneeID'   => $request->ConsigneeID,
                 'ReleaseType'   => $request->ReleaseType,
                 'Ownership'     => 1,
