@@ -107,24 +107,43 @@ class ComposeReplyStep implements AgentStep
         return $bl . ' — ' . $label . ' (ask for the breakdown to list them)';
     }
 
-    /** Type, status and timing on one line, so they cannot contradict each other. */
+    /**
+     * Arrival is derived from the ETA. The stored Status is only what somebody
+     * last typed and is often never updated, so it never answers the question
+     * on its own — where the two disagree, the derived answer wins and the
+     * stale record is noted in the facts table instead.
+     */
     private function statusLine(array $b): string
     {
-        $type = $b['ConsignmentTypeLabel'] ?? '';
+        $type = $this->shortType($b);
         $days = $b['DaysSinceEta'] ?? null;
 
-        if (! empty($b['StatusDisagrees'])) {
-            return "{$type} — ETA passed {$days} " . $this->plural($days, 'day') .
-                ' ago, status not yet updated from Not Arrived';
+        if ($days === null) {
+            return "{$type} — no ETA recorded";
         }
 
         if (empty($b['HasArrived'])) {
-            return $days === null
-                ? "{$type} — no ETA recorded"
-                : "{$type} — due in " . abs($days) . ' ' . $this->plural(abs($days), 'day');
+            return "{$type} — due in " . abs($days) . ' ' . $this->plural(abs($days), 'day');
+        }
+
+        if (! empty($b['StatusDisagrees'])) {
+            return "{$type} — arrived " . $this->ago($days);
         }
 
         return "{$type} — {$b['StatusLabel']}, arrived " . $this->ago($days);
+    }
+
+    /** Short form for mid-sentence use. The full phrase belongs in the facts table. */
+    private function shortType(array $b): string
+    {
+        return match ($b['ConsignmentType'] ?? null) {
+            ConsignmentService::TYPE_LCL,
+            ConsignmentService::TYPE_LCL_PENDING     => 'LCL',
+            ConsignmentService::TYPE_FCL             => 'FCL',
+            ConsignmentService::TYPE_UNCONFIRMED_LCL,
+            ConsignmentService::TYPE_UNCONFIRMED_FCL => 'Type unconfirmed',
+            default                                  => 'Consignment',
+        };
     }
 
     /**
@@ -214,10 +233,14 @@ class ComposeReplyStep implements AgentStep
             // On an LCL the consignees are in the header line, not here.
             'Consignee' => $houseBls > 0 ? null : ($b['ConsigneeName'] ?? null),
             'Type'      => $b['ConsignmentTypeLabel'] ?? null,
-            'Status'    => $b['StatusLabel'] ?? null,
+            'Status'    => empty($b['StatusDisagrees'])
+                ? ($b['StatusLabel'] ?? null)
+                : ($b['StatusLabel'] ?? '') . ' — record not updated',
             'Carrier'   => $b['CarrierName'] ?? null,
             'Vessel'    => trim(($b['VesselName'] ?? '') . ' ' . ($b['VoyageNo'] ?? '')) ?: null,
-            'ETA'       => $b['ETA'] ?? null,
+            'ETA'       => $this->date($b['ETA'] ?? null),
+            'Registered' => $this->date($b['RegisteredOn'] ?? null),
+
         ];
 
         if (($b['ContainerCount'] ?? 0) > 0) {
@@ -255,6 +278,20 @@ class ComposeReplyStep implements AgentStep
         if ($days === null) return 'recently';
         if ($days === 0)    return 'today';
         return $days . ' ' . $this->plural($days, 'day') . ' ago';
+    }
+
+    /** Stored dates are ISO. Nobody reads them that way. */
+    private function date(?string $value): ?string
+    {
+        if (empty($value) || str_starts_with($value, '0000')) {
+            return null;
+        }
+
+        try {
+            return \Carbon\Carbon::parse($value)->format('j M Y');
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     private function plural(int $n, string $word): string

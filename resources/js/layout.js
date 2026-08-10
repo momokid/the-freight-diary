@@ -875,7 +875,7 @@ window.CommandCenter = {
                 html += `<p class="cc-thread-sub">${this.esc(lines[1])}</p>`;
             }
             if (lines.length > 2) {
-                html += `<p class="cc-thread-action">${this.esc(lines.slice(2).join(" "))}</p>`;
+                html += `<p class="cc-thread-action">${this.esc(lines.slice(2).join("\n"))}</p>`;
             }
         }
 

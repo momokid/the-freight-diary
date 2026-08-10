@@ -382,6 +382,7 @@
         border-left: 3px solid #185FA5;
         border-radius: 0 6px 6px 0;
         background: rgba(24, 95, 165, 0.05);
+        white-space: pre-wrap;
     }
 
     /* Amber warning, distinct from the red used for genuine errors */

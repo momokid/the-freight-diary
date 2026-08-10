@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\DB;
 class ConsignmentService
 {
     // Consignment type — single source of truth for the LCL/FCL rule
-    public const TYPE_FCL         = 'FCL';
-    public const TYPE_LCL         = 'LCL';
+    public const TYPE_FCL = 'FCL';
+    public const TYPE_LCL = 'LCL';
     public const TYPE_LCL_PENDING = 'LCL_AWAITING_BREAKDOWN';
+    public const TYPE_UNCONFIRMED_LCL = 'UNCONFIRMED_LCL';
+    public const TYPE_UNCONFIRMED_FCL = 'UNCONFIRMED_FCL';
 
     // Evaluation order: terminal Status flags first (0=Cleared, 3=Gated Out),
     // then ETA-driven logic for everything still active.
@@ -102,29 +104,24 @@ class ConsignmentService
             };";
     }
 
+
     /**
-     * Resolve whether a consignment is LCL, FCL, or LCL awaiting breakdown.
+     * Breakdown rows are proof — they override whatever IsLCL says, because
+     * the flag is typed by a human at registration and the rows are not.
      *
-     * CmdtTypeID = 1 is necessary but not sufficient for LCL — the presence of
-     * manifest breakdown rows is what confirms it. An LCL that has been
-     * registered but not yet broken down is a real and expected state, not an
-     * error: the agent flags it, the user decides whether breakdown is needed.
-     *
-     * This is the only place the rule should exist.
+     * IsLCL NULL means nobody has confirmed the type yet. CmdtTypeID only
+     * hints: on the LCL form it is hardcoded to 1, on the Cmdts form it is a
+     * real commodity type. An unconfirmed consignment owes no manifest work.
      */
     public function resolveType(int $consignmentId, string $bl): string
     {
-        $cmdtTypeId = DB::table('container_main')
+        $row = DB::table('container_main')
             ->where('ConsignmentID', $consignmentId)
             ->where('BL', $bl)
-            ->value('CmdtTypeID');
+            ->first(['CmdtTypeID', 'IsLCL']);
 
-        if ($cmdtTypeId === null) {
+        if ($row === null) {
             throw new \RuntimeException("Consignment not found: {$bl}");
-        }
-
-        if ((int) $cmdtTypeId !== 1) {
-            return self::TYPE_FCL;
         }
 
         $hasBreakdown = DB::table('manifestation_breakdown')
@@ -133,16 +130,37 @@ class ConsignmentService
             ->where('Status', 1)
             ->exists();
 
-        return $hasBreakdown ? self::TYPE_LCL : self::TYPE_LCL_PENDING;
+        if ($hasBreakdown) {
+            return self::TYPE_LCL;
+        }
+
+        if ($row->IsLCL === null) {
+            return (int) $row->CmdtTypeID === 1
+                ? self::TYPE_UNCONFIRMED_LCL
+                : self::TYPE_UNCONFIRMED_FCL;
+        }
+
+        return (int) $row->IsLCL === 1 ? self::TYPE_LCL_PENDING : self::TYPE_FCL;
     }
 
     /** Display label for a resolved type. */
     public function typeLabel(string $type): string
     {
         return match ($type) {
-            self::TYPE_LCL         => 'LCL',
-            self::TYPE_LCL_PENDING => 'LCL — awaiting breakdown',
-            default                => 'FCL',
+            self::TYPE_LCL             => 'LCL',
+            self::TYPE_LCL_PENDING     => 'LCL — awaiting breakdown',
+            self::TYPE_UNCONFIRMED_LCL => 'Likely LCL — type not confirmed',
+            self::TYPE_UNCONFIRMED_FCL => 'Likely FCL — type not confirmed',
+            default                    => 'FCL',
         };
+    }
+
+    /** True only when the type is settled. Unconfirmed owes no manifest work. */
+    public function isConfirmed(string $type): bool
+    {
+        return ! in_array($type, [
+            self::TYPE_UNCONFIRMED_LCL,
+            self::TYPE_UNCONFIRMED_FCL,
+        ], true);
     }
 }

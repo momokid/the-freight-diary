@@ -2,6 +2,7 @@
 
 namespace App\Agent\Steps;
 
+use App\Services\ConsignmentService;
 use App\Agent\AgentContext;
 
 /**
@@ -53,7 +54,7 @@ class ComposeManifestReplyStep implements AgentStep
 
     public static function outputs(): array
     {
-        return ['Reply', 'ReplyFacts', 'IsBrokenDown'];
+        return ['Reply', 'ReplyFacts'];
     }
 
     public function run(array $input, AgentContext $context): array
@@ -62,20 +63,22 @@ class ComposeManifestReplyStep implements AgentStep
 
         $entries = $b['Entries'] ?? [];
         $count   = (int) ($b['EntryCount'] ?? 0);
-        $isLcl   = (int) ($b['ConsignmentType'] ?? 0) === 1;
+        $type    = $b['ConsignmentType'] ?? null;
 
         $lines   = [];
-        $lines[] = trim(($b['ConsigneeName'] ?? 'Unknown consignee') . ' — ' . $b['BL']);
+        $lines[] = $this->headerLine($b);
 
         if ($count === 0) {
-            $lines[] = $isLcl
-                ? 'Manifest not broken down yet — no house BLs entered.'
-                : ($b['ConsignmentTypeLabel'] ?? 'FCL') . ' — no house BL breakdown applies.';
-
+            $lines[] = match ($type) {
+                ConsignmentService::TYPE_LCL,
+                ConsignmentService::TYPE_LCL_PENDING     => 'Manifest not broken down yet — no house BLs entered.',
+                ConsignmentService::TYPE_UNCONFIRMED_LCL,
+                ConsignmentService::TYPE_UNCONFIRMED_FCL => 'Cargo type not confirmed — set it to know whether a breakdown is due.',
+                default                                  => 'FCL — no house BL breakdown applies.',
+            };
             return [
                 'Reply'        => implode("\n", $lines),
                 'ReplyFacts'   => $this->facts($b, 0),
-                'IsBrokenDown' => false,
             ];
         }
 
@@ -94,7 +97,6 @@ class ComposeManifestReplyStep implements AgentStep
         return [
             'Reply'        => implode("\n", $lines),
             'ReplyFacts'   => $this->facts($b, $count),
-            'IsBrokenDown' => true,
         ];
     }
 
@@ -113,6 +115,27 @@ class ComposeManifestReplyStep implements AgentStep
         }
 
         return implode(', ', $parts);
+    }
+
+    /**
+     * An LCL has no single consignee — they sit per house BL. Naming none is
+     * better than naming the wrong one, so the BL stands alone.
+     */
+    private function headerLine(array $b): string
+    {
+        $bl   = $b['BL'] ?? '';
+        $type = $b['ConsignmentType'] ?? null;
+
+        $isLcl = in_array($type, [
+            ConsignmentService::TYPE_LCL,
+            ConsignmentService::TYPE_LCL_PENDING,
+        ], true);
+
+        if ($isLcl || empty($b['ConsigneeName'])) {
+            return $bl;
+        }
+
+        return trim($b['ConsigneeName'] . ' — ' . $bl);
     }
 
     private function entryLine(array $entry): string
@@ -140,16 +163,35 @@ class ComposeManifestReplyStep implements AgentStep
         return '• ' . implode(' — ', $bits);
     }
 
+
     private function facts(array $b, int $count): array
     {
-        return [
-            'BL'            => $b['BL'] ?? null,
-            'Type'          => $b['ConsignmentTypeLabel'] ?? null,
-            'HouseBLs'      => $count,
-            'Lines'         => $b['LineCount'] ?? 0,
-            'TotalPackages' => $b['TotalPackages'] ?? 0,
-            'TotalWeight'   => $b['TotalWeight'] ?? 0,
+        $facts = [
+            'BL'   => $b['BL'] ?? null,
+            'Type' => $b['ConsignmentTypeLabel'] ?? null,
         ];
+
+        if ($count === 0) {
+            return array_filter($facts, fn($v) => $v !== null && $v !== '');
+        }
+
+        $facts['House BLs'] = $count;
+
+        $lineCount = (int) ($b['LineCount'] ?? 0);
+
+        if ($lineCount > $count) {
+            $facts['Breakdown rows'] = $lineCount;
+        }
+
+        if (! empty($b['TotalPackages'])) {
+            $facts['Packages'] = $b['TotalPackages'];
+        }
+
+        if (! empty($b['TotalWeight'])) {
+            $facts['Weight'] = $this->number($b['TotalWeight']) . ' kg';
+        }
+
+        return array_filter($facts, fn($v) => $v !== null && $v !== '');
     }
 
     private function number(float $n): string

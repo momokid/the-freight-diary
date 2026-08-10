@@ -97,7 +97,13 @@ class RunFactory
         $gates = $playbook->GatesJson ?? [];
 
         if (empty($gates)) {
-            return;   // read-only playbooks declare none
+            return;
+        }
+
+        // Gates stop work being done out of order. A lookup does no work, so
+        // a gate on one can only ever refuse a question it should have answered.
+        if (! $this->hasWriteStep($playbook)) {
+            return;
         }
 
         $reference = $seed['Reference'] ?? null;
@@ -164,6 +170,17 @@ class RunFactory
         $inputs = is_object($inputs) ? (array) $inputs : $inputs;
 
         return empty($inputs) ? null : $inputs;
+    }
+
+    private function hasWriteStep(AgentPlaybook $playbook): bool
+    {
+        foreach ($this->registry->requirementsFor($playbook->StepsJson ?? []) as $req) {
+            if ($req['isWrite'] === true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Frozen copy of the playbook as it was at run time. */

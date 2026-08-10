@@ -171,6 +171,7 @@ class ConsignmentController extends Controller
             'Ownership'     => ['required', 'in:1,2'],
             'ConsigneeID'   => ['nullable', 'integer'],
             'CmdtTypeID'    => ['nullable', 'integer'],
+            'IsLCL'         => ['required', 'in:0,1'],
         ]);
 
         $user = Auth::user();
@@ -253,6 +254,7 @@ class ConsignmentController extends Controller
                 'Status'        => 1,
                 'CmdtTypeID'    => $request->CmdtTypeID ?? 1,
                 'ConsigneeID'   => $request->ConsigneeID ?? 0,
+                'IsLCL'         => (int) $request->IsLCL,
                 'ReleaseType'   => 1, // Default — updated later in Cmdts
                 'Ownership'     => $request->Ownership,
                 'ClientCode'    => $clientCode,

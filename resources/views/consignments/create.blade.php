@@ -210,8 +210,8 @@
                         </div>
                     </div>
 
-                    {{-- Row 8: Destination and Ownership only --}}
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                    {{-- Row 8: Destination, Ownership, Cargo Type --}}
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
 
                         <div class="form-group" style="margin-bottom: 0;">
                             <label class="form-label">Destination <span
@@ -229,6 +229,16 @@
                                 <option value="2">Third Party</option>
                             </select>
                             <p id="ownership-error" class="form-error"></p>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Cargo Type <span style="color: #ef4444;">*</span></label>
+                            <select id="islcl" name="IsLCL" class="form-input">
+                                <option value="">Select cargo type...</option>
+                                <option value="1">LCL — breakdown required</option>
+                                <option value="0">FCL — no breakdown</option>
+                            </select>
+                            <p id="islcl-error" class="form-error"></p>
                         </div>
                     </div>
 
@@ -723,6 +733,7 @@
                 AgentContact: document.getElementById('agent-contact').value.trim(),
                 Destination: document.getElementById('destination').value.trim(),
                 Ownership: document.getElementById('ownership').value,
+                IsLCL: document.getElementById('islcl').value,
             };
 
             // Client-side validation
@@ -740,6 +751,7 @@
                 ['POD_ID', 'Port of Discharge'],
                 ['Destination', 'Destination'],
                 ['Ownership', 'Ownership'],
+                ['IsLCL', 'Cargo Type'],
             ];
 
             let firstError = null;
