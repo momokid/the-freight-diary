@@ -92,6 +92,43 @@ class RunFactory
     }
 
 
+    /**
+     * Every required parameter must have a value before a run exists.
+     *
+     * Checked here rather than in the router so the picker path is covered
+     * too — a playbook chosen from the suggestion list arrives with an empty
+     * params array and would otherwise fail mid-run.
+     */
+    private function assertComplete(AgentPlaybook $playbook, array $seed): void
+    {
+        $missing = [];
+
+        foreach ($this->catalogue->paramsFor($playbook) as $name => $spec) {
+
+            if (empty($spec['required'])) {
+                continue;
+            }
+
+            $value = $seed[$name] ?? null;
+
+            // The controller seeds Reference unconditionally, so a present
+            // key proves nothing. Zero is a legitimate value; null and '' are not.
+            if ($value !== null && $value !== '') {
+                continue;
+            }
+
+            $missing[] = [
+                'name'        => $name,
+                'type'        => $spec['type'] ?? 'string',
+                'description' => $spec['description'] ?? null,
+            ];
+        }
+
+        if ($missing) {
+            throw new IncompleteRunException($missing, $playbook->PlaybookKey, $playbook->Title);
+        }
+    }
+
     private function assertWorkflowAllows(AgentPlaybook $playbook, array $seed): void
     {
         $gates = $playbook->GatesJson ?? [];

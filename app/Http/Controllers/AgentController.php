@@ -13,6 +13,7 @@ use App\Models\AgentRun;
 use App\Models\UserAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Agent\IncompleteRunException;
 
 class AgentController extends Controller
 {
@@ -133,6 +134,28 @@ class AgentController extends Controller
                     'label'   => $f['fix']['label'] ?? null,
                     'url'     => $this->fixUrl($f['fix']['route'] ?? null),
                 ], $e->failures),
+            ]);
+        } catch (IncompleteRunException $e) {
+
+            // The task was understood; something it needs was not supplied.
+            return response()->json([
+                'outcome'     => 'incomplete',
+                'message'     => $e->getMessage(),
+                'playbook'    => $e->playbookKey,
+                'taskLabel'   => $e->taskLabel,
+                'missing'     => $e->missing,
+                'instruction' => $instruction,
+            ]);
+        } catch (IncompleteRunException $e) {
+
+            // The task was understood; something it needs was not supplied.
+            return response()->json([
+                'outcome'     => 'incomplete',
+                'message'     => $e->getMessage(),
+                'playbook'    => $e->playbookKey,
+                'taskLabel'   => $e->taskLabel,
+                'missing'     => $e->missing,
+                'instruction' => $instruction,
             ]);
         } catch (\Exception $e) {
             report($e);

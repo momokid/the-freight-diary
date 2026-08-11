@@ -107,8 +107,11 @@ class PlaybookCatalogue
      * in the bag and anything pinned as a literal in the playbook. Derived so
      * a step signature change cannot leave a stale parameter behind; ParamsJson
      * overrides the description only.
+     *
+     * Public because RunFactory checks a seed against this before planning.
+     * Two derivations of the same thing would drift.
      */
-    private function paramsFor(AgentPlaybook $playbook): array
+    public function paramsFor(AgentPlaybook $playbook): array
     {
         $available = [];
         $params    = [];
