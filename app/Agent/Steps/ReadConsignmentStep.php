@@ -75,6 +75,8 @@ class ReadConsignmentStep implements AgentStep
             'ReturnedCount',
             'BreakdownCount',
             'DisbursementStamps',
+            'NextAction',
+            'IsDelayed',
         ];
     }
 
@@ -137,19 +139,26 @@ class ReadConsignmentStep implements AgentStep
 
         // Where it actually is, derived — the stored Status is only what
         // somebody last typed, and on old consignments it is often stale.
-        $type  = $context->get('ConsignmentType');
-        $stage = app(WorkflowService::class)->currentStage([
+        $type     = $context->get('ConsignmentType');
+        $workflow = app(WorkflowService::class);
+
+        $state = [
             'HasArrived'     => $hasArrived,
+            'DaysSinceEta'   => $daysSinceEta,
+            'IsConfirmed'    => app(ConsignmentService::class)->isConfirmed((string) $type),
             'IsLcl'          => in_array($type, [
                 ConsignmentService::TYPE_LCL,
                 ConsignmentService::TYPE_LCL_PENDING,
+                ConsignmentService::TYPE_UNCONFIRMED_LCL,
             ], true),
             'BreakdownCount' => $breakdownCount,
             'Stamps'         => $stamps,
             'ContainerCount' => $containers->count(),
             'GatedOutCount'  => $containers->whereNotNull('GateOutDate')->count(),
             'ReturnedCount'  => $containers->whereNotNull('ReturnDate')->count(),
-        ]);
+        ];
+
+        $stage = $workflow->currentStage($state);
 
         return [
             'Status'             => (int) $row->Status,
@@ -170,6 +179,8 @@ class ReadConsignmentStep implements AgentStep
             'ReturnedCount'      => $containers->whereNotNull('ReturnDate')->count(),
             'BreakdownCount'     => $breakdownCount,
             'DisbursementStamps' => $stamps,
+            'NextAction'         => $workflow->nextAction($state),
+            'IsDelayed'          => $workflow->isDelayed($state),
         ];
     }
 

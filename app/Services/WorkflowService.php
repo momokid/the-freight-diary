@@ -252,4 +252,98 @@ class WorkflowService
             default => 'Unknown',
         };
     }
+
+    /**
+     * What is owed next, in the user's terms.
+     *
+     * Expects the same state array as currentStage(), plus DaysSinceEta and
+     * IsConfirmed. Kept here rather than in the reply so there is one ladder,
+     * not one per caller.
+     */
+    public function nextAction(array $state): string
+    {
+        $days = $state['DaysSinceEta'] ?? null;
+
+        if (empty($state['HasArrived'])) {
+            return $days === null
+                ? 'No ETA recorded — set one so arrival can be tracked.'
+                : 'Awaiting arrival — ETA in ' . abs($days) . ' ' . $this->plural(abs($days), 'day') . '.';
+        }
+
+        // An FCL owes no breakdown, an LCL does. Until the type is settled we
+        // cannot say which, so asking is the only honest next step.
+        if (empty($state['IsConfirmed'])) {
+            return 'Cargo type not confirmed — set it so the system knows whether a breakdown is due.';
+        }
+
+        $breakdown = (int) ($state['BreakdownCount'] ?? 0);
+
+        if (! empty($state['IsLcl']) && $breakdown === 0) {
+            return 'Manifest breakdown not yet done.';
+        }
+
+        $stamps = $state['Stamps'] ?? [];
+
+        if (empty($stamps)) {
+            return ($breakdown > 0 ? "{$breakdown} house " . $this->plural($breakdown, 'BL') . ' manifested — ' : '') .
+                'no disbursement raised yet.';
+        }
+
+        $containers = (int) ($state['ContainerCount'] ?? 0);
+        $gatedOut   = (int) ($state['GatedOutCount'] ?? 0);
+        $returned   = (int) ($state['ReturnedCount'] ?? 0);
+
+        if ($containers > 0 && $gatedOut < $containers) {
+            return 'Disbursement raised (' . implode(', ', $stamps) . ') — ' .
+                ($containers - $gatedOut) . ' of ' . $containers . ' ' .
+                $this->plural($containers, 'container') . ' still to gate out.';
+        }
+
+        if ($containers > 0 && $returned < $containers) {
+            return ($containers - $returned) . ' of ' . $containers . ' ' .
+                $this->plural($containers, 'container') . ' gated out and not yet returned.';
+        }
+
+        return 'All containers gated out and returned — nothing outstanding.';
+    }
+
+    /**
+     * Whether the consignment has sat too long at its current stage.
+     * Thresholds are cumulative from the ETA, so a late stage inherits the
+     * time allowed for the ones before it.
+     */
+    public function isDelayed(array $state): bool
+    {
+        if (empty($state['HasArrived'])) {
+            return false;
+        }
+
+        $days = $state['DaysSinceEta'] ?? 0;
+        $t    = config('agent.thresholds');
+
+        if (! empty($state['IsLcl']) && (int) ($state['BreakdownCount'] ?? 0) === 0) {
+            return $days > $t['arrival_to_manifest'];
+        }
+
+        if (empty($state['Stamps'])) {
+            return $days > ($t['arrival_to_manifest'] + $t['manifest_to_disbursement']);
+        }
+
+        $containers = (int) ($state['ContainerCount'] ?? 0);
+
+        if ($containers > 0 && (int) ($state['GatedOutCount'] ?? 0) < $containers) {
+            return $days > ($t['arrival_to_manifest'] + $t['manifest_to_disbursement'] + $t['disbursement_to_gateout']);
+        }
+
+        if ($containers > 0 && (int) ($state['ReturnedCount'] ?? 0) < $containers) {
+            return $days > array_sum($t);
+        }
+
+        return false;
+    }
+
+    private function plural(int $n, string $word): string
+    {
+        return $n === 1 ? $word : $word . 's';
+    }
 }

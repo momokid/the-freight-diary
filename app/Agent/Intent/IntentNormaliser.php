@@ -7,13 +7,16 @@ use Illuminate\Support\Facades\DB;
 /**
  * Reduces an instruction to a stable pattern and fingerprint.
  *
- * "What is the status of BL MEDUY9898550?" and "status MSCU4421889"
- * both become "status {ref}" — one cached row serves every reference.
+ * Its only job is the cache key. Identifying what each value means is the
+ * model's work, not this class's — so anything shaped like a value is masked
+ * and returned in the order it appeared.
  */
 class IntentNormaliser
 {
     /** Loaded once per request. Small table, no cross-request staleness. */
     private static ?array $verbs = null;
+
+    private const MONTHS = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
 
     private const STOPWORDS = [
         'the',
@@ -59,8 +62,7 @@ class IntentNormaliser
     {
         $raw = trim($raw);
 
-        $references = $this->extractReferences($raw);
-        $text       = $this->maskReferences($raw, $references);
+        [$text, $references] = $this->mask($raw);
 
         $tokens = $this->tokenise($text);
         $tokens = $this->dropStopwords($tokens);
@@ -89,33 +91,64 @@ class IntentNormaliser
         return hash('sha256', implode(' ', $tokens));
     }
 
-    // ── References ──────────────────────────────────────────────────────────
+    // ── Masking ─────────────────────────────────────────────────────────────
 
-
-    private function extractReferences(string $text): array
+    /**
+     * One left-to-right pass. Earlier alternatives win, so a date is never
+     * broken apart into its digits. Returns the masked text and the values
+     * in the order they appeared — one entry per {ref} in the result.
+     */
+    private function mask(string $raw): array
     {
-        preg_match_all('/\b[A-Za-z0-9\-\/]{4,}\b/', $text, $matches);
+        $months = self::MONTHS;
+
+        $pattern = '/
+              (?P<date>
+                  \b\d{4}-\d{2}-\d{2}\b
+                | \b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b
+                | \b\d{1,2}(?:st|nd|rd|th)?\s+(?:' . $months . ')[a-z]*\b
+                | \b(?:' . $months . ')[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\b
+              )
+            | (?P<amount>
+                  \b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b
+                | \b\d+\.\d+\b
+              )
+            | (?P<token>\b[A-Za-z0-9][A-Za-z0-9\-\/]*\b)
+        /ix';
 
         $found = [];
 
-        foreach ($matches[0] as $token) {
-            $bare = str_replace(['-', '/'], '', $token);
+        $text = preg_replace_callback($pattern, function ($m) use (&$found) {
+            $value = trim($m[0]);
 
-            if (preg_match('/[A-Za-z]/', $bare) && preg_match('/\d/', $bare)) {
-                $found[] = strtoupper($token);
+            if (($m['token'] ?? '') !== '' && ! $this->isValue($value)) {
+                return $m[0];
             }
-        }
 
-        return array_values(array_unique($found));
+            $found[] = $value;
+
+            return ' {ref} ';
+        }, $raw);
+
+        return [$text, $found];
     }
 
-    private function maskReferences(string $text, array $references): string
+    /** All digits, or four-plus characters carrying both a letter and a digit. */
+    private function isValue(string $token): bool
     {
-        foreach ($references as $ref) {
-            $text = str_ireplace($ref, ' {ref} ', $text);
+        $bare = str_replace(['-', '/'], '', $token);
+
+        if ($bare === '') {
+            return false;
         }
 
-        return $text;
+        if (ctype_digit($bare)) {
+            return true;
+        }
+
+        return mb_strlen($bare) >= 4
+            && preg_match('/[A-Za-z]/', $bare)
+            && preg_match('/\d/', $bare);
     }
 
     // ── Tokens ──────────────────────────────────────────────────────────────

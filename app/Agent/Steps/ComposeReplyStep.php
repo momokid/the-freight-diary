@@ -56,27 +56,21 @@ class ComposeReplyStep implements AgentStep
 
     public static function outputs(): array
     {
-        return ['Reply', 'ReplyFacts', 'NextAction', 'IsDelayed'];
+        return ['Reply', 'ReplyFacts'];
     }
 
     public function run(array $input, AgentContext $context): array
     {
         $b = $context->all();   // everything earlier steps produced
 
-        $next      = $this->nextAction($b);
-        $facts     = $this->facts($b);
-        $isDelayed = $this->isDelayed($b);
-
         $lines = [];
         $lines[] = $this->headerLine($b);
         $lines[] = $this->statusLine($b);
-        $lines[] = $next;
+        $lines[] = $b['NextAction'] ?? '';
 
         return [
             'Reply'      => implode("\n", array_filter($lines)),
-            'ReplyFacts' => $facts,
-            'NextAction' => $next,
-            'IsDelayed'  => $isDelayed,
+            'ReplyFacts' => $this->facts($b),
         ];
     }
 
@@ -148,87 +142,6 @@ class ComposeReplyStep implements AgentStep
         };
     }
 
-    /**
-     * Where the consignment sits in the workflow, and what is owed next.
-     * Mirrors: register → ETA → arrive → manifest (LCL) → disburse →
-     * gate out → return.
-     */
-    private function nextAction(array $b): string
-    {
-        $days       = $b['DaysSinceEta'] ?? null;
-        $arrived    = $b['HasArrived'] ?? false;
-        $type       = $b['ConsignmentType'] ?? null;
-        $breakdown  = $this->houseBlCount($b);
-        $stamps     = $b['DisbursementStamps'] ?? [];
-        $containers = $b['ContainerCount'] ?? 0;
-        $gatedOut   = $b['GatedOutCount'] ?? 0;
-        $returned   = $b['ReturnedCount'] ?? 0;
-
-        if (! $arrived) {
-            return $days === null
-                ? 'No ETA recorded — set one so arrival can be tracked.'
-                : 'Awaiting arrival — ETA in ' . abs($days) . ' ' . $this->plural(abs($days), 'day') . '.';
-        }
-
-        if (! app(ConsignmentService::class)->isConfirmed($type)) {
-            return 'Cargo type not confirmed — set it so the system knows whether a breakdown is due.';
-        }
-
-        if ($type === ConsignmentService::TYPE_LCL_PENDING) {
-            return 'Manifest breakdown not yet done.';
-        }
-
-        if (empty($stamps)) {
-            return ($breakdown > 0 ? "{$breakdown} house " . $this->plural($breakdown, 'BL') . ' manifested — ' : '') .
-                'no disbursement raised yet.';
-        }
-
-        if ($containers > 0 && $gatedOut < $containers) {
-            $waiting = $containers - $gatedOut;
-            return 'Disbursement raised (' . implode(', ', $stamps) . ') — ' .
-                $waiting . ' of ' . $containers . ' ' . $this->plural($containers, 'container') . ' still to gate out.';
-        }
-
-        if ($containers > 0 && $returned < $containers) {
-            $out = $containers - $returned;
-            return $out . ' of ' . $containers . ' ' . $this->plural($containers, 'container') .
-                ' gated out and not yet returned.';
-        }
-
-        return 'All containers gated out and returned — nothing outstanding.';
-    }
-
-    /** Flag anything sitting longer than the configured tolerance. */
-    private function isDelayed(array $b): bool
-    {
-        if (empty($b['HasArrived'])) {
-            return false;
-        }
-
-        $days = $b['DaysSinceEta'] ?? 0;
-        $t    = config('agent.thresholds');
-
-        if (($b['ConsignmentType'] ?? null) === ConsignmentService::TYPE_LCL_PENDING) {
-            return $days > $t['arrival_to_manifest'];
-        }
-
-        if (empty($b['DisbursementStamps'])) {
-            return $days > ($t['arrival_to_manifest'] + $t['manifest_to_disbursement']);
-        }
-
-        $containers = $b['ContainerCount'] ?? 0;
-
-        if ($containers > 0 && ($b['GatedOutCount'] ?? 0) < $containers) {
-            return $days > ($t['arrival_to_manifest'] + $t['manifest_to_disbursement'] + $t['disbursement_to_gateout']);
-        }
-
-        if ($containers > 0 && ($b['ReturnedCount'] ?? 0) < $containers) {
-            return $days > array_sum($t);
-        }
-
-        return false;
-    }
-
     /** Structured pairs for the thread view to render as a table. */
     private function facts(array $b): array
     {
@@ -238,10 +151,10 @@ class ComposeReplyStep implements AgentStep
             'BL'        => $b['BL'] ?? null,
             // On an LCL the consignees are in the header line, not here.
             'Consignee' => $houseBls > 0 ? null : ($b['ConsigneeName'] ?? null),
-            'Type'      => $b['ConsignmentTypeLabel'] ?? null,
-            'Status'    => empty($b['StatusDisagrees'])
+            'Type' => $b['ConsignmentTypeLabel'] ?? null,
+            'Status' => empty($b['StatusDisagrees'])
                 ? ($b['StatusLabel'] ?? null)
-                : ($b['StatusLabel'] ?? '') . ' — record not updated',
+                : 'Arrived but not updated',
             'Carrier'   => $b['CarrierName'] ?? null,
             'Vessel'    => trim(($b['VesselName'] ?? '') . ' ' . ($b['VoyageNo'] ?? '')) ?: null,
             'ETA'       => $this->date($b['ETA'] ?? null),
