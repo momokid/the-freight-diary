@@ -4,6 +4,7 @@ namespace App\Agent\Intent;
 
 use App\Agent\Llm\LlmAdapter;
 use App\Agent\Llm\LlmResponse;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -23,6 +24,30 @@ class IntentResolver
     public const NONE     = 'none';
 
     private const MAX_SUGGESTIONS = 3;
+
+    /** Container counts and quantities are spoken as often as they are typed. */
+    private const NUMBER_WORDS = [
+        'one' => 1,
+        'two' => 2,
+        'three' => 3,
+        'four' => 4,
+        'five' => 5,
+        'six' => 6,
+        'seven' => 7,
+        'eight' => 8,
+        'nine' => 9,
+        'ten' => 10,
+        'eleven' => 11,
+        'twelve' => 12,
+        'thirteen' => 13,
+        'fourteen' => 14,
+        'fifteen' => 15,
+        'sixteen' => 16,
+        'seventeen' => 17,
+        'eighteen' => 18,
+        'nineteen' => 19,
+        'twenty' => 20,
+    ];
 
     public function __construct(
         private LlmAdapter $llm,
@@ -77,7 +102,7 @@ class IntentResolver
 
         $confidence = $this->confidence($data['confidence'] ?? 0);
         $reference  = $this->reference($data['reference'] ?? null, $instruction);
-        $params     = $this->params($data['params'] ?? [], $key, $catalogue, $reference);
+        $params     = $this->params($data['params'] ?? [], $key, $catalogue, $reference, $instruction);
 
         // A required reference the model could not evidence: missing beats invented.
         if ($reference === null && $this->requiresReference($key, $catalogue)) {
@@ -120,19 +145,135 @@ class IntentResolver
         return mb_stripos($instruction, $value) === false ? null : $value;
     }
 
-    /** Only parameters the playbook actually declares survive. */
-    private function params($given, string $key, array $catalogue, ?string $reference): array
+    /**
+     * Only declared parameters survive, and only when the instruction actually
+     * evidences them. A dropped parameter becomes a question to the user; an
+     * invented one becomes a wrong write.
+     */
+    private function params($given, string $key, array $catalogue, ?string $reference, string $instruction): array
     {
         $given    = is_array($given) ? $given : [];
         $declared = $this->declaredParams($key, $catalogue);
+        $out      = [];
 
-        $out = array_intersect_key($given, $declared);
+        foreach (array_intersect_key($given, $declared) as $name => $value) {
+            $checked = $this->evidenced($value, $declared[$name]['type'] ?? 'string', $instruction);
+
+            if ($checked === null) {
+                Log::warning('[Layer3] Value not evidenced in instruction', [
+                    'playbook'  => $key,
+                    'parameter' => $name,
+                ]);
+
+                continue;
+            }
+
+            $out[$name] = $checked;
+        }
 
         if ($reference !== null && array_key_exists('Reference', $declared)) {
             $out['Reference'] = $reference;
         }
 
         return $out;
+    }
+
+    /** Returns the value to use, normalised where the type allows it, or null. */
+    private function evidenced($value, string $type, string $instruction): mixed
+    {
+        $value = is_scalar($value) ? trim((string) $value) : '';
+
+        if ($value === '') {
+            return null;
+        }
+
+        return match (strtolower($type)) {
+            'date', 'datetime'                    => $this->evidencedDate($value, $instruction),
+            'int', 'integer', 'number', 'decimal' => $this->evidencedNumber($value, $instruction),
+            default                               => $this->evidencedString($value, $instruction),
+        };
+    }
+
+    /** Verbatim, case-insensitive. Names and BLs must never be corrected. */
+    private function evidencedString(string $value, string $instruction): ?string
+    {
+        return mb_stripos($instruction, $value) === false ? null : $value;
+    }
+
+    /**
+     * The model may reformat a date — that is wanted. It may not choose one.
+     * Accepted only when it matches a date the user actually wrote.
+     */
+    private function evidencedDate(string $value, string $instruction): ?string
+    {
+        $parsed = $this->parseDate($value);
+
+        if ($parsed === null) {
+            return null;
+        }
+
+        preg_match_all('/' . IntentNormaliser::DATE_PATTERN . '/i', $instruction, $matches);
+
+        foreach ($matches[0] as $candidate) {
+            if ($this->parseDate(trim($candidate)) === $parsed) {
+                return $parsed;
+            }
+        }
+
+        return null;
+    }
+
+    /** Digits as written, or a spelled-out number of the same value. */
+    private function evidencedNumber(string $value, string $instruction): int|float|null
+    {
+        $clean = str_replace(',', '', $value);
+
+        if (! is_numeric($clean)) {
+            return null;
+        }
+
+        $number = $clean + 0;
+
+        preg_match_all('/\b\d[\d,]*(?:\.\d+)?\b/', $instruction, $matches);
+
+        foreach ($matches[0] as $candidate) {
+            if (str_replace(',', '', $candidate) + 0 === $number) {
+                return $number;
+            }
+        }
+
+        foreach (self::NUMBER_WORDS as $word => $digit) {
+            if ($digit === $number && preg_match('/\b' . $word . '\b/i', $instruction)) {
+                return $number;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Day first. Carbon reads slashes as American, which would turn 03/07/2026
+     * into March and silently save the wrong ETA.
+     */
+    private function parseDate(string $value): ?string
+    {
+        $value = trim($value);
+
+        try {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+                return Carbon::createFromFormat('Y-m-d', $value)->toDateString();
+            }
+
+            if (preg_match('/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/', $value, $m)) {
+                $format = mb_strlen($m[3]) === 2 ? 'd/m/y' : 'd/m/Y';
+
+                return Carbon::createFromFormat($format, "{$m[1]}/{$m[2]}/{$m[3]}")->toDateString();
+            }
+
+            return Carbon::parse($value)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function requiresReference(string $key, array $catalogue): bool

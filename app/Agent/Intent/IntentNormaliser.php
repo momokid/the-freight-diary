@@ -18,6 +18,12 @@ class IntentNormaliser
 
     private const MONTHS = 'jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec';
 
+    /** Shared with IntentResolver, which checks a returned date against the text. */
+    public const DATE_PATTERN = '\b\d{4}-\d{2}-\d{2}\b'
+        . '|\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b'
+        . '|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:' . self::MONTHS . ')[a-z]*\b'
+        . '|\b(?:' . self::MONTHS . ')[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\b';
+
     private const STOPWORDS = [
         'the',
         'what',
@@ -100,15 +106,8 @@ class IntentNormaliser
      */
     private function mask(string $raw): array
     {
-        $months = self::MONTHS;
-
         $pattern = '/
-              (?P<date>
-                  \b\d{4}-\d{2}-\d{2}\b
-                | \b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b
-                | \b\d{1,2}(?:st|nd|rd|th)?\s+(?:' . $months . ')[a-z]*\b
-                | \b(?:' . $months . ')[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\b
-              )
+              (?P<date>' . self::DATE_PATTERN . ')
             | (?P<amount>
                   \b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b
                 | \b\d+\.\d+\b
