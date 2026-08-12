@@ -177,15 +177,29 @@ abstract class ListConsignmentsStep implements AgentStep
             ->whereNotExists(fn($e) => $this->disbursementExists($e, $context));
     }
 
+    /**
+     * Disbursed but nothing billed. Informational — billing is on request.
+     *
+     * FCL invoices sit against the main BL, LCL against each house BL, so
+     * both paths count. Partial LCL billing reads as invoiced here; that is
+     * a different question and deserves its own list.
+     */
     private function notInvoiced($q, AgentContext $context)
     {
         return $q->whereExists(fn($e) => $this->disbursementExists($e, $context))
             ->whereNotExists(function ($e) {
                 $e->select(DB::raw(1))
                     ->from('student_fee as sf')
-                    ->whereColumn('sf.CouponID', 'cm.BL')
-                    ->where('sf.Stamp', 'BL')
-                    ->where('sf.Status', 1);
+                    ->where('sf.Status', 1)
+                    ->where(function ($w) {
+                        $w->whereColumn('sf.SubClassID', 'cm.BL')
+                            ->orWhereExists(function ($h) {
+                                $h->select(DB::raw(1))
+                                    ->from('manifestation_breakdown as mb')
+                                    ->whereColumn('mb.MainBL', 'cm.BL')
+                                    ->whereColumn('mb.HouseBL', 'sf.SubClassID');
+                            });
+                    });
             });
     }
 

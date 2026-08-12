@@ -933,6 +933,7 @@ window.CommandCenter = {
             { key: "Consignee", label: "Consignee", numeric: false },
             { key: "Days", label: "Days", numeric: true },
             { key: "Action", label: "Next action", numeric: false },
+            { key: "Balance", label: "Balance", numeric: true, money: true },
             { key: "ClaimedBy", label: "With", numeric: false },
         ].filter((c) =>
             this.listRows.some(
@@ -979,8 +980,9 @@ window.CommandCenter = {
             cols.forEach((c) => {
                 const cls = c.numeric ? ' class="cc-num"' : "";
                 const val = r[c.key];
+                const blank = val === null || val === undefined || val === "";
                 html += `<td${cls}>${this.esc(
-                    val === null || val === undefined || val === "" ? "—" : val,
+                    blank ? "—" : c.money ? this.money(val) : val,
                 )}</td>`;
             });
             html += "</tr>";
@@ -1214,6 +1216,16 @@ window.CommandCenter = {
         const d = document.createElement("div");
         d.textContent = s === null || s === undefined ? "" : String(s);
         return d.innerHTML;
+    },
+
+    money(value) {
+        return (
+            "GH₵ " +
+            Number(value).toLocaleString("en-GH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            })
+        );
     },
 };
 

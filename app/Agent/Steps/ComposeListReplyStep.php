@@ -97,6 +97,15 @@ class ComposeListReplyStep implements AgentStep
      */
     private function tableRows(array $rows, string $filter): array
     {
+
+        if ($filter === 'outstanding') {
+            return array_map(fn($row) => [
+                'Consignee'    => $row['ConsigneeName'] ?? null,
+                'Balance'      => (float) $row['Balance'],
+                'Consignments' => $row['Consignments'] ?? null,
+            ], $rows);
+        }
+
         $showAction = $filter !== 'overdue';
 
         return array_map(fn($row) => [
@@ -118,8 +127,13 @@ class ComposeListReplyStep implements AgentStep
                 'not_disbursed'    => 'Every arrived consignment has a disbursement raised.',
                 'not_invoiced'     => 'Every disbursed consignment has been invoiced.',
                 'unconfirmed_type' => 'Every consignment has its type confirmed.',
+                'outstanding'      => 'No outstanding balances.',
                 default            => 'Nothing to show.',
             };
+        }
+
+        if ($filter === 'outstanding') {
+            return "{$count} " . $this->plural($count, 'client') . ' owing money';
         }
 
         $noun = $this->plural($count, 'consignment');
@@ -136,6 +150,9 @@ class ComposeListReplyStep implements AgentStep
     /** BL — consignee — age, next action (whoever is on it). */
     private function line(array $row): string
     {
+        if (isset($row['Balance'])) {
+            return $this->balanceLine($row);
+        }
         $parts = [$row['BL'] ?? '?'];
 
         if (! empty($row['ConsigneeName'])) {
@@ -164,6 +181,23 @@ class ComposeListReplyStep implements AgentStep
         }
 
         return $line;
+    }
+
+    /** Consignee — balance — how many consignments it spans. */
+    private function balanceLine(array $row): string
+    {
+        $bits = [
+            $row['ConsigneeName'] ?? 'Consignee not on file',
+            'GH₵ ' . number_format((float) $row['Balance'], 2),
+        ];
+
+        $n = (int) ($row['Consignments'] ?? 0);
+
+        if ($n > 0) {
+            $bits[] = $n . ' ' . $this->plural($n, 'consignment');
+        }
+
+        return implode(' — ', $bits);
     }
 
     private function plural(int $n, string $word): string
