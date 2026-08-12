@@ -15,7 +15,7 @@ class CompanyService
     {
         if (!Auth::check()) return null;
 
-        return self::forBranch(Auth::user()->BranchID);
+        return self::forBranch(Auth::user()->BranchID) ?? self::institution();
     }
 
     /**
@@ -50,7 +50,16 @@ class CompanyService
     public static function institution(): ?object
     {
         return DB::table('inst_reg')
-            ->select('InstName', 'Email', 'TelNo as InstTelNo', 'Website')
+            ->select(
+                'InstName',
+                'Email',
+                'TelNo as InstTelNo',
+                'TelNo',
+                'Website',
+                DB::raw('NULL as BranchName'),
+                DB::raw('NULL as Address'),
+                DB::raw('NULL as Location')
+            )
             ->first();
     }
 }

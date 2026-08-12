@@ -295,7 +295,7 @@
                 <img src="{{ asset('images/logo.png') }}" alt="Logo" onerror="this.style.display='none'">
             </div>
             <div class="header-info">
-                <div class="company-name">{{ $company?->InstName ?? 'Prime Survivors International Ltd' }}</div>
+                <div class="company-name">{{ $company?->InstName }}</div>
                 <div class="company-tagline">Custom Brokers, Consolidation, Sea &amp; Air Freight, Clearing
                     &amp;<br>Forwarding, Transit, Haulage, Import &amp; Export</div>
             </div>
@@ -420,13 +420,7 @@
 
         {{-- ── Bank Details ── --}}
         <div class="bank-qr-row">
-            <div class="bank-details">
-                <div class="title">Bank Account Details</div>
-                <div><strong>Bank Account:</strong> Prime Survivors International Limited</div>
-                <div><strong>Account#:</strong> 1441004070750</div>
-                <div><strong>Bank Name:</strong> ECOBANK</div>
-                <div><strong>Branch:</strong> Tema Main</div>
-            </div>
+            @include('partials._bank-details')
 
             @if ($bankDetails?->MomoQR)
                 <div style="text-align: center; font-size: 9px;">

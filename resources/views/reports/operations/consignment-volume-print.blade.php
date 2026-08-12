@@ -305,7 +305,7 @@
             <img src="{{ asset('images/logo.png') }}" alt="{{ $company?->InstName ?? 'PSIL' }}" class="rpt-logo"
                 onerror="this.style.display='none'">
             <div>
-                <p class="rpt-company-name">{{ $company?->InstName ?? 'Prime Survivors International Ltd' }}</p>
+                <p class="rpt-company-name">{{ $company?->InstName }}</p>
                 <p class="rpt-company-sub">
                     {{ $company?->Address ?? '' }}<br>
                     @if ($company?->TelNo)
@@ -453,7 +453,7 @@
 
     {{-- ── Footer ── --}}
     <div class="rpt-footer">
-        <span>The Freight Diary &nbsp;·&nbsp; {{ $company?->InstName ?? 'Prime Survivors International Ltd' }}
+        <span>The Freight Diary &nbsp;·&nbsp; {{ $company?->InstName }}
             &nbsp;·&nbsp; Confidential — for internal use only</span>
         <span>Printed by: {{ auth()->user()->FullName ?? auth()->user()->ID }} &nbsp;·&nbsp;
             {{ now()->format('d M Y, h:i A') }}</span>

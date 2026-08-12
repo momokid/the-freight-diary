@@ -311,7 +311,7 @@
             <img src="{{ asset('images/logo.png') }}" alt="{{ $company?->InstName ?? 'PSIL' }}" class="rpt-logo"
                 onerror="this.style.display='none'">
             <div>
-                <p class="rpt-company-name">{{ $company?->InstName ?? 'Prime Survivors International Ltd' }}</p>
+                <p class="rpt-company-name">{{ $company?->InstName }}</p>
                 <p class="rpt-company-sub">
                     {{ $company?->Address ?? '' }}<br>
                     @if ($company?->TelNo)
@@ -437,30 +437,30 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach ($data['lcl'] as $i => $summary)
+                @foreach ($data['lcl'] as $i => $lclRow)
                     @php
                         $pnlCls =
-                            $summary->NetProfit > 0
+                            $lclRow->NetProfit > 0
                                 ? 'pnl-positive'
-                                : ($summary->NetProfit < 0
+                                : ($lclRow->NetProfit < 0
                                     ? 'pnl-negative'
                                     : 'pnl-zero');
                     @endphp
                     {{-- LCL Summary row ── --}}
                     <tr class="lcl-summary">
                         <td>{{ $i + 1 }}</td>
-                        <td style="font-family:monospace">{{ $summary->MainBL ?? '—' }}</td>
+                        <td style="font-family:monospace">{{ $lclRow->MainBL ?? '—' }}</td>
                         <td style="color:#6b7280">LCL Summary</td>
-                        <td>{{ $summary->ConsigneeName }}</td>
-                        <td>{{ $summary->ContainerSize ?? '—' }}</td>
-                        <td class="r" style="color:#185FA5">GH₵ {{ number_format($summary->TotalRevenue, 2) }}
+                        <td>{{ $lclRow->ConsigneeName }}</td>
+                        <td>{{ $lclRow->ContainerSize ?? '—' }}</td>
+                        <td class="r" style="color:#185FA5">GH₵ {{ number_format($lclRow->TotalRevenue, 2) }}
                         </td>
-                        <td class="r" style="color:#b91c1c">GH₵ {{ number_format($summary->TotalExpenditure, 2) }}
+                        <td class="r" style="color:#b91c1c">GH₵ {{ number_format($lclRow->TotalExpenditure, 2) }}
                         </td>
-                        <td class="r {{ $pnlCls }}">GH₵ {{ number_format($summary->NetProfit, 2) }}</td>
+                        <td class="r {{ $pnlCls }}">GH₵ {{ number_format($lclRow->NetProfit, 2) }}</td>
                     </tr>
                     {{-- HBL breakdown rows ── --}}
-                    @foreach ($summary->hblRows as $hbl)
+                    @foreach ($lclRow->hblRows as $hbl)
                         @php
                             $hblPnlCls =
                                 $hbl->NetProfit > 0
@@ -510,7 +510,7 @@
     @endif
 
     <div class="rpt-footer">
-        <span>The Freight Diary &nbsp;·&nbsp; {{ $company?->InstName ?? 'Prime Survivors International Ltd' }}
+        <span>The Freight Diary &nbsp;·&nbsp; {{ $company?->InstName }}
             &nbsp;·&nbsp; Confidential — for internal use only</span>
         <span>Printed by: {{ auth()->user()->FullName ?? auth()->user()->ID }} &nbsp;·&nbsp;
             {{ now()->format('d M Y, h:i A') }}</span>

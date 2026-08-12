@@ -3,7 +3,7 @@
         <img src="{{ asset('images/logo.png') }}" alt="{{ $company?->InstName ?? 'PSIL' }}"
             style="height: 56px; width: auto; object-fit: contain; flex-shrink: 0;" onerror="this.style.display='none'">
         <div>
-            <p class="rpt-company-name">{{ $company?->InstName ?? 'Prime Survivors International Ltd' }}</p>
+            <p class="rpt-company-name">{{ $company?->InstName }}</p>
             <p class="rpt-company-sub">
                 {{ $company?->Address ?? '' }}<br>
                 @if ($company?->TelNo)

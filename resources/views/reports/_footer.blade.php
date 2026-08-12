@@ -1,6 +1,6 @@
 <div class="rpt-footer">
     <span class="rpt-footer-txt">
-        The Freight Diary &nbsp;·&nbsp; {{ $company?->InstName ?? 'Prime Survivors International Ltd' }} &nbsp;·&nbsp;
+        The Freight Diary &nbsp;·&nbsp; {{ $company?->InstName }} &nbsp;·&nbsp;
         Confidential — for internal use only
     </span>
     <span class="rpt-footer-txt">

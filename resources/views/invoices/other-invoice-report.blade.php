@@ -211,7 +211,7 @@
             <div>
                 <div class="label">From:</div>
                 <div class="value">
-                    {{ $company?->InstName ?? 'Prime Survivors International Ltd' }}<br>
+                    {{ $company?->InstName }}<br>
                     {{ $company?->Address ?? 'P.O.Box CT3635' }}<br>
                     {{ $company?->TelNo ?? '0242 - 947 228 / 0201 - 382 199' }}
                 </div>

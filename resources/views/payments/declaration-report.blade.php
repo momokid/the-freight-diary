@@ -247,7 +247,7 @@
                 <img src="{{ asset('images/logo.png') }}" alt="Logo" onerror="this.style.display='none'">
             </div>
             <div class="header-info">
-                <div class="company">{{ $company?->InstName ?? 'Prime Survivors International Ltd' }}</div>
+                <div class="company">{{ $company?->InstName }}</div>
                 <div class="tagline">Custom Brokers, Consolidation, Sea &amp; Air Freight, Clearing &amp;<br>Forwarding,
                     Transit, Haulage, Import &amp; Export</div>
             </div>

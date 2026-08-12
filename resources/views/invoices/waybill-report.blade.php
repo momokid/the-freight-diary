@@ -189,7 +189,7 @@
             <img src="{{ asset('images/logo.png') }}" alt="Logo" onerror="this.style.display='none'">
         </div>
         <div class="header-center">
-            <div class="company-name">{{ $company?->InstName ?? 'Prime Survivors International Ltd' }}</div>
+            <div class="company-name">{{ $company?->InstName }}</div>
             <div class="company-info">
                 @if ($company?->Address)
                     {{ $company->Address }}<br>
