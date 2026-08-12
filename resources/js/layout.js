@@ -489,6 +489,7 @@ window.CommandCenter = {
             stLoading: document.getElementById("cc-state-loading"),
             recents: document.getElementById("cc-recents"),
             noRecents: document.getElementById("cc-no-recents"),
+            starters: document.getElementById("cc-starters"),
         };
 
         if (!this.el.overlay) return; // partial not included on this page
@@ -515,6 +516,28 @@ window.CommandCenter = {
         this.el.overlay.classList.add("cc-open");
         this.el.overlay.setAttribute("aria-hidden", "false");
         this.renderRecents();
+        this.renderStarters([
+            {
+                title: "Status of a consignment",
+                fill: "status of ",
+                icon: "box",
+            },
+            {
+                title: "Breakdown of a manifest",
+                fill: "breakdown of ",
+                icon: "doc",
+            },
+            {
+                title: "Overdue consignments",
+                run: "what is overdue",
+                icon: "box",
+            },
+            {
+                title: "Clients owing money",
+                run: "who owes us money",
+                icon: "user",
+            },
+        ]);
         this.setState("empty");
         this.el.input.focus();
     },
@@ -557,6 +580,7 @@ window.CommandCenter = {
         const hint = document.getElementById("cc-enter-hint");
         if (hint) hint.textContent = mode === "agent" ? "run" : "open";
     },
+
     /**
      * Phase 1 heuristic only — replaced by real intent routing in Phase 3
      * (agent_intent_cache + agent_verb_synonyms).
@@ -1093,6 +1117,26 @@ window.CommandCenter = {
         }
     },
 
+    renderStarters(items) {
+        if (!this.el.starters) return;
+
+        this.starters = items;
+
+        this.el.starters.innerHTML = items
+            .map(
+                (s, i) => `
+            <button type="button" class="cc-starter" onclick="window.ccStarter(${i})">
+                <svg class="cc-starter-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="${this.iconPath(s.icon)}" />
+                </svg>
+                <span class="cc-starter-title">${this.esc(s.title)}</span>
+                <span class="cc-starter-mark">${s.run ? "↵" : "…"}</span>
+            </button>`,
+            )
+            .join("");
+    },
+
     renderRecents() {
         const list = this.getRecents();
         this.el.noRecents.hidden = list.length > 0;
@@ -1359,6 +1403,24 @@ window.ccOpenBl = function (index) {
     cc.el.input.value = instruction;
     cc.setMode("agent");
     cc.runAgent(instruction);
+};
+
+window.ccStarter = function (i) {
+    const cc = window.CommandCenter;
+    const s = cc?.starters?.[i];
+
+    if (!s) return;
+
+    if (s.run) {
+        cc.el.input.value = s.run;
+        cc.setMode("agent");
+        cc.runAgent(s.run);
+        return;
+    }
+
+    cc.el.input.value = s.fill;
+    cc.setMode("agent");
+    cc.el.input.focus();
 };
 
 setTimeout(loadBell, 0);

@@ -55,6 +55,8 @@
                 <p id="cc-no-recents" class="cc-hint-text">
                     Start typing to search, or describe what you want done.
                 </p>
+                <p class="cc-section-label" style="margin-top:14px;">Try asking</p>
+                <div id="cc-starters"></div>
             </div>
 
             {{-- Results state — groups injected by layout.js --}}
@@ -591,6 +593,53 @@
 
     .cc-thread-more a:hover {
         text-decoration: underline;
+    }
+
+    /* ── Starter list ── */
+    #cc-starters {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 8px;
+    }
+
+    .cc-starter {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--content-bg);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 0.12s, background 0.12s;
+    }
+
+    .cc-starter:hover {
+        border-color: #185FA5;
+        background: rgba(24, 95, 165, 0.06);
+    }
+
+    .cc-starter-icon {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        color: #185FA5;
+    }
+
+    .cc-starter-title {
+        font-size: 13.5px;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    /* ↵ runs on click; … fills the box and waits for a reference */
+    .cc-starter-mark {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--text-muted);
     }
 
     /* ── Mobile: full screen ── */
