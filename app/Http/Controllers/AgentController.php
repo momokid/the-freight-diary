@@ -223,6 +223,10 @@ class AgentController extends Controller
             'reply'     => $bag['Reply'] ?? null,
             'facts'     => $bag['ReplyFacts'] ?? [],
             'delayed'   => (bool) ($bag['IsDelayed'] ?? false),
+            'moreUrl'   => $bag['MoreUrl'] ?? null,
+            'moreLabel' => $bag['MoreLabel'] ?? null,
+            'replyKind' => $bag['ReplyKind'] ?? 'consignment',
+            'replyRows' => $bag['ReplyRows'] ?? [],
             'message'   => $run->FailureReason,
             'steps'     => $run->actions->map(fn($a) => [
                 'label'  => $a->StepLabel,

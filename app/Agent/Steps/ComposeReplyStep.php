@@ -56,7 +56,7 @@ class ComposeReplyStep implements AgentStep
 
     public static function outputs(): array
     {
-        return ['Reply', 'ReplyFacts'];
+        return ['Reply', 'ReplyFacts', 'ReplyKind', 'NextAction', 'IsDelayed'];
     }
 
     public function run(array $input, AgentContext $context): array
@@ -71,6 +71,7 @@ class ComposeReplyStep implements AgentStep
         return [
             'Reply'      => implode("\n", array_filter($lines)),
             'ReplyFacts' => $this->facts($b),
+            'ReplyKind'  => 'consignment',
         ];
     }
 

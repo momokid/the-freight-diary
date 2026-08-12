@@ -528,6 +528,71 @@
         text-align: center;
     }
 
+    /* ── List replies ── */
+    #cc-list-wrap {
+        max-height: 340px;
+        overflow-y: auto;
+        margin-bottom: 12px;
+    }
+
+    .cc-list-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .cc-list-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        background: var(--card-bg);
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border-color);
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+
+    .cc-list-table td {
+        padding: 7px 10px;
+        color: var(--text-primary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .cc-list-table tbody tr {
+        cursor: pointer;
+    }
+
+    .cc-list-table tbody tr:hover {
+        background: rgba(24, 95, 165, 0.05);
+    }
+
+    .cc-list-table td:first-child {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .cc-list-table .cc-num {
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .cc-thread-more a {
+        font-size: 13px;
+        font-weight: 500;
+        color: #185FA5;
+        text-decoration: none;
+    }
+
+    .cc-thread-more a:hover {
+        text-decoration: underline;
+    }
+
     /* ── Mobile: full screen ── */
     @media (max-width: 640px) {
         #cc-panel {

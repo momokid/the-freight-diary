@@ -7,6 +7,11 @@ return [
         'consignment.read'    => \App\Agent\Steps\ReadConsignmentStep::class,
         'manifest.read'       => \App\Agent\Steps\ManifestBreakdownStep::class,
         'reply.compose'       => \App\Agent\Steps\ComposeReplyStep::class,
+        'consignment.list'    => \App\Agent\Steps\ListConsignmentsStep::class,
+        'reply.list'          => \App\Agent\Steps\ComposeListReplyStep::class,
+        'consignment.list.operations'   => \App\Agent\Steps\ListOperationsStep::class,
+        'consignment.list.disbursement' => \App\Agent\Steps\ListDisbursementStep::class,
+        'consignment.list.client'       => \App\Agent\Steps\ListClientStep::class,
         'reply.manifest'      => \App\Agent\Steps\ComposeManifestReplyStep::class,
     ],
 

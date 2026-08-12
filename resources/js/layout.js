@@ -863,20 +863,11 @@ window.CommandCenter = {
             html += `<p class="cc-thread-flag cc-flag-warn">Delayed</p>`;
         }
 
-        // The reply is three lines doing three jobs: who and what, where it
-        // stands, and what is owed next. Flat text buries the third.
         if (data.reply) {
-            const lines = data.reply.split("\n").filter((l) => l.trim() !== "");
-
-            if (lines.length) {
-                html += `<p class="cc-thread-head">${this.esc(lines[0])}</p>`;
-            }
-            if (lines.length > 1) {
-                html += `<p class="cc-thread-sub">${this.esc(lines[1])}</p>`;
-            }
-            if (lines.length > 2) {
-                html += `<p class="cc-thread-action">${this.esc(lines.slice(2).join("\n"))}</p>`;
-            }
+            html +=
+                data.replyKind === "list"
+                    ? this.replyList(data.reply, data.replyRows)
+                    : this.replyConsignment(data.reply);
         }
 
         const facts = data.facts || {};
@@ -890,7 +881,114 @@ window.CommandCenter = {
             html += "</dl>";
         }
 
+        if (data.moreUrl && data.moreLabel) {
+            html += `<p class="cc-thread-more"><a href="${this.esc(data.moreUrl)}">${this.esc(data.moreLabel)} →</a></p>`;
+        }
+
         return html;
+    },
+
+    /**
+     * Three lines doing three jobs: who and what, where it stands, and what
+     * is owed next. Flat text buries the third.
+     */
+    replyConsignment(reply) {
+        const lines = reply.split("\n").filter((l) => l.trim() !== "");
+        let html = "";
+
+        if (lines.length) {
+            html += `<p class="cc-thread-head">${this.esc(lines[0])}</p>`;
+        }
+        if (lines.length > 1) {
+            html += `<p class="cc-thread-sub">${this.esc(lines[1])}</p>`;
+        }
+        if (lines.length > 2) {
+            html += `<p class="cc-thread-action">${this.esc(lines.slice(2).join("\n"))}</p>`;
+        }
+
+        return html;
+    },
+
+    /** A count, then a sortable table. Prose is the fallback with no rows. */
+    replyList(reply, rows) {
+        const lines = reply.split("\n").filter((l) => l.trim() !== "");
+        let html = lines.length
+            ? `<p class="cc-thread-head">${this.esc(lines[0])}</p>`
+            : "";
+
+        if (!rows || !rows.length) {
+            return html;
+        }
+
+        this.listRows = rows;
+        this.listSort = { key: "Days", dir: "desc" };
+
+        return html + `<div id="cc-list-wrap">${this.listTable()}</div>`;
+    },
+
+    /** Only columns with a value somewhere — a header over 16 blanks is noise. */
+    listColumns() {
+        return [
+            { key: "BL", label: "BL", numeric: false },
+            { key: "Consignee", label: "Consignee", numeric: false },
+            { key: "Days", label: "Days", numeric: true },
+            { key: "Action", label: "Next action", numeric: false },
+            { key: "ClaimedBy", label: "With", numeric: false },
+        ].filter((c) =>
+            this.listRows.some(
+                (r) =>
+                    r[c.key] !== null &&
+                    r[c.key] !== undefined &&
+                    r[c.key] !== "",
+            ),
+        );
+    },
+
+    listTable() {
+        const cols = this.listColumns();
+        const { key, dir } = this.listSort;
+
+        const sorted = [...this.listRows].sort((a, b) => {
+            const av = a[key];
+            const bv = b[key];
+
+            // Blanks sink regardless of direction
+            if (av === null || av === undefined || av === "") return 1;
+            if (bv === null || bv === undefined || bv === "") return -1;
+
+            const cmp =
+                typeof av === "number" && typeof bv === "number"
+                    ? av - bv
+                    : String(av).localeCompare(String(bv));
+
+            return dir === "asc" ? cmp : -cmp;
+        });
+
+        let html = '<table class="cc-list-table"><thead><tr>';
+
+        cols.forEach((c) => {
+            const arrow = c.key === key ? (dir === "asc" ? " ▲" : " ▼") : "";
+            const cls = c.numeric ? ' class="cc-num"' : "";
+            html += `<th${cls} onclick="window.ccSortList('${c.key}')">${this.esc(c.label)}${arrow}</th>`;
+        });
+
+        html += "</tr></thead><tbody>";
+
+        sorted.forEach((r, i) => {
+            html += `<tr onclick="window.ccOpenBl(${i})">`;
+            cols.forEach((c) => {
+                const cls = c.numeric ? ' class="cc-num"' : "";
+                const val = r[c.key];
+                html += `<td${cls}>${this.esc(
+                    val === null || val === undefined || val === "" ? "—" : val,
+                )}</td>`;
+            });
+            html += "</tr>";
+        });
+
+        this.listSorted = sorted;
+
+        return html + "</tbody></table>";
     },
 
     /** Identifiers read better in mono; status carries its own colour. */
@@ -1222,5 +1320,33 @@ document.addEventListener("click", function (e) {
 });
 
 window.toggleBell = toggleBell;
+
+/** Re-sort in place. The same column toggles direction. */
+window.ccSortList = function (key) {
+    const cc = window.CommandCenter;
+    const wrap = document.getElementById("cc-list-wrap");
+
+    if (!cc || !wrap) return;
+
+    cc.listSort =
+        cc.listSort.key === key
+            ? { key, dir: cc.listSort.dir === "asc" ? "desc" : "asc" }
+            : { key, dir: key === "Days" ? "desc" : "asc" };
+
+    wrap.innerHTML = cc.listTable();
+};
+
+/** A row is a question waiting to be asked. */
+window.ccOpenBl = function (index) {
+    const cc = window.CommandCenter;
+    const row = cc?.listSorted?.[index];
+
+    if (!row?.BL) return;
+
+    const instruction = "status of " + row.BL;
+    cc.el.input.value = instruction;
+    cc.setMode("agent");
+    cc.runAgent(instruction);
+};
 
 setTimeout(loadBell, 0);
