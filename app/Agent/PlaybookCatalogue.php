@@ -94,6 +94,10 @@ class PlaybookCatalogue
 
     public function forStarters(?UserAuth $userAuth): array
     {
+        if ($userAuth === null) {
+            return [];
+        }
+
         $out = [];
 
         foreach ($this->permitted($userAuth) as $playbook) {

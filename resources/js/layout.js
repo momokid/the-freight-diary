@@ -490,6 +490,7 @@ window.CommandCenter = {
             recents: document.getElementById("cc-recents"),
             noRecents: document.getElementById("cc-no-recents"),
             starters: document.getElementById("cc-starters"),
+            backBar: document.getElementById("cc-back-bar"),
         };
 
         if (!this.el.overlay) return; // partial not included on this page
@@ -543,9 +544,24 @@ window.CommandCenter = {
         this.lastFocused = null;
     },
 
+    /** Clear the box and return to the starting point. */
+    backToStart() {
+        this.el.input.value = "";
+        this.rows = [];
+        this.activeIndex = -1;
+        this.setMode("search");
+        this.renderRecents();
+        this.renderStarters(this.starterList());
+        this.setState("empty");
+        this.el.input.focus();
+    },
+
     // ── State switching ───────────────────────────────────────
 
     setState(name) {
+        if (this.el.backBar) {
+            this.el.backBar.hidden = name === "empty";
+        }
         this.el.stEmpty.hidden = name !== "empty";
         this.el.stResults.hidden = name !== "results";
         this.el.stThread.hidden = name !== "thread";
@@ -1125,45 +1141,9 @@ window.CommandCenter = {
             .join("");
     },
 
-    /** What the agent can actually do today. Grows as playbooks land. */
+    /** Only what this user may run — the catalogue filters by permission. */
     starterList() {
-        return [
-            {
-                title: "Status of a consignment",
-                fill: "status of ",
-                icon: "box",
-            },
-            {
-                title: "Breakdown of a manifest",
-                fill: "breakdown of ",
-                icon: "doc",
-            },
-            {
-                title: "Overdue consignments",
-                run: "what is overdue",
-                icon: "box",
-            },
-            {
-                title: "Not yet disbursed",
-                run: "what has not been disbursed",
-                icon: "receipt",
-            },
-            {
-                title: "Not yet invoiced",
-                run: "what has not been invoiced",
-                icon: "doc",
-            },
-            {
-                title: "Unconfirmed type",
-                run: "show unconfirmed type",
-                icon: "box",
-            },
-            {
-                title: "Clients owing money",
-                run: "who owes us money",
-                icon: "user",
-            },
-        ];
+        return window.CommandCenterConfig.starters || [];
     },
 
     renderRecents() {

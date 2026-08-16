@@ -1,9 +1,19 @@
+@php
+    $ccVerbs = \Illuminate\Support\Facades\Cache::remember(
+        'cc_verbs',
+        3600,
+        fn() => \Illuminate\Support\Facades\DB::table('agent_verb_synonyms')->where('Status', 1)->pluck('Verb')->all(),
+    );
+    $ccStarters = app(\App\Agent\PlaybookCatalogue::class)->forStarters($userAuth ?? null);
+@endphp
+
 <script>
     window.CommandCenterConfig = {
         resolveUrl: '{{ route('command-center.resolve') }}',
         runUrl: '{{ route('command-center.run') }}',
         csrf: '{{ csrf_token() }}',
-        verbs: @json(\App\Services\AgentVerbService::forJs()),
+        verbs: @json($ccVerbs),
+        starters: @json($ccStarters),
     };
 </script>
 
@@ -45,6 +55,16 @@
             <span id="cc-mic-status-text"></span>
         </div>
 
+        {{-- ── Back to the starting point — shown once the panel leaves the empty state ── --}}
+        <div id="cc-back-bar" hidden>
+            <button type="button" onclick="window.CommandCenter.backToStart()">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                Back
+            </button>
+        </div>
+
         {{-- ── Body: exactly one state visible at a time ── --}}
         <div id="cc-body">
 
@@ -62,7 +82,7 @@
             {{-- Results state — groups injected by layout.js --}}
             <div id="cc-state-results" class="cc-state" hidden></div>
 
-            {{-- Thread state — Phase 4 agent conversation; stubbed for now --}}
+            {{-- Thread state — agent conversation --}}
             <div id="cc-state-thread" class="cc-state" hidden></div>
 
             {{-- Loading --}}
@@ -107,8 +127,9 @@
         backdrop-filter: blur(2px);
     }
 
+    /* One dial for panel text size — every font-size below scales off it */
     #cc-panel {
-        --cc-scale: 1.3;
+        --cc-scale: 1.2;
         position: relative;
         width: 1000px;
         max-width: calc(100vw - 32px);
@@ -128,7 +149,7 @@
         border-radius: 4px;
         background: var(--content-bg);
         font-family: inherit;
-        font-size: 11px;
+        font-size: calc(11px * var(--cc-scale));
     }
 
     @keyframes cc-in {
@@ -165,7 +186,7 @@
         outline: none;
         background: transparent;
         color: var(--text-primary);
-        font-size: 15px;
+        font-size: calc(15px * var(--cc-scale));
     }
 
     #cc-input::placeholder {
@@ -174,7 +195,7 @@
 
     #cc-mode-badge {
         flex-shrink: 0;
-        font-size: 10px;
+        font-size: calc(10px * var(--cc-scale));
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -250,7 +271,7 @@
     #cc-mic-status {
         display: none;
         padding: 7px 16px;
-        font-size: 12px;
+        font-size: calc(12px * var(--cc-scale));
         border-bottom: 1px solid var(--border-color);
     }
 
@@ -267,16 +288,50 @@
         background: rgba(185, 28, 28, 0.06);
     }
 
+    /* ── Back bar ── */
+    #cc-back-bar {
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    #cc-back-bar[hidden] {
+        display: none;
+    }
+
+    #cc-back-bar button {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px 4px 6px;
+        border: 1px solid var(--border-color);
+        border-radius: 999px;
+        background: var(--content-bg);
+        color: var(--text-muted);
+        font: inherit;
+        font-size: calc(12px * var(--cc-scale));
+        cursor: pointer;
+    }
+
+    #cc-back-bar button:hover {
+        border-color: #185FA5;
+        color: #185FA5;
+    }
+
+    #cc-back-bar svg {
+        width: 14px;
+        height: 14px;
+    }
+
     /* ── Body ── */
     #cc-body {
         max-height: 68vh;
         overflow-y: auto;
-        padding: 8p;
+        padding: 8px;
     }
 
     .cc-section-label {
         padding: 6px 16px;
-        font-size: 10px;
+        font-size: calc(10px * var(--cc-scale));
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.05em;
@@ -285,7 +340,7 @@
 
     .cc-hint-text {
         padding: 14px 16px;
-        font-size: 13px;
+        font-size: calc(13px * var(--cc-scale));
         color: var(--text-muted);
     }
 
@@ -320,7 +375,7 @@
     }
 
     .cc-row-title {
-        font-size: 13px;
+        font-size: calc(13px * var(--cc-scale));
         font-weight: 600;
         color: var(--text-primary);
         white-space: nowrap;
@@ -334,7 +389,7 @@
     }
 
     .cc-row-meta {
-        font-size: 11px;
+        font-size: calc(11px * var(--cc-scale));
         color: var(--text-muted);
         white-space: nowrap;
         overflow: hidden;
@@ -347,7 +402,7 @@
     }
 
     .cc-thread-you {
-        font-size: 13px;
+        font-size: calc(13px * var(--cc-scale));
         color: var(--text-muted);
         margin-bottom: 10px;
     }
@@ -359,7 +414,7 @@
 
     /* ── Reply: three lines, three jobs ── */
     .cc-thread-head {
-        font-size: 15px;
+        font-size: calc(15px * var(--cc-scale));
         font-weight: 600;
         line-height: 1.4;
         color: var(--text-primary);
@@ -367,7 +422,7 @@
     }
 
     .cc-thread-sub {
-        font-size: 13px;
+        font-size: calc(13px * var(--cc-scale));
         line-height: 1.5;
         color: var(--text-muted);
         margin-bottom: 10px;
@@ -375,7 +430,7 @@
 
     /* The sentence the user acts on — everything else is context */
     .cc-thread-action {
-        font-size: 13.5px;
+        font-size: calc(13.5px * var(--cc-scale));
         font-weight: 500;
         line-height: 1.5;
         color: var(--text-primary);
@@ -387,13 +442,75 @@
         white-space: pre-wrap;
     }
 
+    .cc-thread-working {
+        font-size: calc(13px * var(--cc-scale));
+        color: var(--text-muted);
+    }
+
+    .cc-thread-reply {
+        font-size: calc(14px * var(--cc-scale));
+        line-height: 1.55;
+        color: var(--text-primary);
+        margin-bottom: 12px;
+    }
+
+    .cc-thread-error {
+        font-size: calc(13px * var(--cc-scale));
+        color: #b91c1c;
+    }
+
+    .cc-thread-flag {
+        display: inline-block;
+        font-size: calc(10px * var(--cc-scale));
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(185, 28, 28, 0.1);
+        color: #b91c1c;
+        margin-bottom: 8px;
+    }
+
     /* Amber warning, distinct from the red used for genuine errors */
     .cc-thread-flag.cc-flag-warn {
         background: rgba(146, 64, 14, 0.1);
         color: #92400e;
     }
 
-    /* ── Fact values ── */
+    .cc-thread-fix {
+        display: inline-block;
+        font-size: calc(13px * var(--cc-scale));
+        font-weight: 600;
+        color: #185FA5;
+        text-decoration: none;
+        margin-bottom: 10px;
+    }
+
+    .cc-thread-fix:hover {
+        text-decoration: underline;
+    }
+
+    /* ── Facts ── */
+    .cc-facts {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 14px;
+        font-size: calc(12px * var(--cc-scale));
+        padding-top: 10px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .cc-facts dt {
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .cc-facts dd {
+        color: var(--text-primary);
+        margin: 0;
+    }
+
     .cc-facts dd.cc-mono {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         letter-spacing: 0.02em;
@@ -401,7 +518,7 @@
 
     .cc-facts dd.cc-status {
         display: inline-block;
-        font-size: 10px;
+        font-size: calc(10px * var(--cc-scale));
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -444,68 +561,6 @@
         color: #b91c1c;
     }
 
-    .cc-thread-working {
-        font-size: 13px;
-        color: var(--text-muted);
-    }
-
-    .cc-thread-reply {
-        font-size: 14px;
-        line-height: 1.55;
-        color: var(--text-primary);
-        margin-bottom: 12px;
-    }
-
-    .cc-thread-error {
-        font-size: 13px;
-        color: #b91c1c;
-    }
-
-    .cc-thread-flag {
-        display: inline-block;
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        padding: 2px 8px;
-        border-radius: 999px;
-        background: rgba(185, 28, 28, 0.1);
-        color: #b91c1c;
-        margin-bottom: 8px;
-    }
-
-    .cc-thread-fix {
-        display: inline-block;
-        font-size: calc(13px * var(--cc-scale));
-        font-weight: 600;
-        color: #185FA5;
-        text-decoration: none;
-        margin-bottom: 10px;
-    }
-
-    .cc-thread-fix:hover {
-        text-decoration: underline;
-    }
-
-    .cc-facts {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 4px 14px;
-        font-size: 12px;
-        padding-top: 10px;
-        border-top: 1px solid var(--border-color);
-    }
-
-    .cc-facts dt {
-        color: var(--text-muted);
-        white-space: nowrap;
-    }
-
-    .cc-facts dd {
-        color: var(--text-primary);
-        margin: 0;
-    }
-
     /* ── Footer ── */
     #cc-footer {
         display: flex;
@@ -513,7 +568,7 @@
         padding: 9px 16px;
         border-top: 1px solid var(--border-color);
         background: var(--content-bg);
-        font-size: 11px;
+        font-size: calc(11px * var(--cc-scale));
         color: var(--text-muted);
     }
 
@@ -526,7 +581,7 @@
         border-radius: 4px;
         background: var(--card-bg);
         font-family: inherit;
-        font-size: 10px;
+        font-size: calc(10px * var(--cc-scale));
         text-align: center;
     }
 
@@ -540,7 +595,7 @@
     .cc-list-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 13px;
+        font-size: calc(13px * var(--cc-scale));
     }
 
     .cc-list-table th {
@@ -548,7 +603,7 @@
         top: 0;
         z-index: 1;
         text-align: left;
-        font-size: 11px;
+        font-size: calc(11px * var(--cc-scale));
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -585,7 +640,7 @@
     }
 
     .cc-thread-more a {
-        font-size: 13px;
+        font-size: calc(13px * var(--cc-scale));
         font-weight: 500;
         color: #185FA5;
         text-decoration: none;
@@ -600,6 +655,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 8px;
+        padding: 0 16px 8px;
     }
 
     .cc-starter {
@@ -630,7 +686,7 @@
     }
 
     .cc-starter-title {
-        font-size: 13.5px;
+        font-size: calc(13.5px * var(--cc-scale));
         font-weight: 500;
         color: var(--text-primary);
     }
@@ -638,7 +694,7 @@
     /* ↵ runs on click; … fills the box and waits for a reference */
     .cc-starter-mark {
         margin-left: auto;
-        font-size: 12px;
+        font-size: calc(12px * var(--cc-scale));
         color: var(--text-muted);
     }
 
