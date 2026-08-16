@@ -59,7 +59,7 @@
                                         <thead>
                                             <tr style="background:#185FA5;color:#ffffff;">
                                                 <th style="padding:8px 10px;text-align:left;">BL No</th>
-                                                <th style="padding:8px 10px;text-align:left;">Consignee</th>
+                                                <th style="padding:8px 10px;text-align:left;">Carrier</th>
                                                 <th style="padding:8px 10px;text-align:left;">ETA</th>
                                                 <th style="padding:8px 10px;text-align:center;">Containers</th>
                                             </tr>
@@ -70,7 +70,7 @@
                                                     style="background:{{ $loop->index % 2 === 0 ? '#f9fafb' : '#ffffff' }};">
                                                     <td style="padding:8px 10px;font-family:monospace;">
                                                         {{ $row->BL }}</td>
-                                                    <td style="padding:8px 10px;">{{ $row->FullName }}</td>
+                                                    <td style="padding:8px 10px;">{{ $row->CarrierName ?: '-' }}</td>
                                                     <td style="padding:8px 10px;">
                                                         {{ \Carbon\Carbon::parse($row->ETA)->format('d M Y') }}
                                                     </td>
@@ -87,18 +87,18 @@
                                 <p
                                     style="margin:0 0 8px;font-size:15px;font-weight:bold;color:#185FA5;
                        border-bottom:2px solid #185FA5;padding-bottom:6px;">
-                                    Upcoming &mdash; Next 7 Days ({{ count($digest['upcoming']) }})
+                                    Upcoming &mdash; Next 3 Days ({{ count($digest['upcoming']) }})
                                 </p>
 
                                 @if (empty($digest['upcoming']))
-                                    <p style="color:#6b7280;margin:0 0 24px;">None in the next 7 days.</p>
+                                    <p style="color:#6b7280;margin:0 0 24px;">None in the next 3 days.</p>
                                 @else
                                     <table width="100%" cellpadding="0" cellspacing="0"
                                         style="margin-bottom:28px;border-collapse:collapse;">
                                         <thead>
                                             <tr style="background:#185FA5;color:#ffffff;">
                                                 <th style="padding:8px 10px;text-align:left;">BL No</th>
-                                                <th style="padding:8px 10px;text-align:left;">Consignee</th>
+                                                <th style="padding:8px 10px;text-align:left;">Carrier</th>
                                                 <th style="padding:8px 10px;text-align:left;">ETA</th>
                                                 <th style="padding:8px 10px;text-align:center;">Days</th>
                                                 <th style="padding:8px 10px;text-align:center;">Containers</th>
@@ -110,7 +110,7 @@
                                                     style="background:{{ $loop->index % 2 === 0 ? '#f9fafb' : '#ffffff' }};">
                                                     <td style="padding:8px 10px;font-family:monospace;">
                                                         {{ $row->BL }}</td>
-                                                    <td style="padding:8px 10px;">{{ $row->FullName }}</td>
+                                                    <td style="padding:8px 10px;">{{ $row->CarrierName ?: '-' }}</td>
                                                     <td style="padding:8px 10px;">
                                                         {{ \Carbon\Carbon::parse($row->ETA)->format('d M Y') }}
                                                     </td>
@@ -153,7 +153,7 @@
                                                     style="background:{{ $loop->index % 2 === 0 ? '#f9fafb' : '#ffffff' }};">
                                                     <td style="padding:8px 10px;font-family:monospace;">
                                                         {{ $row->BL }}</td>
-                                                    <td style="padding:8px 10px;">{{ $row->FullName }}</td>
+                                                    <td style="padding:8px 10px;">{{ $row->CarrierName ?: '-' }}</td>
                                                     <td style="padding:8px 10px;font-weight:bold;">
                                                         {{ \Carbon\Carbon::parse($row->ETA)->format('d M Y') }}
                                                     </td>

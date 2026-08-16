@@ -8,7 +8,18 @@ use Illuminate\Support\Facades\Log;
 
 class EtaAlertService
 {
+    /** How far ahead the internal digest looks. */
+    private const UPCOMING_DAYS = 3;
+
     public function __construct(private ArkeselService $arkesel) {}
+
+    /** Fetched once per run — a run can send many messages. */
+    private ?string $companyName = null;
+
+    private function companyName(): string
+    {
+        return $this->companyName ??= CompanyService::institution()?->InstName ?? '';
+    }
 
     /**
      * Main entry point — called by the scheduled command.
@@ -21,24 +32,32 @@ class EtaAlertService
             return [];
         }
 
-        $consignments = $this->getActiveConsignments();
+        $digest = ['arriving_today' => [], 'upcoming' => [], 'eta_changed' => []];
+
+        // The internal digest covers every arriving consignment. LCLs carry no
+        // consignee on container_main, so a join would drop them silently.
+        foreach ($this->getDigestConsignments() as $row) {
+            $etaDays = (int) $row->ETADays;
+
+            if ($etaDays === 0) {
+                $digest['arriving_today'][] = $row;
+            } elseif ($etaDays <= self::UPCOMING_DAYS) {
+                $digest['upcoming'][] = $row;
+            }
+        }
+
+        // SMS is a separate set: it needs a phone number and honours opt-out.
+        $consignments = $this->getSmsConsignments();
 
         if ($consignments->isEmpty()) {
-            return [];
+            return $digest;
         }
 
         $latestLogs = $this->getLatestSnapshots($consignments->pluck('BL')->toArray());
 
-        $digest = ['arriving_today' => [], 'upcoming' => [], 'eta_changed' => []];
-
         foreach ($consignments as $consignment) {
-            $etaDays = (int) $consignment->ETADays;
-
-            // Populate digest from the full active set regardless of log state
-            if ($etaDays === 0) {
+            if ((int) $consignment->ETADays === 0) {
                 $this->queueArrival($consignment);
-            } elseif ($etaDays <= 3) {
-                $digest['upcoming'][] = $consignment;
             }
 
             $latestSnapshot = $latestLogs->get($consignment->BL);
@@ -59,29 +78,50 @@ class EtaAlertService
         return $digest;
     }
 
-    private function getActiveConsignments()
+    /**
+     * Everything arriving, whoever it belongs to. No consignee join: an LCL
+     * carries ConsigneeID 0 because its consignees sit on the house BLs.
+     */
+    private function getDigestConsignments()
+    {
+        return DB::table('container_main as cm')
+            ->leftJoin('ship_carrier as sc', 'sc.CarrierID', '=', 'cm.CarrierID')
+            ->where('cm.Status', 1)
+            ->where('cm.Ownership', 1)
+            ->whereRaw('cm.ETA BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)', [self::UPCOMING_DAYS])
+            ->orderBy('cm.ETA')
+            ->get([
+                'cm.ConsignmentID',
+                'cm.BL',
+                'cm.ETA',
+                'sc.CarrierName',
+                DB::raw('TO_DAYS(cm.ETA) - TO_DAYS(CURDATE()) AS ETADays'),
+                DB::raw('(SELECT COUNT(*) FROM container_details cd
+                          WHERE cd.ConsignmentID = cm.ConsignmentID) as ContainerCount'),
+            ]);
+    }
+
+    /** Only what can actually be texted — a phone number and no opt-out. */
+    private function getSmsConsignments()
     {
         return DB::table('container_main as cm')
             ->join('consignee_main as co', 'co.ConsigneeID', '=', 'cm.ConsigneeID')
-            ->select([
-                'cm.ConsignmentID',
-                'cm.BL',
-                'cm.ConsigneeID',
-                'cm.ETA',
-                DB::raw('TO_DAYS(cm.ETA) - TO_DAYS(CURDATE()) AS ETADays'),
-                'co.FullName',
-                'co.TelNo',
-            ])
             ->where('cm.Status', 1)
             ->where('cm.Ownership', 1)
             ->whereRaw('cm.ETA >= CURDATE()')
             ->where('co.AlertOptOut', 0)
             ->where('co.TelNo', '!=', '')
-            ->addSelect(DB::raw(
-                '(SELECT COUNT(*) FROM container_details cd 
-      WHERE cd.ConsignmentID = cm.ConsignmentID) as ContainerCount'
-            ))
-            ->get();
+            ->get([
+                'cm.ConsignmentID',
+                'cm.BL',
+                'cm.ConsigneeID',
+                'cm.ETA',
+                'co.FullName',
+                'co.TelNo',
+                DB::raw('TO_DAYS(cm.ETA) - TO_DAYS(CURDATE()) AS ETADays'),
+                DB::raw('(SELECT COUNT(*) FROM container_details cd
+                          WHERE cd.ConsignmentID = cm.ConsignmentID) as ContainerCount'),
+            ]);
     }
 
     private function getLatestSnapshots(array $bls): \Illuminate\Support\Collection
@@ -203,20 +243,24 @@ class EtaAlertService
         }
     }
 
-    // -------------------------------------------------------------------------
     // Message builders — edit here to change SMS wording
-    // -------------------------------------------------------------------------
 
     private function buildArrivalMessage(string $fullName, string $bl): string
     {
-        $name = mb_substr(trim($fullName), 0, 20);
-        return "Dear {$name}, your consignment BL {$bl} is due to arrive at Tema Port today. Please prepare for clearance. - PSIL";
+        $name    = mb_substr(trim($fullName), 0, 20);
+        $company = $this->companyName();
+        $signoff = $company === '' ? '' : " - {$company}";
+
+        return "Dear {$name}, your consignment BL {$bl} is due to arrive at Tema Port today. Please prepare for clearance.{$signoff}";
     }
 
     private function buildEtaChangeMessage(string $fullName, string $bl, string $newETA): string
     {
-        $name = mb_substr(trim($fullName), 0, 20);
-        $date = date('d M Y', strtotime($newETA));
-        return "Dear {$name}, the arrival date for BL {$bl} has been updated to {$date}. Contact PSIL for details.";
+        $name    = mb_substr(trim($fullName), 0, 20);
+        $date    = date('d M Y', strtotime($newETA));
+        $company = $this->companyName();
+        $contact = $company === '' ? 'Contact us for details.' : "Contact {$company} for details.";
+
+        return "Dear {$name}, the arrival date for BL {$bl} has been updated to {$date}. {$contact}";
     }
 }
