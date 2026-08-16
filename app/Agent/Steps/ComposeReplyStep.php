@@ -176,9 +176,7 @@ class ComposeReplyStep implements AgentStep
             $facts['Disbursement'] = implode(', ', $b['DisbursementStamps']);
         }
 
-        if (! empty($b['MatchedOn'])) {
-            $facts['Matched on'] = $b['MatchedOn'];
-        }
+
 
         return array_filter($facts, fn($v) => $v !== null && $v !== '');
     }

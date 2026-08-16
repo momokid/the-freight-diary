@@ -12,20 +12,14 @@ use App\Services\WorkflowService;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
-/**
- * Builds a run and its action rows from a playbook.
- *
- * Permissions are checked here, at plan time, so an unauthorised step is
- * visible before the user approves anything rather than failing halfway.
- * The runner checks again at execution in case rights changed since.
- */
+
 class RunFactory
 {
     public function __construct(
         private StepRegistry $registry,
         private WorkflowService $workflow,
+        private PlaybookCatalogue $catalogue,
     ) {}
-
     /**
      * @param  array  $seed     values the planner extracted, e.g. ['Reference' => 'MEDUY9898550']
      * @param  array  $meta     RawInstruction, InputModality, IntentKey, ResolutionLayer, LLMProvider, LLMModel
@@ -45,6 +39,7 @@ class RunFactory
         }
 
         $this->assertPermitted($steps, $userAuth);
+        $this->assertComplete($playbook, $seed);
         $this->assertWorkflowAllows($playbook, $seed);
 
         return DB::transaction(function () use ($playbook, $userAuth, $branchId, $seed, $meta, $steps) {
@@ -92,13 +87,6 @@ class RunFactory
     }
 
 
-    /**
-     * Every required parameter must have a value before a run exists.
-     *
-     * Checked here rather than in the router so the picker path is covered
-     * too — a playbook chosen from the suggestion list arrives with an empty
-     * params array and would otherwise fail mid-run.
-     */
     private function assertComplete(AgentPlaybook $playbook, array $seed): void
     {
         $missing = [];
