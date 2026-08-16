@@ -31,6 +31,8 @@ class AgentPlaybook extends Model
         'BranchID',
         'CreatedAt',
         'UpdatedAt',
+        'CardTitle',
+        'SortOrder',
         'Status',
     ];
 

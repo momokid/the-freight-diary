@@ -104,13 +104,15 @@ class PlaybookCatalogue
             $needsValue = collect($this->paramsFor($playbook))
                 ->contains(fn($spec) => ! empty($spec['required']));
 
+            $label = $this->cardLabel($playbook);
+
             $card = [
-                'title' => $playbook->Title,
+                'title' => $label,
                 'icon'  => $this->iconFor($playbook->PlaybookKey),
             ];
 
             if (! $needsValue) {
-                $card['run'] = $this->firstExample($playbook) ?? $playbook->Title;
+                $card['run'] = $this->firstExample($playbook) ?? $label;
                 $out[] = $card;
                 continue;
             }
@@ -123,6 +125,14 @@ class PlaybookCatalogue
         }
 
         return $out;
+    }
+
+    /** User-facing wording; Title is the internal label the picker keeps. */
+    private function cardLabel(AgentPlaybook $playbook): string
+    {
+        $card = trim((string) $playbook->CardTitle);
+
+        return $card !== '' ? $card : $playbook->Title;
     }
 
     /** Text before the placeholder, e.g. "status of {BL}" gives "status of ". */
@@ -204,7 +214,9 @@ class PlaybookCatalogue
     /** @return AgentPlaybook[] */
     private function all(): array
     {
+        // SortOrder drives card position; PlaybookKey only breaks ties.
         return $this->playbooks ??= AgentPlaybook::active()
+            ->orderBy('SortOrder')
             ->orderBy('PlaybookKey')
             ->get()
             ->all();
