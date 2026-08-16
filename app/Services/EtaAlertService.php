@@ -75,6 +75,11 @@ class EtaAlertService
             }
         }
 
+        // LCL arrivals — one message per house BL, since the consignees differ.
+        foreach ($this->getLclRecipients() as $recipient) {
+            $this->queueArrival($recipient, $recipient->HouseBL);
+        }
+
         return $digest;
     }
 
@@ -101,16 +106,19 @@ class EtaAlertService
             ]);
     }
 
-    /** Only what can actually be texted — a phone number and no opt-out. */
+    /**
+     * FCL recipients. A missing phone number is queued anyway — the operator
+     * fills it in before sending. Opt-outs are excluded outright.
+     */
     private function getSmsConsignments()
     {
         return DB::table('container_main as cm')
-            ->join('consignee_main as co', 'co.ConsigneeID', '=', 'cm.ConsigneeID')
+            ->leftJoin('consignee_main as co', 'co.ConsigneeID', '=', 'cm.ConsigneeID')
             ->where('cm.Status', 1)
             ->where('cm.Ownership', 1)
+            ->where('cm.ConsigneeID', '<>', 0)
             ->whereRaw('cm.ETA >= CURDATE()')
-            ->where('co.AlertOptOut', 0)
-            ->where('co.TelNo', '!=', '')
+            ->where(fn($q) => $q->where('co.AlertOptOut', 0)->orWhereNull('co.AlertOptOut'))
             ->get([
                 'cm.ConsignmentID',
                 'cm.BL',
@@ -121,6 +129,32 @@ class EtaAlertService
                 DB::raw('TO_DAYS(cm.ETA) - TO_DAYS(CURDATE()) AS ETADays'),
                 DB::raw('(SELECT COUNT(*) FROM container_details cd
                           WHERE cd.ConsignmentID = cm.ConsignmentID) as ContainerCount'),
+            ]);
+    }
+
+    /**
+     * LCL recipients — one per house BL. The consignee sits on the breakdown,
+     * not on container_main, which is why ConsigneeID there is 0.
+     */
+    private function getLclRecipients()
+    {
+        return DB::table('container_main as cm')
+            ->join('manifestation_breakdown as mb', 'mb.MainBL', '=', 'cm.BL')
+            ->leftJoin('consignee_main as co', 'co.ConsigneeID', '=', 'mb.ConsigneeID')
+            ->where('cm.Status', 1)
+            ->where('cm.Ownership', 1)
+            ->whereRaw('cm.ETA = CURDATE()')
+            ->where(fn($q) => $q->where('co.AlertOptOut', 0)->orWhereNull('co.AlertOptOut'))
+            ->groupBy('cm.ConsignmentID', 'cm.BL', 'mb.HouseBL', 'mb.ConsigneeID', 'cm.ETA', 'co.FullName', 'co.TelNo')
+            ->get([
+                'cm.ConsignmentID',
+                'cm.BL',
+                'mb.HouseBL',
+                'mb.ConsigneeID',
+                'cm.ETA',
+                'co.FullName',
+                'co.TelNo',
+                DB::raw('COUNT(*) as ContainerCount'),
             ]);
     }
 
@@ -160,10 +194,17 @@ class EtaAlertService
         );
     }
 
-    private function queueArrival(object $consignment): void
+    /**
+     * Queued, not sent — a human releases these from the arrival modal.
+     *
+     * A blank phone number is queued deliberately: the operator fills it in
+     * and it saves back to the consignee. Filtering here would hide the gap.
+     */
+    private function queueArrival(object $consignment, string $houseBl = ''): void
     {
         $already = DB::table('arrival_sms_queue')
             ->where('BL', $consignment->BL)
+            ->where('HBL', $houseBl)
             ->where('QueueDate', now()->toDateString())
             ->exists();
 
@@ -171,21 +212,24 @@ class EtaAlertService
             return;
         }
 
-        $message = $this->buildArrivalMessage($consignment->FullName, $consignment->BL);
+        // The client knows their house BL, not the vessel's main BL.
+        $clientRef = $houseBl !== '' ? $houseBl : $consignment->BL;
+        $name      = $consignment->FullName ?? '';
 
         DB::table('arrival_sms_queue')->insert([
-            'ConsignmentID' => $consignment->ConsignmentID,
-            'BL'            => $consignment->BL,
-            'ConsigneeID'   => $consignment->ConsigneeID,
-            'ConsigneeName' => $consignment->FullName,
-            'Phone'         => $consignment->TelNo,
-            'ETA'           => $consignment->ETA,
-            'ContainerCount' => (int) $consignment->ContainerCount,
-            'Message'       => $message,
-            'Status'        => 0,
-            'SentBy'        => null,
-            'SentAt'        => null,
-            'QueueDate'     => now()->toDateString(),
+            'ConsignmentID'  => $consignment->ConsignmentID,
+            'BL'             => $consignment->BL,
+            'HBL'            => $houseBl,
+            'ConsigneeID'    => $consignment->ConsigneeID,
+            'ConsigneeName'  => $name,
+            'Phone'          => $consignment->TelNo ?? '',
+            'ETA'            => $consignment->ETA,
+            'ContainerCount' => (int) ($consignment->ContainerCount ?? 0),
+            'Message'        => $this->buildArrivalMessage($name, $clientRef),
+            'Status'         => 0,
+            'SentBy'         => null,
+            'SentAt'         => null,
+            'QueueDate'      => now()->toDateString(),
         ]);
     }
 

@@ -117,7 +117,7 @@
                                                     <td
                                                         style="padding:8px 10px;text-align:center;font-weight:bold;
                                                         color:{{ (int) $row->ETADays <= 2 ? '#b91c1c' : '#185FA5' }};">
-                                                        {{ $row->ETADays }}d
+                                                        {{ $row->ETADays }}
                                                     </td>
                                                     <td style="padding:8px 10px;text-align:center;font-weight:bold;">
                                                         {{ $row->ContainerCount ?: '-' }}
