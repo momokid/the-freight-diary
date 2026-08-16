@@ -271,7 +271,7 @@
     #cc-body {
         max-height: 68vh;
         overflow-y: auto;
-        padding: 8px 0;
+        padding: 8p;
     }
 
     .cc-section-label {

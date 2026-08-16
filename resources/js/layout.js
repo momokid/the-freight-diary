@@ -516,28 +516,9 @@ window.CommandCenter = {
         this.el.overlay.classList.add("cc-open");
         this.el.overlay.setAttribute("aria-hidden", "false");
         this.renderRecents();
-        this.renderStarters([
-            {
-                title: "Status of a consignment",
-                fill: "status of ",
-                icon: "box",
-            },
-            {
-                title: "Breakdown of a manifest",
-                fill: "breakdown of ",
-                icon: "doc",
-            },
-            {
-                title: "Overdue consignments",
-                run: "what is overdue",
-                icon: "box",
-            },
-            {
-                title: "Clients owing money",
-                run: "who owes us money",
-                icon: "user",
-            },
-        ]);
+
+        this.renderStarters(this.starterList());
+
         this.setState("empty");
         this.el.input.focus();
     },
@@ -861,11 +842,18 @@ window.CommandCenter = {
             return;
         }
 
-        if (
-            data.outcome === "unresolved" ||
-            data.outcome === "error" ||
-            data.outcome === "failed"
-        ) {
+        if (data.outcome === "unresolved") {
+            this.renderThread(
+                this.threadYou(instruction) +
+                    `<p class="cc-thread-error">I can't do that yet. Here's what I can do:</p>` +
+                    `<div id="cc-starters"></div>`,
+            );
+            this.el.starters = document.getElementById("cc-starters");
+            this.renderStarters(this.starterList());
+            return;
+        }
+
+        if (data.outcome === "error" || data.outcome === "failed") {
             this.renderThread(
                 this.threadYou(instruction) +
                     `<p class="cc-thread-error">${this.esc(data.message || "That did not work.")}</p>`,
@@ -1135,6 +1123,47 @@ window.CommandCenter = {
             </button>`,
             )
             .join("");
+    },
+
+    /** What the agent can actually do today. Grows as playbooks land. */
+    starterList() {
+        return [
+            {
+                title: "Status of a consignment",
+                fill: "status of ",
+                icon: "box",
+            },
+            {
+                title: "Breakdown of a manifest",
+                fill: "breakdown of ",
+                icon: "doc",
+            },
+            {
+                title: "Overdue consignments",
+                run: "what is overdue",
+                icon: "box",
+            },
+            {
+                title: "Not yet disbursed",
+                run: "what has not been disbursed",
+                icon: "receipt",
+            },
+            {
+                title: "Not yet invoiced",
+                run: "what has not been invoiced",
+                icon: "doc",
+            },
+            {
+                title: "Unconfirmed type",
+                run: "show unconfirmed type",
+                icon: "box",
+            },
+            {
+                title: "Clients owing money",
+                run: "who owes us money",
+                icon: "user",
+            },
+        ];
     },
 
     renderRecents() {

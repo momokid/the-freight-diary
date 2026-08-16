@@ -92,6 +92,65 @@ class PlaybookCatalogue
         ], $this->permitted($userAuth));
     }
 
+    public function forStarters(?UserAuth $userAuth): array
+    {
+        $out = [];
+
+        foreach ($this->permitted($userAuth) as $playbook) {
+            $needsValue = collect($this->paramsFor($playbook))
+                ->contains(fn($spec) => ! empty($spec['required']));
+
+            $card = [
+                'title' => $playbook->Title,
+                'icon'  => $this->iconFor($playbook->PlaybookKey),
+            ];
+
+            if (! $needsValue) {
+                $card['run'] = $this->firstExample($playbook) ?? $playbook->Title;
+                $out[] = $card;
+                continue;
+            }
+
+            $fill = $this->fillPrefix($playbook);
+
+            // No usable prefix: still offer the card, just open the box empty.
+            $card['fill'] = $fill ?? '';
+            $out[] = $card;
+        }
+
+        return $out;
+    }
+
+    /** Text before the placeholder, e.g. "status of {BL}" gives "status of ". */
+    private function fillPrefix(AgentPlaybook $playbook): ?string
+    {
+        $example = $this->firstExample($playbook);
+
+        if ($example === null || ! preg_match('/^(.*?)\{[A-Za-z]+\}\s*$/', $example, $m)) {
+            return null;
+        }
+
+        $prefix = $m[1];
+
+        return trim($prefix) === '' ? null : rtrim($prefix) . ' ';
+    }
+
+    private function firstExample(AgentPlaybook $playbook): ?string
+    {
+        return $playbook->intentExamples()[0] ?? null;
+    }
+
+    private function iconFor(string $key): string
+    {
+        return match (true) {
+            str_contains($key, 'outstanding')  => 'user',
+            str_contains($key, 'manifest'),
+            str_contains($key, 'invoiced')     => 'doc',
+            str_contains($key, 'disburs')      => 'receipt',
+            default                            => 'box',
+        };
+    }
+
     /** Playbooks skipped, and why. For admins — never sent to the model. */
     public function problems(): array
     {
@@ -100,17 +159,6 @@ class PlaybookCatalogue
 
     // ── Derivation ──────────────────────────────────────────────────────────
 
-    /**
-     * What the caller must supply.
-     *
-     * Each step's declared inputs, less anything an earlier step already puts
-     * in the bag and anything pinned as a literal in the playbook. Derived so
-     * a step signature change cannot leave a stale parameter behind; ParamsJson
-     * overrides the description only.
-     *
-     * Public because RunFactory checks a seed against this before planning.
-     * Two derivations of the same thing would drift.
-     */
     public function paramsFor(AgentPlaybook $playbook): array
     {
         $available = [];
