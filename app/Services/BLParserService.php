@@ -553,7 +553,9 @@ class BLParserService
 
     // ─────────────────────────────────────────────────────────────────────────
     // Match an extracted text value against any list of {id, label} options
-    // Used for any <select> field matched post-OCR (carrier, shipper, POL, POD, etc.)
+    // Used for any <select> field matched post-OCR (carrier, shipper, POL, POD,
+    // consignee). Scoring runs exact → containment → weighted token overlap →
+    // character similarity, and withholds the ID below MEDIUM.
     // ─────────────────────────────────────────────────────────────────────────
     public function matchOption(string $extractedValue, array $options): array
     {
@@ -568,7 +570,6 @@ class BLParserService
             ];
         }
 
-        // ── Exact match (case-insensitive) always wins outright ──
         foreach ($options as $option) {
             if (strcasecmp(trim($option['label']), $extractedValue) === 0) {
                 return [
@@ -580,12 +581,13 @@ class BLParserService
             }
         }
 
-        // ── No exact match — fall back to similarity scoring ──
+        $frequencies = $this->tokenFrequencies($options);
+        $needle      = $this->tokenise($extractedValue);
+
         $best = ['id' => null, 'label' => null, 'score' => 0.0];
 
         foreach ($options as $option) {
-            similar_text(strtoupper($extractedValue), strtoupper($option['label']), $percent);
-            $score = $percent / 100;
+            $score = $this->scoreLabel($extractedValue, $needle, (string) $option['label'], $frequencies, count($options));
 
             if ($score > $best['score']) {
                 $best = ['id' => $option['id'], 'label' => $option['label'], 'score' => $score];
@@ -594,7 +596,6 @@ class BLParserService
 
         $status = $best['score'] >= self::HIGH   ? 'ok'
             : ($best['score'] >= self::MEDIUM ? 'review' : 'low');
-
 
         if ($status === 'low') {
             return [
@@ -612,6 +613,124 @@ class BLParserService
             'confidence' => round($best['score'], 2),
             'status'     => $status,
         ];
+    }
+
+    /** One label scored against the extracted value. */
+    private function scoreLabel(
+        string $extracted,
+        array $needle,
+        string $label,
+        array $frequencies,
+        int $total
+    ): float {
+        $upperExtracted = strtoupper($extracted);
+        $upperLabel     = strtoupper(trim($label));
+
+        // "Tema" inside "Tema, Ghana" is the same port, not a 53% match.
+        if ($upperLabel !== '' && (str_contains($upperLabel, $upperExtracted) || str_contains($upperExtracted, $upperLabel))) {
+            return 0.90;
+        }
+
+        $candidate = $this->tokenise($label);
+
+        similar_text($upperExtracted, $upperLabel, $percent);
+        $character = $percent / 100;
+
+        // Nothing meaningful left after normalising — characters are all we have.
+        if (empty($needle) || empty($candidate)) {
+            return $character;
+        }
+
+        $shared = array_intersect($needle, $candidate);
+
+        // Two multi-word names sharing no token are different parties, however
+        // similar the letters. ABIGAIL K. MENSAH is not ABIGAIL DANKWAH.
+        // No word in common means different parties, however similar the letters.
+        if (empty($shared)) {
+            return min($character, 0.45);
+        }
+
+        $matched = 0.0;
+        $possible = 0.0;
+
+        foreach ($needle as $token) {
+            $weight    = $this->tokenWeight($token, $frequencies, $total);
+            $possible += $weight;
+
+            if (in_array($token, $candidate, true)) {
+                $matched += $weight;
+            }
+        }
+
+        if ($possible <= 0) {
+            return $character;
+        }
+
+        $token = $matched / $possible;
+
+        // Extra words on the candidate dilute the match a little.
+        $extra = count(array_diff($candidate, $needle));
+        $token *= 1 - min(0.25, $extra * 0.08);
+
+        return max($token, $character >= self::HIGH ? $character : $character * 0.8);
+    }
+
+    /** A token shared by half the table says nothing; a rare one says a lot. */
+    private function tokenWeight(string $token, array $frequencies, int $total): float
+    {
+        $seen = $frequencies[$token] ?? 0;
+
+        if ($seen <= 0 || $total <= 0) {
+            return 1.0;
+        }
+
+        return 1 / (1 + log(1 + ($seen / $total) * 100));
+    }
+
+    /** How many option labels each token appears in. */
+    private function tokenFrequencies(array $options): array
+    {
+        $frequencies = [];
+
+        foreach ($options as $option) {
+            foreach (array_unique($this->tokenise((string) $option['label'])) as $token) {
+                $frequencies[$token] = ($frequencies[$token] ?? 0) + 1;
+            }
+        }
+
+        return $frequencies;
+    }
+
+    /** Uppercase words, punctuation stripped, legal and filler words dropped. */
+    private function tokenise(string $value): array
+    {
+        $noise = [
+            'LTD',
+            'LIMITED',
+            'CO',
+            'COMPANY',
+            'LLC',
+            'INC',
+            'CORP',
+            'CORPORATION',
+            'PLC',
+            'GMBH',
+            'ENTERPRISE',
+            'ENTERPRISES',
+            'VENTURES',
+            'GROUP',
+            'THE',
+            'AND',
+            'OF',
+            'FOR',
+        ];
+
+        $words = preg_split('/[^A-Z0-9]+/', strtoupper($value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return array_values(array_filter(
+            $words,
+            fn($w) => strlen($w) > 1 && ! in_array($w, $noise, true)
+        ));
     }
 
     // Parse JSON from model response

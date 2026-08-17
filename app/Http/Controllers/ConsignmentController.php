@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\ClientNotificationService;
+use App\Services\RegistrationInferenceService;
 
 class ConsignmentController extends Controller
 {
@@ -479,7 +480,8 @@ class ConsignmentController extends Controller
     }
 
     //extract from BL for container_main fields
-    public function extractFromBL(Request $request)
+    // Extract from BL for container_main fields
+    public function extractFromBL(Request $request, RegistrationInferenceService $inference)
     {
         $request->validate([
             'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:10240'],
@@ -488,7 +490,6 @@ class ConsignmentController extends Controller
         $file = $request->file('file');
         $hash = hash_file('sha256', $file->getRealPath());
 
-        // ── Cache check ──
         $cached = DB::table('ocr_cache')
             ->where('FileHash', $hash)
             ->where('ExpiresAt', '>', now())
@@ -506,11 +507,16 @@ class ConsignmentController extends Controller
                 Auth::user()->ID
             );
 
-            return response()->json(array_merge($result, ['cached' => true]));
+            return response()->json([
+                'success'  => true,
+                'fields'   => $result['fields'],
+                'provider' => $result['provider'] ?? null,
+                'matches'  => $inference->enrich($result['fields']),
+                'cached'   => true,
+            ]);
         }
 
-        // ── Cache miss — compress (if possible) then extract ──
-        $parser = new \App\Services\BLParserService();
+        $parser     = new \App\Services\BLParserService();
         $compressed = $parser->compressForOcr($file->getRealPath(), $file->getMimeType());
 
         $fileForExtraction = $compressed['path'] === $file->getRealPath()
@@ -532,14 +538,15 @@ class ConsignmentController extends Controller
             ], 500);
         }
 
-        $containers  = $result['fields']['Containers'] ?? [];
-        $totalWeight = $result['fields']['TotalGrossWeight']['value'] ?? '';
-
         $this->stageCargoLines(
             $result['fields']['CargoLines'] ?? [],
             $result['fields']['MainBL']['value'] ?? '',
             Auth::user()->ID
         );
+
+        $containers  = $result['fields']['Containers'] ?? [];
+        $totalWeight = $result['fields']['TotalGrossWeight']['value'] ?? '';
+
         if (count($containers) === 1 && empty($containers[0]['Weight']['value']) && $totalWeight !== '') {
             $result['fields']['Containers'][0]['Weight'] = [
                 'value'      => $totalWeight,
@@ -548,47 +555,24 @@ class ConsignmentController extends Controller
             ];
         }
 
-        $optionSources = [
-            'carrier' => ['table' => 'ship_carrier', 'idCol' => 'CarrierID', 'labelCol' => 'CarrierName', 'field' => 'ShippingLine', 'fallback' => 'VesselName'],
-            'shipper' => ['table' => 'shipper_main',  'idCol' => 'ShipperID', 'labelCol' => 'ShipperName', 'field' => 'ShipperName'],
-            'pol'     => ['table' => 'pol',           'idCol' => 'POL_ID',    'labelCol' => 'POL_Name',    'field' => 'POL'],
-            'pod'     => ['table' => 'pod',           'idCol' => 'POD_ID',    'labelCol' => 'POD_Name',    'field' => 'POD'],
-        ];
-
-        $matches = [];
-        foreach ($optionSources as $key => $src) {
-            $options = DB::table($src['table'])
-                ->select("{$src['idCol']} as id", "{$src['labelCol']} as label")
-                ->get()
-                ->map(fn($o) => (array) $o)
-                ->toArray();
-
-            $text = $result['fields'][$src['field']]['value'] ?? '';
-            if ($text === '' && isset($src['fallback'])) {
-                $text = $result['fields'][$src['fallback']]['value'] ?? '';
-            }
-
-            $matches[$key] = $parser->matchOption($text, $options);
-        }
-
-        $response = [
-            'success'  => true,
-            'fields'   => $result['fields'],
-            'provider' => $result['provider'],
-            'matches'  => $matches,
-        ];
-
-        // ── Save to cache ──
+        // Only the document read is cached. Matching and inference run every
+        // time — release type moves with history, and a category list change
+        // must not wait 30 days to take effect.
         DB::table('ocr_cache')->insert([
             'FileHash'  => $hash,
-            'Result'    => json_encode($response),
+            'Result'    => json_encode(['fields' => $result['fields'], 'provider' => $result['provider']]),
             'Provider'  => $result['provider'],
             'HitCount'  => 1,
             'CreatedAt' => now(),
             'ExpiresAt' => now()->addDays(30),
         ]);
 
-        return response()->json($response);
+        return response()->json([
+            'success'  => true,
+            'fields'   => $result['fields'],
+            'provider' => $result['provider'],
+            'matches'  => $inference->enrich($result['fields']),
+        ]);
     }
 
     public function sendNotification(Request $request, ClientNotificationService $notification)
