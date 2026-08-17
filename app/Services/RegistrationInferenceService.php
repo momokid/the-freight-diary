@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\MatchAlias;
 
 /**
  * Turns extracted Bill of Lading text into the registration fields the form
@@ -16,7 +17,11 @@ use Illuminate\Support\Facades\Log;
  */
 class RegistrationInferenceService
 {
+    // Constants for confidence thresholds and limits on how many rows to consider.
     private const MEDIUM = 0.60;
+    private const WHOLE_TABLE_LIMIT = 30;
+    private const SHORTLIST_LIMIT = 5;
+    private array $sizes = [];
 
     /** Extracted field → master data table, matched by name similarity. */
     private const OPTION_SOURCES = [
@@ -57,30 +62,11 @@ class RegistrationInferenceService
         return $matches;
     }
 
-    // ── Master data matching ────────────────────────────────────────────────
-
     private function matchOptions(array $fields): array
     {
         $matches = [];
 
         foreach (self::OPTION_SOURCES as $key => $source) {
-            $options = DB::table($source['table'])
-                ->when(isset($source['activeCol']), fn($q) => $q->where($source['activeCol'], 1))
-                ->select("{$source['idCol']} as id", "{$source['labelCol']} as label")
-                ->get()
-                ->map(fn($o) => (array) $o)
-                ->all();
-
-            // One row means there is nothing to choose — take it.
-            if (count($options) === 1) {
-                $matches[$key] = [
-                    'id'         => $options[0]['id'],
-                    'label'      => $options[0]['label'],
-                    'confidence' => 1.0,
-                    'status'     => 'ok',
-                ];
-                continue;
-            }
 
             $text = trim((string) ($fields[$source['field']]['value'] ?? ''));
 
@@ -88,12 +74,114 @@ class RegistrationInferenceService
                 $text = trim((string) ($fields[$source['fallback']]['value'] ?? ''));
             }
 
-            $matches[$key] = $this->parser->matchOption($text, $options);
+            // A user has already told us what this text means.
+            $learned = $text === '' ? null : MatchAlias::lookup($key, $text);
+
+            if ($learned !== null) {
+                $option = $this->optionById($source, $learned);
+
+                if ($option) {
+                    $matches[$key] = [
+                        'id'         => $option['id'],
+                        'label'      => $option['label'],
+                        'confidence' => 1.0,
+                        'status'     => 'ok',
+                        'matchType'  => 'learned',
+                        'candidates' => [],
+                    ];
+                    continue;
+                }
+            }
+
+            $options = $this->candidateRows($source, $text);
+
+            // One row means there is nothing to choose — take it.
+            if (count($options) === 1 && $this->tableSize($source) === 1) {
+                $matches[$key] = [
+                    'id'         => $options[0]['id'],
+                    'label'      => $options[0]['label'],
+                    'confidence' => 1.0,
+                    'status'     => 'ok',
+                    'matchType'  => 'only_option',
+                    'candidates' => [],
+                ];
+                continue;
+            }
+
+            $matches[$key] = in_array($key, ['consignee', 'shipper'], true)
+                ? $this->parser->matchParty($text, $options)
+                : $this->parser->matchOption($text, $options);
         }
 
         return $matches;
     }
 
+    /**
+     * Rows worth considering. Small tables go through whole — an abbreviation
+     * shares no word with the name it stands for, so filtering would drop it.
+     * Large tables are narrowed to rows sharing a word, most matches first.
+     */
+    private function candidateRows(array $source, string $text): array
+    {
+        $query = DB::table($source['table'])
+            ->when(isset($source['activeCol']), fn($q) => $q->where($source['activeCol'], 1));
+
+        if ($this->tableSize($source) <= self::WHOLE_TABLE_LIMIT) {
+            return $query
+                ->select("{$source['idCol']} as id", "{$source['labelCol']} as label")
+                ->get()
+                ->map(fn($o) => (array) $o)
+                ->all();
+        }
+
+        $tokens = $this->parser->significantTokens($text);
+
+        if (empty($tokens)) {
+            return [];
+        }
+
+        $label = $source['labelCol'];
+        $hits  = [];
+
+        foreach ($tokens as $token) {
+            $query->orWhere($label, 'like', '%' . $token . '%');
+            $hits[] = "(CASE WHEN `{$label}` LIKE ? THEN 1 ELSE 0 END)";
+        }
+
+        $bindings = array_map(fn($t) => '%' . $t . '%', $tokens);
+
+        return $query
+            ->select("{$source['idCol']} as id", "{$label} as label")
+            ->orderByRaw('(' . implode(' + ', $hits) . ') DESC', $bindings)
+            ->limit(self::SHORTLIST_LIMIT)
+            ->get()
+            ->map(fn($o) => (array) $o)
+            ->all();
+    }
+
+    private function optionById(array $source, int $id): ?array
+    {
+        $row = DB::table($source['table'])
+            ->when(isset($source['activeCol']), fn($q) => $q->where($source['activeCol'], 1))
+            ->where($source['idCol'], $id)
+            ->select("{$source['idCol']} as id", "{$source['labelCol']} as label")
+            ->first();
+
+        return $row ? (array) $row : null;
+    }
+
+    /** Row counts are stable within a request — count each table once. */
+    private function tableSize(array $source): int
+    {
+        $key = $source['table'];
+
+        return $this->sizes[$key] ??= DB::table($source['table'])
+            ->when(isset($source['activeCol']), fn($q) => $q->where($source['activeCol'], 1))
+            ->count();
+    }
+
+
+    
     // ── Commodity ───────────────────────────────────────────────────────────
 
     /** Cargo text against the category/type lists. Null when unresolved. */

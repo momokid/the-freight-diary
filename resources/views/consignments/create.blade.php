@@ -494,19 +494,27 @@
     <script>
         const CSRF = '{{ csrf_token() }}';
 
-        // ── Commodity type filtering ──
-        function loadCommodityTypes() {
-            const categoryId = document.getElementById('commodity-category').value;
-            const typeSelect = document.getElementById('cmdt-type-id');
-            typeSelect.innerHTML = '<option value="">Select type...</option>';
-            if (!categoryId || !categoryTypes[categoryId]) return;
-            categoryTypes[categoryId].forEach(type => {
-                const opt = document.createElement('option');
-                opt.value = type.TypeID;
-                opt.textContent = type.TypeName;
-                typeSelect.appendChild(opt);
-            });
-        }
+        // OCR matches the user has not yet confirmed — save is blocked while any remain.
+        const pendingMatches = {};
+
+        const MATCH_FIELDS = {
+            carrier: {
+                selectId: 'carrier-id',
+                label: 'Carrier'
+            },
+            shipper: {
+                selectId: 'shipper-id',
+                label: 'Shipper'
+            },
+            pol: {
+                selectId: 'pol-id',
+                label: 'Port of Loading'
+            },
+            pod: {
+                selectId: 'pod-id',
+                label: 'Port of Discharge'
+            },
+        };
 
         // ── Summary panel updates ──
         function updateSummary(containers) {
@@ -519,7 +527,6 @@
             document.getElementById('summary-cost').textContent = 'GHS ' + totalCost.toFixed(2);
         }
 
-        // Update BL in summary when typed
         document.getElementById('bl').addEventListener('input', function() {
             document.getElementById('summary-bl').textContent = this.value.toUpperCase() || '—';
         });
@@ -536,40 +543,22 @@
 
             errorEl.classList.remove('visible');
 
-            if (!bl) {
-                errorEl.textContent = 'Please enter the Bill of Lading number first.';
-                errorEl.classList.add('visible');
-                return;
-            }
-            if (!sealNo) {
-                errorEl.textContent = 'Seal No is required.';
-                errorEl.classList.add('visible');
-                return;
-            }
-            if (!contNo) {
-                errorEl.textContent = 'Container No is required.';
-                errorEl.classList.add('visible');
-                return;
-            }
-            if (!size) {
-                errorEl.textContent = 'Container Size is required.';
-                errorEl.classList.add('visible');
-                return;
-            }
-            if (!/\d/.test(size)) {
-                errorEl.textContent = 'Container Size must contain a number (e.g. 20, 40).';
-                errorEl.classList.add('visible');
-                return;
-            }
-            if (!weight || parseFloat(weight) <= 0) {
-                errorEl.textContent = 'Weight must be greater than zero.';
-                errorEl.classList.add('visible');
-                return;
-            }
-            if (cost === '' || parseFloat(cost) < 0) {
-                errorEl.textContent = 'Handling cost is required.';
-                errorEl.classList.add('visible');
-                return;
+            const checks = [
+                [!bl, 'Please enter the Bill of Lading number first.'],
+                [!sealNo, 'Seal No is required.'],
+                [!contNo, 'Container No is required.'],
+                [!size, 'Container Size is required.'],
+                [size && !/\d/.test(size), 'Container Size must contain a number (e.g. 20, 40).'],
+                [!weight || parseFloat(weight) <= 0, 'Weight must be greater than zero.'],
+                [cost === '' || parseFloat(cost) < 0, 'Handling cost is required.'],
+            ];
+
+            for (const [failed, message] of checks) {
+                if (failed) {
+                    errorEl.textContent = message;
+                    errorEl.classList.add('visible');
+                    return;
+                }
             }
 
             fetch('{{ route('consignments.containers.add') }}', {
@@ -591,15 +580,12 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        // Clear container fields
                         document.getElementById('seal-no').value = '';
                         document.getElementById('container-no').value = '';
                         document.getElementById('container-size').value = '';
                         document.getElementById('container-weight').value = '';
-                        // Render staging table
                         renderContainerTable(data.containers);
                         updateSummary(data.containers);
-                        // Fire success callback if provided
                         if (typeof onSuccess === 'function') onSuccess();
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to add container.';
@@ -693,7 +679,6 @@
                     if (data.success) {
                         renderContainerTable([]);
                         updateSummary([]);
-                        // Hide warning banner
                         const banner = document.querySelector('[style*="rgba(234,179,8"]');
                         if (banner) banner.remove();
                     }
@@ -701,10 +686,121 @@
                 .catch(() => alert('Something went wrong.'));
         }
 
-        // Initialize summary if pending containers exist
         @if ($pendingContainers->isNotEmpty())
             updateSummary(@json($pendingContainers));
         @endif
+
+        // ── OCR match confirmation ──
+
+        // ok fills straight away; anything less waits for the user to click.
+        function applyMatch(key, match, rawText) {
+            const selectId = MATCH_FIELDS[key].selectId;
+            clearPendingMatch(key);
+
+            if (!match || match.status === 'empty') {
+                if (rawText) applyConfidence(selectId, 'empty');
+                return;
+            }
+
+            if (match.status === 'ok') {
+                document.getElementById(selectId).value = match.id;
+                applyConfidence(selectId, 'ok');
+                return;
+            }
+
+            const suggestion = match.label || match.guess;
+            if (!suggestion) {
+                applyConfidence(selectId, 'empty');
+                return;
+            }
+
+            pendingMatches[key] = {
+                rawText,
+                suggestion
+            };
+            renderMatchPrompt(key, match.id, suggestion, rawText, match.status);
+        }
+
+        function renderMatchPrompt(key, id, label, rawText, status) {
+            const selectId = MATCH_FIELDS[key].selectId;
+            const el = document.getElementById(selectId);
+            if (!el) return;
+
+            applyConfidence(selectId, status === 'low' ? 'low' : 'review');
+
+            const prompt = document.createElement('div');
+            prompt.className = 'match-prompt';
+            prompt.id = `match-prompt-${key}`;
+            prompt.style.cssText =
+                'margin-top:6px;padding:8px 10px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;font-size:0.75rem;color:#92400e;';
+
+            const safeLabel = String(label).replace(/'/g, "\\'");
+
+            prompt.innerHTML = `
+                <span>Document said "<strong>${rawText}</strong>". Did you mean <strong>${label}</strong>?</span>
+                <button type="button" onclick="confirmMatch('${key}', ${id ? id : 'null'}, '${safeLabel}')"
+                    style="margin-left:8px;padding:3px 10px;border-radius:5px;border:none;background:#16a34a;color:#fff;font-size:0.7rem;font-weight:600;cursor:pointer;">
+                    Yes, use this
+                </button>
+                <button type="button" onclick="rejectMatch('${key}')"
+                    style="margin-left:6px;padding:3px 10px;border-radius:5px;border:1px solid #d97706;background:transparent;color:#92400e;font-size:0.7rem;font-weight:600;cursor:pointer;">
+                    No, I'll choose
+                </button>`;
+
+            el.parentElement.appendChild(prompt);
+        }
+
+        window.confirmMatch = function(key, id, label) {
+            const pending = pendingMatches[key];
+            const select = document.getElementById(MATCH_FIELDS[key].selectId);
+
+            // A low match withholds the id — find the option by its label instead.
+            if (!id) {
+                const option = Array.from(select.options)
+                    .find(o => o.textContent.trim().toUpperCase() === String(label).trim().toUpperCase());
+                if (!option) return;
+                id = parseInt(option.value, 10);
+            }
+
+            select.value = id;
+            clearConfidence(MATCH_FIELDS[key].selectId);
+
+            if (pending) rememberMatch(key, pending.rawText, id);
+            clearPendingMatch(key);
+        };
+
+        // The guess was wrong — clear it and let the user pick.
+        window.rejectMatch = function(key) {
+            const selectId = MATCH_FIELDS[key].selectId;
+            clearPendingMatch(key);
+            clearConfidence(selectId);
+            const el = document.getElementById(selectId);
+            if (el) el.focus();
+        };
+
+        function rememberMatch(key, rawText, matchedId) {
+            if (!rawText || !matchedId) return;
+
+            fetch('{{ route('match-alias.store') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    SourceKey: key,
+                    RawText: rawText,
+                    MatchedID: matchedId
+                }),
+            }).catch(() => {});
+        }
+
+        function clearPendingMatch(key) {
+            delete pendingMatches[key];
+            const prompt = document.getElementById(`match-prompt-${key}`);
+            if (prompt) prompt.remove();
+        }
 
         // ── Submit consignment ──
         function submitConsignment() {
@@ -715,7 +811,16 @@
             errorEl.classList.remove('visible');
             successEl.classList.remove('visible');
 
-            // Gather all field values
+            // An unconfirmed OCR match must not be saved on the user's behalf.
+            const unconfirmed = Object.keys(pendingMatches);
+            if (unconfirmed.length) {
+                errorEl.textContent = 'Please confirm the suggested ' +
+                    unconfirmed.map(k => MATCH_FIELDS[k].label).join(', ') +
+                    ', or select manually.';
+                errorEl.classList.add('visible');
+                return;
+            }
+
             const fields = {
                 DOT: document.getElementById('dot').value,
                 ETA: document.getElementById('eta').value,
@@ -736,7 +841,6 @@
                 IsLCL: document.getElementById('islcl').value,
             };
 
-            // Client-side validation
             const required = [
                 ['DOT', 'Date of Transaction'],
                 ['ETA', 'ETA'],
@@ -792,13 +896,11 @@
                         successEl.textContent = `Consignment registered. Receipt: ${data.ReceiptNo}`;
                         successEl.classList.add('visible');
 
-                        // Reset form immediately
                         document.getElementById('consignment-form').reset();
                         renderContainerTable([]);
                         updateSummary([]);
                         successEl.classList.remove('visible');
 
-                        // Open SMS notification popup
                         openSmsModal(data.BL, data.ClientCode, data.ConsigneeID,
                             '{{ route('consignments.send-notification') }}', 'registration');
                     } else {
@@ -823,7 +925,6 @@
 
         function closeQuickAdd(type) {
             document.getElementById('modal-' + type).style.display = 'none';
-            // Clear inputs
             document.querySelectorAll('#modal-' + type + ' input').forEach(el => el.value = '');
             document.querySelectorAll('#modal-' + type + ' .form-error').forEach(el => el.classList.remove('visible'));
         }
@@ -834,7 +935,6 @@
                 shipper: '{{ route('master-data.shippers.store') }}',
                 pol: '{{ route('master-data.ports.pol.store') }}',
                 pod: '{{ route('master-data.ports.pod.store') }}',
-                consignee: '{{ route('master-data.consignees.store') }}',
             };
 
             const payloads = {
@@ -854,32 +954,15 @@
                 pod: {
                     POD_Name: document.getElementById('qa-pod-name').value.trim()
                 },
-                consignee: {
-                    FullName: document.getElementById('qa-consignee-name').value.trim(),
-                    TelNo: document.getElementById('qa-consignee-phone').value.trim(),
-                    Address1: document.getElementById('qa-consignee-address').value.trim(),
-                    Address2: '',
-                    Address3: ''
-                },
-            };
-
-            const errorIds = {
-                carrier: 'qa-carrier-error',
-                shipper: 'qa-shipper-error',
-                pol: 'qa-pol-error',
-                pod: 'qa-pod-error',
-                consignee: 'qa-consignee-error',
             };
 
             const btn = document.getElementById('qa-' + type + '-btn');
-            const errorEl = document.getElementById(errorIds[type]);
+            const errorEl = document.getElementById('qa-' + type + '-error');
 
             errorEl.classList.remove('visible');
 
-            // Basic validation
             const payload = payloads[type];
-            const firstVal = Object.values(payload)[0];
-            if (!firstVal) {
+            if (!Object.values(payload)[0]) {
                 errorEl.textContent = 'This field is required.';
                 errorEl.classList.add('visible');
                 return;
@@ -900,35 +983,32 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        // Add new option to the corresponding dropdown
-                        const selectors = {
-                            carrier: 'carrier-id',
-                            shipper: 'shipper-id',
-                            pol: 'pol-id',
-                            pod: 'pod-id',
-                            consignee: 'consignee-id',
-                        };
                         const labels = {
                             carrier: data.CarrierName,
                             shipper: data.ShipperName,
                             pol: data.POL_Name,
                             pod: data.POD_Name,
-                            consignee: data.FullName,
                         };
                         const values = {
                             carrier: data.CarrierID,
                             shipper: data.ShipperID,
                             pol: data.POL_ID,
                             pod: data.POD_ID,
-                            consignee: data.ConsigneeID,
                         };
 
-                        const select = document.getElementById(selectors[type]);
+                        const select = document.getElementById(MATCH_FIELDS[type].selectId);
                         const option = document.createElement('option');
                         option.value = values[type];
                         option.textContent = labels[type];
                         option.selected = true;
                         select.appendChild(option);
+
+                        // A new record answers whatever the document said.
+                        if (pendingMatches[type]) {
+                            rememberMatch(type, pendingMatches[type].rawText, values[type]);
+                            clearPendingMatch(type);
+                            clearConfidence(MATCH_FIELDS[type].selectId);
+                        }
 
                         closeQuickAdd(type);
                     } else {
@@ -945,15 +1025,13 @@
                         carrier: 'Add Carrier',
                         shipper: 'Add Shipper',
                         pol: 'Add POL',
-                        pod: 'Add POD',
-                        consignee: 'Add Consignee'
+                        pod: 'Add POD'
                     };
                     btn.textContent = labelMap[type];
                     btn.disabled = false;
                 });
         }
 
-        // Close modals on backdrop click
         ['carrier', 'shipper', 'pol', 'pod'].forEach(type => {
             document.getElementById('modal-' + type).addEventListener('click', function(e) {
                 if (e.target === this) closeQuickAdd(type);
@@ -961,8 +1039,6 @@
         });
 
         // ── Confidence highlighting ──
-        // Applies border colour and badge to a form element based on extraction status
-        // status: 'ok' | 'review' | 'low' | 'empty'
         function applyConfidence(elementId, status) {
             const el = document.getElementById(elementId);
             if (!el) return;
@@ -976,11 +1052,9 @@
 
             el.style.borderColor = colors[status] ?? 'var(--border-color)';
 
-            // Find or create badge element immediately after the input
             const parent = el.parentElement;
             let badge = parent.querySelector('.ocr-badge');
 
-            // ok is the only status with no badge — extraction succeeded cleanly
             if (status === 'ok') {
                 if (badge) badge.remove();
                 return;
@@ -1001,11 +1075,11 @@
             }
 
             if (status === 'review') {
-                badge.textContent = '⚠ Review';
+                badge.textContent = '⚠ Confirm below';
                 badge.style.background = '#fef3c7';
                 badge.style.color = '#92400e';
             } else if (status === 'low') {
-                badge.textContent = '✗ Low confidence';
+                badge.textContent = '✗ Confirm below';
                 badge.style.background = '#fee2e2';
                 badge.style.color = '#b91c1c';
             } else if (status === 'empty') {
@@ -1023,49 +1097,14 @@
             if (badge) badge.remove();
         }
 
-        // ── Fill a text or date input 
-        function fillField(elementId, field) {
-            if (!field || !field.value) return;
-            const el = document.getElementById(elementId);
-            if (!el) return;
-            el.value = field.value;
-            applyConfidence(elementId, field.status);
-        }
-
         function fillField(elementId, field) {
             if (!field) return;
             const el = document.getElementById(elementId);
             if (!el) return;
 
-            if (field.value) {
-                el.value = field.value;
-            }
+            if (field.value) el.value = field.value;
             applyConfidence(elementId, field.status);
         }
-
-        function matchDropdown(selectId, field) {
-            if (!field || !field.value) return;
-            const select = document.getElementById(selectId);
-            if (!select) return;
-
-            const text = field.value.toLowerCase();
-            let matched = false;
-
-            for (let opt of select.options) {
-                const optText = opt.textContent.toLowerCase();
-                if (optText.includes(text) || text.includes(optText)) {
-                    opt.selected = true;
-                    matched = true;
-                    break;
-                }
-            }
-
-            // No match — officer must select manually
-            if (!matched) {
-                applyConfidence(selectId, 'review');
-            }
-        }
-
 
         function extractFromBL(input) {
             const file = input.files[0];
@@ -1075,7 +1114,6 @@
             const statusTextEl = document.getElementById('ocr-status-text');
             const btn = document.getElementById('ocr-btn');
 
-            // Show loading state
             statusEl.style.display = 'flex';
             statusTextEl.textContent = 'Extracting fields with AI...';
             btn.disabled = true;
@@ -1102,9 +1140,8 @@
                     }
 
                     const f = data.fields;
+                    const m = data.matches ?? {};
 
-                    // ── Text fields ──────
-                    // MainBL — also updates the summary panel
                     if (f.MainBL && f.MainBL.value) {
                         const bl = f.MainBL.value.toUpperCase();
                         document.getElementById('bl').value = bl;
@@ -1116,8 +1153,6 @@
                     fillField('voyage-no', f.VoyageNo);
                     fillField('pois', f.POIS);
                     fillField('destination', f.Destination);
-
-                    // ── Date fields 
                     fillField('dois', f.DOIS);
                     fillField('sob', f.SOB);
                     fillField('eta', f.ETA);
@@ -1129,23 +1164,20 @@
                             ' KG (extracted — pending)';
                     }
 
-                    // NEW
-                    ['carrier', 'shipper', 'pol', 'pod'].forEach(key => {
-                        const m = data.matches && data.matches[key];
-                        if (!m) return;
+                    const rawText = {
+                        carrier: f.ShippingLine?.value || f.VesselName?.value || '',
+                        shipper: f.ShipperName?.value || '',
+                        pol: f.POL?.value || '',
+                        pod: f.POD?.value || '',
+                    };
 
-                        const selectId = key === 'carrier' ? 'carrier-id' :
-                            key === 'shipper' ? 'shipper-id' :
-                            key === 'pol' ? 'pol-id' :
-                            'pod-id';
+                    Object.keys(MATCH_FIELDS).forEach(key => applyMatch(key, m[key], rawText[key]));
 
-                        if (m.id) document.getElementById(selectId).value = m.id;
-                        applyConfidence(selectId, m.status);
-                    });
-
-                    // ── Success state ────
-                    statusTextEl.textContent = '✓ Fields extracted — review highlighted fields';
-                    statusEl.style.color = '#15803d';
+                    const waiting = Object.keys(pendingMatches).length;
+                    statusTextEl.textContent = waiting ?
+                        `✓ Extracted — ${waiting} field(s) need confirming` :
+                        '✓ Fields extracted — review highlighted fields';
+                    statusEl.style.color = waiting ? '#92400e' : '#15803d';
                     setTimeout(() => {
                         statusEl.style.display = 'none';
                         statusEl.style.color = '';
@@ -1159,7 +1191,6 @@
                 })
                 .finally(() => {
                     btn.disabled = false;
-                    // Reset file input so same file can be re-uploaded if needed
                     input.value = '';
                 });
         }
@@ -1216,7 +1247,6 @@
 
             wrapper.innerHTML = html;
 
-            // Apply confidence styling AFTER the HTML is inserted into the page
             containers.forEach((c, index) => {
                 applyConfidence(`ocr-container-no-${index}`, c.ContainerNo.status);
                 applyConfidence(`ocr-seal-no-${index}`, c.SealNo.status);
@@ -1226,15 +1256,12 @@
         }
 
         function addOcrContainer(index) {
-            const containerNo = document.getElementById(`ocr-container-no-${index}`).value.trim();
-            const sealNo = document.getElementById(`ocr-seal-no-${index}`).value.trim();
-            const size = document.getElementById(`ocr-size-${index}`).value.trim();
-            const weight = document.getElementById(`ocr-weight-${index}`).value.trim();
-
-            document.getElementById('container-no').value = containerNo;
-            document.getElementById('seal-no').value = sealNo;
-            document.getElementById('container-size').value = size;
-            document.getElementById('container-weight').value = weight;
+            document.getElementById('container-no').value = document.getElementById(`ocr-container-no-${index}`).value
+                .trim();
+            document.getElementById('seal-no').value = document.getElementById(`ocr-seal-no-${index}`).value.trim();
+            document.getElementById('container-size').value = document.getElementById(`ocr-size-${index}`).value.trim();
+            document.getElementById('container-weight').value = document.getElementById(`ocr-weight-${index}`).value
+                .trim();
 
             // Only remove the preview card after confirmed server success
             addContainer(() => removeOcrContainer(index));
@@ -1245,7 +1272,6 @@
             if (card) card.remove();
         }
 
-        // Text/date/number inputs — clear confidence on keystroke
         [
             'bl', 'vessel-name', 'voyage-no', 'pois', 'destination',
             'dois', 'sob', 'eta', 'container-no', 'seal-no',
@@ -1255,12 +1281,19 @@
             if (el) el.addEventListener('input', () => clearConfidence(id));
         });
 
-        // Select dropdowns — clear confidence on selection change
-        [
-            'carrier-id', 'shipper-id', 'pol-id', 'pod-id',
-        ].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('change', () => clearConfidence(id));
+        // Choosing a different option is a correction — learn from it.
+        Object.keys(MATCH_FIELDS).forEach(key => {
+            const el = document.getElementById(MATCH_FIELDS[key].selectId);
+            if (!el) return;
+
+            el.addEventListener('change', function() {
+                clearConfidence(MATCH_FIELDS[key].selectId);
+
+                if (pendingMatches[key] && this.value) {
+                    rememberMatch(key, pendingMatches[key].rawText, parseInt(this.value, 10));
+                    clearPendingMatch(key);
+                }
+            });
         });
     </script>
 @endpush

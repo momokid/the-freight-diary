@@ -18,8 +18,9 @@ class BLParserService
     private string $groqKey;
     private string $groqModel;
 
-    private const HIGH   = 0.85;
-    private const MEDIUM = 0.60;
+    private const HIGH            = 0.85;
+    private const MEDIUM          = 0.60;
+    private const SHORTLIST_LIMIT = 5;
 
     public function __construct()
     {
@@ -552,105 +553,158 @@ class BLParserService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Match an extracted text value against any list of {id, label} options
-    // Used for any <select> field matched post-OCR (carrier, shipper, POL, POD,
-    // consignee). Scoring runs exact → containment → weighted token overlap →
-    // character similarity, and withholds the ID below MEDIUM.
+    // Company names — carrier, POL. Registered names, written the same way on
+    // every document, so exactness carries the weight. A shared industry word
+    // like SHIPPING identifies nothing and earns nothing.
     // ─────────────────────────────────────────────────────────────────────────
     public function matchOption(string $extractedValue, array $options): array
     {
         $extractedValue = trim($extractedValue);
 
         if ($extractedValue === '' || empty($options)) {
-            return [
-                'id'         => null,
-                'label'      => null,
-                'confidence' => 0.0,
-                'status'     => 'empty',
-            ];
+            return $this->emptyMatch();
         }
 
-        foreach ($options as $option) {
-            if (strcasecmp(trim($option['label']), $extractedValue) === 0) {
-                return [
-                    'id'         => $option['id'],
-                    'label'      => $option['label'],
-                    'confidence' => 1.0,
-                    'status'     => 'ok',
-                ];
-            }
+        $exact = $this->exactMatches($extractedValue, $options);
+
+        if (count($exact) === 1) {
+            return $this->decided($exact[0], 1.0, 'exact');
+        }
+
+        // "CMA" inside "CMA CGM" is the same carrier — but only where one
+        // option contains it. ANWAR sits inside ANWARs too.
+        $contained = array_values(array_filter(
+            $options,
+            fn($o) => $this->contains((string) $o['label'], $extractedValue)
+        ));
+
+        if (count($contained) === 1) {
+            return $this->decided($contained[0], 0.90, 'contained');
+        }
+
+        return $this->undecided($contained);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Parties — consignee, shipper. May be a person or a company, and two
+    // people can share a name, so nothing here fills a field on similarity
+    // alone. Options arrive pre-filtered by the caller's query.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function matchParty(string $extractedValue, array $options): array
+    {
+        $extractedValue = trim($extractedValue);
+
+        if ($extractedValue === '' || empty($options)) {
+            return $this->emptyMatch();
+        }
+
+        $exact = $this->exactMatches($extractedValue, $options);
+
+        if (count($exact) === 1) {
+            return $this->decided($exact[0], 1.0, 'exact');
+        }
+
+        // Two records with the same name are a question only a person can answer.
+        if (count($exact) > 1) {
+            return $this->undecided($exact, 'duplicate');
         }
 
         $frequencies = $this->tokenFrequencies($options);
-        $needle      = $this->tokenise($extractedValue);
+        $needle      = $this->significantTokens($extractedValue);
 
-        $best = ['id' => null, 'label' => null, 'score' => 0.0];
+        $scored = [];
 
         foreach ($options as $option) {
-            $score = $this->scoreLabel($extractedValue, $needle, (string) $option['label'], $frequencies, count($options));
+            $score = $this->scoreParty($extractedValue, $needle, (string) $option['label'], $frequencies, count($options));
 
-            if ($score > $best['score']) {
-                $best = ['id' => $option['id'], 'label' => $option['label'], 'score' => $score];
+            if ($score > 0) {
+                $scored[] = ['id' => $option['id'], 'label' => $option['label'], 'score' => $score];
             }
         }
 
-        $status = $best['score'] >= self::HIGH   ? 'ok'
-            : ($best['score'] >= self::MEDIUM ? 'review' : 'low');
+        $ranked = collect($scored)->sortByDesc('score')->values()->all();
 
-        if ($status === 'low') {
-            return [
-                'id'         => null,
-                'label'      => null,
-                'confidence' => round($best['score'], 2),
-                'status'     => 'low',
-                'guess'      => $best['label'],
-            ];
-        }
+        return $this->undecided($ranked);
+    }
 
+    // ── Shared ──────────────────────────────────────────────────────────────
+
+    private function exactMatches(string $value, array $options): array
+    {
+        return array_values(array_filter(
+            $options,
+            fn($o) => strcasecmp(trim((string) $o['label']), $value) === 0
+        ));
+    }
+
+    private function contains(string $label, string $value): bool
+    {
+        $label = strtoupper(trim($label));
+        $value = strtoupper($value);
+
+        return $label !== '' && ($label === $value
+            || str_contains($label, $value)
+            || str_contains($value, $label));
+    }
+
+    private function decided(array $option, float $confidence, string $matchType): array
+    {
         return [
-            'id'         => $best['id'],
-            'label'      => $best['label'],
-            'confidence' => round($best['score'], 2),
-            'status'     => $status,
+            'id'         => $option['id'],
+            'label'      => $option['label'],
+            'confidence' => $confidence,
+            'status'     => 'ok',
+            'matchType'  => $matchType,
+            'candidates' => [],
         ];
     }
 
-    /** One label scored against the extracted value. */
-    private function scoreLabel(
+    /** Nothing fills the field — the shortlist is the user's to resolve. */
+    private function undecided(array $candidates, string $matchType = 'shortlist'): array
+    {
+        $shortlist = array_map(fn($row) => [
+            'id'    => $row['id'],
+            'label' => $row['label'],
+        ], array_slice($candidates, 0, self::SHORTLIST_LIMIT));
+
+        return [
+            'id'         => null,
+            'label'      => null,
+            'confidence' => 0.0,
+            'status'     => empty($shortlist) ? 'empty' : 'low',
+            'matchType'  => empty($shortlist) ? 'none' : $matchType,
+            'candidates' => $shortlist,
+        ];
+    }
+
+    private function emptyMatch(): array
+    {
+        return [
+            'id'         => null,
+            'label'      => null,
+            'confidence' => 0.0,
+            'status'     => 'empty',
+            'matchType'  => 'none',
+            'candidates' => [],
+        ];
+    }
+
+    /** Ranks a party name. Order is unreliable; a rare surname is not. */
+    private function scoreParty(
         string $extracted,
         array $needle,
         string $label,
         array $frequencies,
         int $total
     ): float {
-        $upperExtracted = strtoupper($extracted);
-        $upperLabel     = strtoupper(trim($label));
+        $candidate = $this->significantTokens($label);
 
-        // "Tema" inside "Tema, Ghana" is the same port, not a 53% match.
-        if ($upperLabel !== '' && (str_contains($upperLabel, $upperExtracted) || str_contains($upperExtracted, $upperLabel))) {
-            return 0.90;
-        }
-
-        $candidate = $this->tokenise($label);
-
-        similar_text($upperExtracted, $upperLabel, $percent);
-        $character = $percent / 100;
-
-        // Nothing meaningful left after normalising — characters are all we have.
         if (empty($needle) || empty($candidate)) {
-            return $character;
+            similar_text(strtoupper($extracted), strtoupper($label), $percent);
+            return $percent / 100;
         }
 
-        $shared = array_intersect($needle, $candidate);
-
-        // Two multi-word names sharing no token are different parties, however
-        // similar the letters. ABIGAIL K. MENSAH is not ABIGAIL DANKWAH.
-        // No word in common means different parties, however similar the letters.
-        if (empty($shared)) {
-            return min($character, 0.45);
-        }
-
-        $matched = 0.0;
+        $matched  = 0.0;
         $possible = 0.0;
 
         foreach ($needle as $token) {
@@ -663,16 +717,15 @@ class BLParserService
         }
 
         if ($possible <= 0) {
-            return $character;
+            return 0.0;
         }
 
-        $token = $matched / $possible;
+        $score = $matched / $possible;
 
         // Extra words on the candidate dilute the match a little.
         $extra = count(array_diff($candidate, $needle));
-        $token *= 1 - min(0.25, $extra * 0.08);
 
-        return max($token, $character >= self::HIGH ? $character : $character * 0.8);
+        return $score * (1 - min(0.25, $extra * 0.08));
     }
 
     /** A token shared by half the table says nothing; a rare one says a lot. */
@@ -693,7 +746,7 @@ class BLParserService
         $frequencies = [];
 
         foreach ($options as $option) {
-            foreach (array_unique($this->tokenise((string) $option['label'])) as $token) {
+            foreach (array_unique($this->significantTokens((string) $option['label'])) as $token) {
                 $frequencies[$token] = ($frequencies[$token] ?? 0) + 1;
             }
         }
@@ -702,7 +755,7 @@ class BLParserService
     }
 
     /** Uppercase words, punctuation stripped, legal and filler words dropped. */
-    private function tokenise(string $value): array
+    public function significantTokens(string $value): array
     {
         $noise = [
             'LTD',
@@ -723,6 +776,9 @@ class BLParserService
             'AND',
             'OF',
             'FOR',
+            'MR',
+            'MRS',
+            'MISS',
         ];
 
         $words = preg_split('/[^A-Z0-9]+/', strtoupper($value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
@@ -732,6 +788,7 @@ class BLParserService
             fn($w) => strlen($w) > 1 && ! in_array($w, $noise, true)
         ));
     }
+
 
     // Parse JSON from model response
     // Strips markdown fences if present

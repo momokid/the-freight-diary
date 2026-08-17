@@ -292,6 +292,14 @@
         const CSRF = '{{ csrf_token() }}';
         let searchTimer = null;
 
+        // OCR matches the user has not yet confirmed — save is blocked while any remain.
+        const pendingMatches = {};
+
+        const MATCH_LABELS = {
+            consignee: 'Consignee',
+            carrier: 'Shipping Line',
+        };
+
         // ── Load types by category ──
         function loadTypes() {
             const categoryId = document.getElementById('category-id').value;
@@ -367,45 +375,167 @@
                 .then(data => renderConsigneeDropdown(data));
         }
 
-        function triggerConsigneeOcrSearch(name) {
-            document.getElementById('consignee-search').value = name;
-
-            fetch(`{{ route('cmdts.consignee-search') }}?q=${encodeURIComponent(name)}`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    const exact = data.find(c => c.FullName.trim().toUpperCase() === name.trim().toUpperCase());
-
-                    if (exact) {
-                        selectConsignee(exact.ConsigneeID, exact.FullName);
-                        applyConfidenceCmdts('consignee-search', 'ok');
-                        return;
-                    }
-
-                    if (data.length) {
-                        renderConsigneeDropdown(data);
-                        applyConfidenceCmdts('consignee-search', 'review');
-                    } else {
-                        // No match at all — leave empty for manual entry, per Option 2
-                        applyConfidenceCmdts('consignee-search', 'empty');
-                    }
-                });
-        }
-
-        function selectConsignee(id, name) {
+        window.selectConsignee = function(id, name) {
             document.getElementById('consignee-search').value = name;
             document.getElementById('consignee-id').value = id;
             document.getElementById('consignee-dropdown').style.display = 'none';
-        }
+
+            // Picking manually after a failed match is itself a correction worth learning.
+            if (pendingMatches.consignee) {
+                rememberMatch('consignee', pendingMatches.consignee.rawText, id);
+                clearPendingMatch('consignee');
+            }
+        };
 
         document.addEventListener('click', function(e) {
             if (!e.target.closest('#consignee-search') && !e.target.closest('#consignee-dropdown')) {
                 document.getElementById('consignee-dropdown').style.display = 'none';
             }
         });
+
+        // ── OCR match confirmation ──
+
+        // ok fills straight away; anything less waits for the user to click.
+        function applyMatchCmdts(key, match, elementId, rawText) {
+            clearPendingMatch(key);
+
+            if (!match || match.status === 'empty') {
+                if (rawText) applyConfidenceCmdts(elementId, 'empty');
+                return;
+            }
+
+            if (match.status === 'ok') {
+                setMatchValue(key, match.id, match.label);
+                applyConfidenceCmdts(elementId, 'ok');
+                return;
+            }
+
+            const suggestion = match.label || match.guess;
+            if (!suggestion) {
+                applyConfidenceCmdts(elementId, 'empty');
+                return;
+            }
+
+            pendingMatches[key] = {
+                rawText,
+                elementId
+            };
+            renderMatchPrompt(key, match.id, suggestion, elementId, match.status);
+        }
+
+        function renderMatchPrompt(key, id, label, elementId, status) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            applyConfidenceCmdts(elementId, status === 'low' ? 'low' : 'review');
+
+            const prompt = document.createElement('div');
+            prompt.className = 'match-prompt';
+            prompt.id = `match-prompt-${key}`;
+            prompt.style.cssText =
+                'margin-top:6px;padding:8px 10px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;font-size:0.75rem;color:#92400e;';
+
+            const safeLabel = String(label).replace(/'/g, "\\'");
+            const idPart = id ? id : 'null';
+
+            prompt.innerHTML = `
+                <span>Document said "<strong>${rawTextOf(key)}</strong>". Did you mean <strong>${label}</strong>?</span>
+                <button type="button" onclick="confirmMatchCmdts('${key}', ${idPart}, '${safeLabel}')"
+                    style="margin-left:8px;padding:3px 10px;border-radius:5px;border:none;background:#16a34a;color:#fff;font-size:0.7rem;font-weight:600;cursor:pointer;">
+                    Yes, use this
+                </button>
+                <button type="button" onclick="rejectMatchCmdts('${key}')"
+                    style="margin-left:6px;padding:3px 10px;border-radius:5px;border:1px solid #d97706;background:transparent;color:#92400e;font-size:0.7rem;font-weight:600;cursor:pointer;">
+                    No, I'll choose
+                </button>`;
+
+            el.parentElement.appendChild(prompt);
+        }
+
+        function rawTextOf(key) {
+            return pendingMatches[key] ? pendingMatches[key].rawText : '';
+        }
+
+        window.confirmMatchCmdts = function(key, id, label) {
+            const pending = pendingMatches[key];
+
+            // A low match withholds the id — resolve it by name before saving.
+            if (!id) {
+                resolveByName(key, label);
+                return;
+            }
+
+            setMatchValue(key, id, label);
+
+            if (pending) rememberMatch(key, pending.rawText, id);
+            clearPendingMatch(key);
+        };
+
+        // The guess was wrong — clear it and let the user pick.
+        window.rejectMatchCmdts = function(key) {
+            clearPendingMatch(key);
+            clearConfidenceCmdts(key === 'consignee' ? 'consignee-search' : 'carrier-id');
+
+            const focusEl = document.getElementById(key === 'consignee' ? 'consignee-search' : 'carrier-id');
+            if (focusEl) focusEl.focus();
+        };
+
+        function setMatchValue(key, id, label) {
+            if (key === 'consignee') {
+                document.getElementById('consignee-search').value = label;
+                document.getElementById('consignee-id').value = id;
+                return;
+            }
+
+            if (key === 'carrier') {
+                document.getElementById('carrier-id').value = id;
+            }
+        }
+
+        // The guess came back without an id — look it up so the click still works.
+        function resolveByName(key, label) {
+            if (key !== 'consignee') return;
+
+            fetch(`{{ route('cmdts.consignee-search') }}?q=${encodeURIComponent(label)}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    const exact = data.find(c => c.FullName.trim().toUpperCase() === label.trim().toUpperCase());
+                    if (!exact) return;
+
+                    const pending = pendingMatches[key];
+                    setMatchValue(key, exact.ConsigneeID, exact.FullName);
+                    if (pending) rememberMatch(key, pending.rawText, exact.ConsigneeID);
+                    clearPendingMatch(key);
+                });
+        }
+
+        function rememberMatch(key, rawText, matchedId) {
+            if (!rawText || !matchedId) return;
+
+            fetch('{{ route('match-alias.store') }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    SourceKey: key,
+                    RawText: rawText,
+                    MatchedID: matchedId
+                }),
+            }).catch(() => {});
+        }
+
+        function clearPendingMatch(key) {
+            delete pendingMatches[key];
+            const prompt = document.getElementById(`match-prompt-${key}`);
+            if (prompt) prompt.remove();
+        }
 
         // ── Container Modal ──
         function openContainerModal() {
@@ -460,11 +590,11 @@
             }
 
             if (status === 'review') {
-                badge.textContent = '⚠ Review';
+                badge.textContent = '⚠ Confirm below';
                 badge.style.background = '#fef3c7';
                 badge.style.color = '#92400e';
             } else if (status === 'low') {
-                badge.textContent = '✗ Low confidence';
+                badge.textContent = '✗ Confirm below';
                 badge.style.background = '#fee2e2';
                 badge.style.color = '#b91c1c';
             } else if (status === 'empty') {
@@ -488,26 +618,6 @@
             if (!el) return;
             if (field.value) el.value = field.value;
             applyConfidenceCmdts(elementId, field.status);
-        }
-
-        function matchDropdownCmdts(selectId, field) {
-            if (!field || !field.value) return;
-            const select = document.getElementById(selectId);
-            if (!select) return;
-
-            const text = field.value.toLowerCase();
-            let matched = false;
-
-            for (let opt of select.options) {
-                const optText = opt.textContent.toLowerCase();
-                if (optText.includes(text) || text.includes(optText)) {
-                    opt.selected = true;
-                    matched = true;
-                    break;
-                }
-            }
-
-            if (!matched) applyConfidenceCmdts(selectId, 'review');
         }
 
         function extractFromBLCmdts(input) {
@@ -544,6 +654,7 @@
                     }
 
                     const f = data.fields;
+                    const m = data.matches ?? {};
 
                     if (f.MainBL && f.MainBL.value) {
                         document.getElementById('bl').value = f.MainBL.value.toUpperCase();
@@ -552,20 +663,17 @@
 
                     fillFieldCmdts('eta', f.ETA);
 
-                    if (data.matches && data.matches.carrier) {
-                        const cm = data.matches.carrier;
-                        if (cm.id) document.getElementById('carrier-id').value = cm.id;
-                        applyConfidenceCmdts('carrier-id', cm.status);
-                    }
-
-                    if (f.ConsigneeName && f.ConsigneeName.value) {
-                        triggerConsigneeOcrSearch(f.ConsigneeName.value);
-                    }
+                    const carrierText = (f.ShippingLine?.value || f.VesselName?.value || '');
+                    applyMatchCmdts('carrier', m.carrier, 'carrier-id', carrierText);
+                    applyMatchCmdts('consignee', m.consignee, 'consignee-search', f.ConsigneeName?.value || '');
 
                     renderContainerPreviewCmdts(f.Containers);
 
-                    statusTextEl.textContent = '✓ Fields extracted — review highlighted fields';
-                    statusEl.style.color = '#15803d';
+                    const waiting = Object.keys(pendingMatches).length;
+                    statusTextEl.textContent = waiting ?
+                        `✓ Extracted — ${waiting} field(s) need confirming` :
+                        '✓ Fields extracted — review highlighted fields';
+                    statusEl.style.color = waiting ? '#92400e' : '#15803d';
                     setTimeout(() => {
                         statusEl.style.display = 'none';
                         statusEl.style.color = '';
@@ -762,14 +870,12 @@
                 .then(data => {
                     if (data.success) {
                         renderContainersTable(data.containers);
-                        // clear fields but keep modal open for next container
                         document.getElementById('modal-container-no').value = '';
                         document.getElementById('modal-container-size').value = '';
                         document.getElementById('modal-seal-no').value = '';
                         document.getElementById('modal-item-details').value = '';
                         document.getElementById('modal-container-no').focus();
 
-                        // Show brief success feedback in modal
                         errorEl.style.color = '#16a34a';
                         errorEl.textContent = '✓ Container added. Add another or close when done.';
                         errorEl.classList.add('visible');
@@ -820,19 +926,19 @@
             </thead>
             <tbody>
                 ${containers.map(c => `
-                                                                                                                    <tr>
-                                                                                                                        <td class="td-mono">${c.ContainerNo}</td>
-                                                                                                                        <td class="td-muted">${c.Size}ft</td>
-                                                                                                                        <td class="td-muted">${c.SealNo || '—'}</td>
-                                                                                                                        <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
-                                                                                                                        <td style="text-align: center;">
-                                                                                                                            <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
-                                                                                                                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                                                                                                </svg>
-                                                                                                                            </button>
-                                                                                                                        </td>
-                                                                                                                    </tr>`).join('')}
+                                <tr>
+                                    <td class="td-mono">${c.ContainerNo}</td>
+                                    <td class="td-muted">${c.Size}ft</td>
+                                    <td class="td-muted">${c.SealNo || '—'}</td>
+                                    <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
+                                    <td style="text-align: center;">
+                                        <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
+                                            <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>`).join('')}
             </tbody>
         </table>`;
         }
@@ -885,6 +991,16 @@
 
             errorEl.classList.remove('visible');
             successEl.classList.remove('visible');
+
+            // An unconfirmed OCR match must not be saved on the user's behalf.
+            const unconfirmed = Object.keys(pendingMatches);
+            if (unconfirmed.length) {
+                errorEl.textContent = 'Please confirm the suggested ' +
+                    unconfirmed.map(k => MATCH_LABELS[k] ?? k).join(' and ') +
+                    ', or select manually.';
+                errorEl.classList.add('visible');
+                return;
+            }
 
             const categoryId = document.getElementById('category-id').value;
             const typeId = document.getElementById('type-id').value;
@@ -969,13 +1085,16 @@
                     } else {
                         errorEl.textContent = data.message ?? 'Failed to save consignment.';
                         errorEl.classList.add('visible');
+                        btn.textContent = 'Add New Consignment';
+                        btn.disabled = false;
                     }
                 })
                 .catch(() => {
                     errorEl.textContent = 'Something went wrong. Please try again.';
                     errorEl.classList.add('visible');
-                })
-
+                    btn.textContent = 'Add New Consignment';
+                    btn.disabled = false;
+                });
         }
 
         // ── Commodity Type Quick Add ──
@@ -1046,7 +1165,6 @@
             @endif
         });
 
-        // Close type modal on backdrop click
         document.getElementById('modal-quick-type').addEventListener('click', function(e) {
             if (e.target === this) closeQuickAddModal('type');
         });
@@ -1055,6 +1173,7 @@
         window.onQuickAddConsignee = function(id, name) {
             document.getElementById('consignee-search').value = name;
             document.getElementById('consignee-id').value = id;
+            clearPendingMatch('consignee');
         };
 
         window.onQuickAddCarrier = function(id, name) {
@@ -1063,6 +1182,7 @@
             opt.textContent = name;
             document.getElementById('carrier-id').appendChild(opt);
             document.getElementById('carrier-id').value = id;
+            clearPendingMatch('carrier');
         };
 
         window.onQuickAddCategory = function(id, name) {
@@ -1088,6 +1208,14 @@
             if (el) el.addEventListener('input', () => clearConfidenceCmdts(id));
         });
 
-        document.getElementById('carrier-id').addEventListener('change', () => clearConfidenceCmdts('carrier-id'));
+        document.getElementById('carrier-id').addEventListener('change', function() {
+            clearConfidenceCmdts('carrier-id');
+
+            // Choosing a different line is a correction — learn from it.
+            if (pendingMatches.carrier && this.value) {
+                rememberMatch('carrier', pendingMatches.carrier.rawText, parseInt(this.value, 10));
+                clearPendingMatch('carrier');
+            }
+        });
     </script>
 @endpush
