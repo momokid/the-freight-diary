@@ -383,6 +383,7 @@
             // Picking manually after a failed match is itself a correction worth learning.
             if (pendingMatches.consignee) {
                 rememberMatch('consignee', pendingMatches.consignee.rawText, id);
+                clearConfidenceCmdts(pendingMatches.consignee.elementId);
                 clearPendingMatch('consignee');
             }
         };
@@ -395,14 +396,11 @@
 
         // ── OCR match confirmation ──
 
-        // ok fills straight away; anything less waits for the user to click.
+        // A decided match fills the field; anything else is the user's to resolve.
         function applyMatchCmdts(key, match, elementId, rawText) {
             clearPendingMatch(key);
 
-            if (!match || match.status === 'empty') {
-                if (rawText) applyConfidenceCmdts(elementId, 'empty');
-                return;
-            }
+            if (!match) return;
 
             if (match.status === 'ok') {
                 setMatchValue(key, match.id, match.label);
@@ -410,9 +408,10 @@
                 return;
             }
 
-            const suggestion = match.label || match.guess;
-            if (!suggestion) {
-                applyConfidenceCmdts(elementId, 'empty');
+            const candidates = match.candidates ?? [];
+
+            if (!candidates.length) {
+                if (rawText) applyConfidenceCmdts(elementId, 'empty');
                 return;
             }
 
@@ -420,14 +419,14 @@
                 rawText,
                 elementId
             };
-            renderMatchPrompt(key, match.id, suggestion, elementId, match.status);
+            renderCandidatesCmdts(key, candidates, rawText, elementId, match.matchType);
         }
 
-        function renderMatchPrompt(key, id, label, elementId, status) {
+        function renderCandidatesCmdts(key, candidates, rawText, elementId, matchType) {
             const el = document.getElementById(elementId);
             if (!el) return;
 
-            applyConfidenceCmdts(elementId, status === 'low' ? 'low' : 'review');
+            applyConfidenceCmdts(elementId, 'review');
 
             const prompt = document.createElement('div');
             prompt.className = 'match-prompt';
@@ -435,49 +434,44 @@
             prompt.style.cssText =
                 'margin-top:6px;padding:8px 10px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;font-size:0.75rem;color:#92400e;';
 
-            const safeLabel = String(label).replace(/'/g, "\\'");
-            const idPart = id ? id : 'null';
+            const question = matchType === 'duplicate' ?
+                `More than one record is named "<strong>${rawText}</strong>" — which one?` :
+                `Document said "<strong>${rawText}</strong>". Closest matches:`;
+
+            const chips = candidates.map(c => {
+                const safe = String(c.label).replace(/'/g, "\\'");
+                return `<button type="button" onclick="chooseCandidateCmdts('${key}', ${c.id}, '${safe}')"
+                    style="padding:4px 11px;border-radius:14px;border:1px solid #16a34a;background:#fff;color:#166534;font-size:0.72rem;font-weight:600;cursor:pointer;">
+                    ${c.label}
+                </button>`;
+            }).join('');
 
             prompt.innerHTML = `
-                <span>Document said "<strong>${rawTextOf(key)}</strong>". Did you mean <strong>${label}</strong>?</span>
-                <button type="button" onclick="confirmMatchCmdts('${key}', ${idPart}, '${safeLabel}')"
-                    style="margin-left:8px;padding:3px 10px;border-radius:5px;border:none;background:#16a34a;color:#fff;font-size:0.7rem;font-weight:600;cursor:pointer;">
-                    Yes, use this
-                </button>
-                <button type="button" onclick="rejectMatchCmdts('${key}')"
-                    style="margin-left:6px;padding:3px 10px;border-radius:5px;border:1px solid #d97706;background:transparent;color:#92400e;font-size:0.7rem;font-weight:600;cursor:pointer;">
-                    No, I'll choose
-                </button>`;
+                <div style="margin-bottom:7px;">${question}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    ${chips}
+                    <button type="button" onclick="noneOfTheseCmdts('${key}')"
+                        style="padding:4px 11px;border-radius:14px;border:1px dashed #d97706;background:transparent;color:#92400e;font-size:0.72rem;font-weight:600;cursor:pointer;">
+                        None of these
+                    </button>
+                </div>`;
 
             el.parentElement.appendChild(prompt);
         }
 
-        function rawTextOf(key) {
-            return pendingMatches[key] ? pendingMatches[key].rawText : '';
-        }
-
-        window.confirmMatchCmdts = function(key, id, label) {
+        window.chooseCandidateCmdts = function(key, id, label) {
             const pending = pendingMatches[key];
 
-            // A low match withholds the id — resolve it by name before saving.
-            if (!id) {
-                resolveByName(key, label);
-                return;
-            }
-
             setMatchValue(key, id, label);
+            if (pending) clearConfidenceCmdts(pending.elementId);
 
             if (pending) rememberMatch(key, pending.rawText, id);
             clearPendingMatch(key);
         };
 
-        // The guess was wrong — clear it and let the user pick.
-        window.rejectMatchCmdts = function(key) {
-            clearPendingMatch(key);
-            clearConfidenceCmdts(key === 'consignee' ? 'consignee-search' : 'carrier-id');
-
-            const focusEl = document.getElementById(key === 'consignee' ? 'consignee-search' : 'carrier-id');
-            if (focusEl) focusEl.focus();
+        // Not in the list — the record needs creating. Chips stay until it is.
+        window.noneOfTheseCmdts = function(key) {
+            openQuickAddModal(key);
         };
 
         function setMatchValue(key, id, label) {
@@ -490,27 +484,6 @@
             if (key === 'carrier') {
                 document.getElementById('carrier-id').value = id;
             }
-        }
-
-        // The guess came back without an id — look it up so the click still works.
-        function resolveByName(key, label) {
-            if (key !== 'consignee') return;
-
-            fetch(`{{ route('cmdts.consignee-search') }}?q=${encodeURIComponent(label)}`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    const exact = data.find(c => c.FullName.trim().toUpperCase() === label.trim().toUpperCase());
-                    if (!exact) return;
-
-                    const pending = pendingMatches[key];
-                    setMatchValue(key, exact.ConsigneeID, exact.FullName);
-                    if (pending) rememberMatch(key, pending.rawText, exact.ConsigneeID);
-                    clearPendingMatch(key);
-                });
         }
 
         function rememberMatch(key, rawText, matchedId) {
@@ -926,19 +899,19 @@
             </thead>
             <tbody>
                 ${containers.map(c => `
-                                <tr>
-                                    <td class="td-mono">${c.ContainerNo}</td>
-                                    <td class="td-muted">${c.Size}ft</td>
-                                    <td class="td-muted">${c.SealNo || '—'}</td>
-                                    <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
-                                    <td style="text-align: center;">
-                                        <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
-                                            <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                            </svg>
-                                        </button>
-                                    </td>
-                                </tr>`).join('')}
+                                                    <tr>
+                                                        <td class="td-mono">${c.ContainerNo}</td>
+                                                        <td class="td-muted">${c.Size}ft</td>
+                                                        <td class="td-muted">${c.SealNo || '—'}</td>
+                                                        <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
+                                                        <td style="text-align: center;">
+                                                            <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
+                                                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                                </svg>
+                                                            </button>
+                                                        </td>
+                                                    </tr>`).join('')}
             </tbody>
         </table>`;
         }
@@ -1173,6 +1146,12 @@
         window.onQuickAddConsignee = function(id, name) {
             document.getElementById('consignee-search').value = name;
             document.getElementById('consignee-id').value = id;
+
+            // A new record answers whatever the document said.
+            if (pendingMatches.consignee) {
+                rememberMatch('consignee', pendingMatches.consignee.rawText, id);
+                clearConfidenceCmdts(pendingMatches.consignee.elementId);
+            }
             clearPendingMatch('consignee');
         };
 
@@ -1182,6 +1161,11 @@
             opt.textContent = name;
             document.getElementById('carrier-id').appendChild(opt);
             document.getElementById('carrier-id').value = id;
+
+            if (pendingMatches.carrier) {
+                rememberMatch('carrier', pendingMatches.carrier.rawText, id);
+                clearConfidenceCmdts('carrier-id');
+            }
             clearPendingMatch('carrier');
         };
 
