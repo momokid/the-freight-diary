@@ -286,6 +286,12 @@ class BLParserService
             '"Size/Type", "Type/Size", "Container Type", "Equipment Type", or values embedded directly next to the ' .
             'container number (e.g. "1x40HC", "20\'GP", "40GP"). Extract only the two-digit size number, stripping any suffix such as HC, HQ, GP, RF, or ft ' .
             '(e.g. "40HC" → "40", "20\'GP" → "20", "45HQ" → "45"). ' .
+            'Some bills have no container table at all — the details run together on one line in the particulars ' .
+            'section, for example "SUDU7657700 ML-AE4299733 20 DRY 8\'6 1 LOT 23580.000 KGS 20.000 CBM". ' .
+            'When that is the layout, read the container number, seal number, size, weight and volume from that ' .
+            'single line. A container number is four letters followed by seven digits. Never use a voyage number, ' .
+            'booking number or B/L number as a container number — if no four-letter-seven-digit code appears, ' .
+            'leave ContainerNo as an empty string. ' .
             'Item description may also be labeled differently — look for "Description of Goods", "Commodity", ' .
             '"Cargo Description", "Said to Contain", or similar. If the description is given once for the whole shipment ' .
             'rather than per container, repeat that same description for every container in the Containers array. ' .
@@ -301,16 +307,21 @@ class BLParserService
             'Indicators of FCL: one consignee, one description covering the whole shipment, and cargo stated ' .
             'as whole containers. Note that "Shipper\'s Load Stow and Count" and "Said to Contain" appear on ' .
             'both types and are not decisive on their own. ' .
-            'State your reasoning in one short sentence, and use "UNKNOWN" when the document does not show enough.' .
+            'State your reasoning in one short sentence, and use "UNKNOWN" when the document does not show enough. ' .
+            'Most bills carry a band of small labelled boxes near the signature block, typically including ' .
+            '"Carrier\'s Receipt", "Place of Issue of B/L", "Number & Sequence of Original B(s)/L", ' .
+            '"Date of Issue of B/L" and "Shipped on Board Date". Read every box in that band and report each ' .
+            'labelled value. Two of those boxes often show the same date — that repetition is normal on a bill ' .
+            'issued the day the cargo loaded, and is never a reason to omit one of them.' .
             "\n\nReturn exactly this JSON structure:\n" .
             '{
                 "MainBL": "Master Bill of Lading number",
                 "VesselName": "name of the vessel or ship",
                 "ShippingLine": "the carrier/shipping line company name if explicitly stated on the document (e.g. Maersk, MSC, CMA CGM, ONE) — leave empty string if only the vessel name is given and no separate carrier/line name appears",
                 "VoyageNo": "voyage number",
-                "POIS": "place of issue",
+                "POIS": "place of issue of the B/L — look for labels such as `Place of Issue of B/L`, `Place and Date of Issue`, or a place named beside the Carrier`s Receipt block. Return the place only, never the date.",
                 "DOIS": "date of issue in YYYY-MM-DD format — usually found near the signature block as `Place and Date of Issue`. Leave empty string if not explicitly stated.",
-                "SOB": "shipped on board date in YYYY-MM-DD format — only present on true on-board Bills of Lading, often stamped separately from the issue date. Leave empty string if not explicitly stated, and never assume it is the same as DOIS.",
+                "SOB": "shipped on board date in YYYY-MM-DD format — look for a field labelled `Shipped on Board Date`, `Shipped on Board`, `Laden on Board` or an on-board stamp. Extract it whenever such a label appears, even if the date shown is the same as the date of issue. Leave empty string only when no on-board label or stamp appears at all — never infer it from the issue date.",
                 "POL": "port of loading full name",
                 "POD": "port of discharge full name",
                 "Destination": "final destination",

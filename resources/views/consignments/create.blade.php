@@ -692,15 +692,12 @@
 
         // ── OCR match confirmation ──
 
-        // ok fills straight away; anything less waits for the user to click.
+        // A decided match fills the field; anything else is the user's to resolve.
         function applyMatch(key, match, rawText) {
             const selectId = MATCH_FIELDS[key].selectId;
             clearPendingMatch(key);
 
-            if (!match || match.status === 'empty') {
-                if (rawText) applyConfidence(selectId, 'empty');
-                return;
-            }
+            if (!match) return;
 
             if (match.status === 'ok') {
                 document.getElementById(selectId).value = match.id;
@@ -708,25 +705,25 @@
                 return;
             }
 
-            const suggestion = match.label || match.guess;
-            if (!suggestion) {
-                applyConfidence(selectId, 'empty');
+            const candidates = match.candidates ?? [];
+
+            if (!candidates.length) {
+                if (rawText) applyConfidence(selectId, 'empty');
                 return;
             }
 
             pendingMatches[key] = {
-                rawText,
-                suggestion
+                rawText
             };
-            renderMatchPrompt(key, match.id, suggestion, rawText, match.status);
+            renderCandidates(key, candidates, rawText, match.matchType);
         }
 
-        function renderMatchPrompt(key, id, label, rawText, status) {
+        function renderCandidates(key, candidates, rawText, matchType) {
             const selectId = MATCH_FIELDS[key].selectId;
             const el = document.getElementById(selectId);
             if (!el) return;
 
-            applyConfidence(selectId, status === 'low' ? 'low' : 'review');
+            applyConfidence(selectId, 'review');
 
             const prompt = document.createElement('div');
             prompt.className = 'match-prompt';
@@ -734,48 +731,45 @@
             prompt.style.cssText =
                 'margin-top:6px;padding:8px 10px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;font-size:0.75rem;color:#92400e;';
 
-            const safeLabel = String(label).replace(/'/g, "\\'");
+            const question = matchType === 'duplicate' ?
+                `More than one record is named "<strong>${rawText}</strong>" — which one?` :
+                `Document said "<strong>${rawText}</strong>". Closest matches:`;
+
+            const chips = candidates.map(c => {
+                const safe = String(c.label).replace(/'/g, "\\'");
+                return `<button type="button" onclick="chooseCandidate('${key}', ${c.id})"
+                    style="padding:4px 11px;border-radius:14px;border:1px solid #16a34a;background:#fff;color:#166534;font-size:0.72rem;font-weight:600;cursor:pointer;">
+                    ${c.label}
+                </button>`;
+            }).join('');
 
             prompt.innerHTML = `
-                <span>Document said "<strong>${rawText}</strong>". Did you mean <strong>${label}</strong>?</span>
-                <button type="button" onclick="confirmMatch('${key}', ${id ? id : 'null'}, '${safeLabel}')"
-                    style="margin-left:8px;padding:3px 10px;border-radius:5px;border:none;background:#16a34a;color:#fff;font-size:0.7rem;font-weight:600;cursor:pointer;">
-                    Yes, use this
-                </button>
-                <button type="button" onclick="rejectMatch('${key}')"
-                    style="margin-left:6px;padding:3px 10px;border-radius:5px;border:1px solid #d97706;background:transparent;color:#92400e;font-size:0.7rem;font-weight:600;cursor:pointer;">
-                    No, I'll choose
-                </button>`;
+                <div style="margin-bottom:7px;">${question}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    ${chips}
+                    <button type="button" onclick="noneOfThese('${key}')"
+                        style="padding:4px 11px;border-radius:14px;border:1px dashed #d97706;background:transparent;color:#92400e;font-size:0.72rem;font-weight:600;cursor:pointer;">
+                        None of these
+                    </button>
+                </div>`;
 
             el.parentElement.appendChild(prompt);
         }
 
-        window.confirmMatch = function(key, id, label) {
+        window.chooseCandidate = function(key, id) {
             const pending = pendingMatches[key];
-            const select = document.getElementById(MATCH_FIELDS[key].selectId);
+            const selectId = MATCH_FIELDS[key].selectId;
 
-            // A low match withholds the id — find the option by its label instead.
-            if (!id) {
-                const option = Array.from(select.options)
-                    .find(o => o.textContent.trim().toUpperCase() === String(label).trim().toUpperCase());
-                if (!option) return;
-                id = parseInt(option.value, 10);
-            }
-
-            select.value = id;
-            clearConfidence(MATCH_FIELDS[key].selectId);
+            document.getElementById(selectId).value = id;
+            clearConfidence(selectId);
 
             if (pending) rememberMatch(key, pending.rawText, id);
             clearPendingMatch(key);
         };
 
-        // The guess was wrong — clear it and let the user pick.
-        window.rejectMatch = function(key) {
-            const selectId = MATCH_FIELDS[key].selectId;
-            clearPendingMatch(key);
-            clearConfidence(selectId);
-            const el = document.getElementById(selectId);
-            if (el) el.focus();
+        // Not in the list — the record needs creating. Chips stay until it is.
+        window.noneOfThese = function(key) {
+            openQuickAdd(key);
         };
 
         function rememberMatch(key, rawText, matchedId) {
