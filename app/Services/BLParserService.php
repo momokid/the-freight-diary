@@ -324,7 +324,7 @@ class BLParserService
                 "SOB": "shipped on board date in YYYY-MM-DD format — look for a field labelled `Shipped on Board Date`, `Shipped on Board`, `Laden on Board` or an on-board stamp. Extract it whenever such a label appears, even if the date shown is the same as the date of issue. Leave empty string only when no on-board label or stamp appears at all — never infer it from the issue date.",
                 "POL": "port of loading full name",
                 "POD": "port of discharge full name",
-                "Destination": "final destination",
+                "Destination": "place of delivery — only when a box labelled `Place of Delivery`, `Final Destination` or `Delivery Agent` carries a value. Never infer it from the consignee or notify party address, and never repeat the port of discharge. Leave empty string when that box is blank.",
                 "ETA": "estimated time of arrival in YYYY-MM-DD format — ETA is rarely printed on a Bill of Lading since the BL is issued before the vessel sails. Only extract if explicitly labeled ETA/Estimated Arrival on the document itself. Never calculate, estimate, or infer an ETA from other dates (SOB, DOIS, etc.) — leave empty string if not explicitly stated.",                "ShipperName": "full name of shipper",
                 "ShipperAddress": "shipper address",
                 "ConsigneeName": "full name of consignee",
