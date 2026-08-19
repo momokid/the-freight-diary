@@ -74,7 +74,7 @@ class ManifestController extends Controller
         $bl = strtoupper(trim($request->BL));
 
         $consignment = DB::table('container_main as cm')
-            ->join('shipper_main as s', 'cm.ShipperID', '=', 's.ShipperID')
+            ->leftjoin('shipper_main as s', 'cm.ShipperID', '=', 's.ShipperID')
             ->where('cm.BL', $bl)
             ->where('cm.Status', 1)
             ->select(
@@ -154,7 +154,7 @@ class ManifestController extends Controller
         if (strlen($q) < 3) return response()->json([]);
 
         $results = DB::table('container_main as cm')
-            ->join('shipper_main as s', 'cm.ShipperID', '=', 's.ShipperID')
+            ->leftjoin('shipper_main as s', 'cm.ShipperID', '=', 's.ShipperID')
             ->where('cm.BL', 'like', "%{$q}%")
             ->where('cm.Status', 1)
             ->limit(8)
