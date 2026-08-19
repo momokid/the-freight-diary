@@ -16,8 +16,10 @@
     @endif
 
     @foreach ([
+            'type' => ['Type not confirmed', 'Arrived, nobody has said whether this is LCL or FCL'],
             'return' => ['Container overdue', 'Gated out, container not returned'],
             'gateout' => ['Gate-out overdue', 'Disbursed, still at the port'],
+            'manifest' => ['Manifest not broken down', 'LCL arrived, no house BLs entered'],
             'disbursement' => ['Disbursement overdue', 'Arrived, no disbursement raised'],
         ] as $stage => $meta)
         @continue(empty($groups[$stage]))
@@ -92,10 +94,23 @@
                                         </button>
                                     @endif
                                 </span>
-                                <button onclick="runStall(this, '{{ $item['Phrase'] }}')"
-                                    style="margin-left: 6px; padding: 5px 11px; border-radius: 6px; border: none; background: #185FA5; color: #fff; font-size: 0.75rem; cursor: pointer;">
-                                    Start
-                                </button>
+                                @if ($stage === 'type')
+                                    <button
+                                        onclick="confirmType(this, {{ $item['ConsignmentID'] }}, '{{ $item['BL'] }}', 'LCL')"
+                                        style="margin-left: 6px; padding: 5px 11px; border-radius: 6px; border: none; background: #185FA5; color: #fff; font-size: 0.75rem; cursor: pointer;">
+                                        LCL
+                                    </button>
+                                    <button
+                                        onclick="confirmType(this, {{ $item['ConsignmentID'] }}, '{{ $item['BL'] }}', 'FCL')"
+                                        style="margin-left: 6px; padding: 5px 11px; border-radius: 6px; border: 1px solid #185FA5; background: transparent; color: #185FA5; font-size: 0.75rem; cursor: pointer;">
+                                        FCL
+                                    </button>
+                                @else
+                                    <button onclick="startStall(this, '{{ $stage }}', '{{ $item['BL'] }}')"
+                                        style="margin-left: 6px; padding: 5px 11px; border-radius: 6px; border: none; background: #185FA5; color: #fff; font-size: 0.75rem; cursor: pointer;">
+                                        Start
+                                    </button>
+                                @endif
                             </td>
                         </tr>
                         <tr id="reply-{{ $item['ConsignmentID'] }}-{{ $stage }}" style="display: none;"
@@ -127,9 +142,14 @@
         const STALL = {
             claim: '{{ route('stalled.claim') }}',
             release: '{{ route('stalled.release') }}',
-            run: '{{ route('command-center.run') }}',
+            confirmType: '{{ route('consignment-type.confirm') }}',
             csrf: '{{ csrf_token() }}',
             me: '{{ auth()->user()->ID }}',
+        };
+
+        const STAGE_URLS = {
+            manifest: '{{ route('manifest.index') }}',
+            disbursement: '{{ route('disbursement.analysis.index') }}',
         };
 
         const PER_PAGE = 10;
@@ -163,11 +183,12 @@
         };
 
         document.addEventListener('DOMContentLoaded', () => {
-            ['return', 'gateout', 'disbursement'].forEach(s => {
+            ['type', 'manifest', 'return', 'gateout', 'disbursement'].forEach(s => {
                 if (document.querySelector(`tr[data-row="${s}"]`)) pageStall(s, 0);
             });
         });
 
+        // ── Claims ──────────────────────────────────────────────────────────
 
         window.claimStall = function(consignmentId, bl, stage) {
             const slot = document.querySelector(`.claim-slot[data-key="${consignmentId}-${stage}"]`);
@@ -238,17 +259,25 @@
                 });
         };
 
-        window.runStall = function(btn, phrase) {
-            const row = btn.closest('tr');
-            const reply = row.nextElementSibling;
-            const cell = reply.querySelector('td');
+        // ── Actions ─────────────────────────────────────────────────────────
 
-            btn.disabled = true;
-            btn.textContent = 'Working…';
-            reply.style.display = '';
-            cell.textContent = '';
+        // Each stage finishes on its own screen — take the user there.
+        window.startStall = function(btn, stage, bl) {
+            const base = STAGE_URLS[stage];
 
-            fetch(STALL.run, {
+            if (!base) {
+                showStallNote(btn, 'There is no screen wired up for this step yet.');
+                return;
+            }
+
+            window.location.href = `${base}?bl=${encodeURIComponent(bl)}`;
+        };
+
+        window.confirmType = function(btn, consignmentId, bl, type) {
+            const buttons = btn.closest('tr').querySelectorAll('button');
+            buttons.forEach(b => b.disabled = true);
+
+            fetch(STALL.confirmType, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -256,37 +285,32 @@
                         'X-Requested-With': 'XMLHttpRequest'
                     },
                     body: JSON.stringify({
-                        instruction: phrase,
-                        modality: 'text'
+                        ConsignmentID: consignmentId,
+                        BL: bl,
+                        Type: type
                     }),
                 })
                 .then(r => r.json())
                 .then(d => {
-                    btn.disabled = false;
-                    btn.textContent = 'Start';
-                    cell.innerHTML = renderOutcome(d);
+                    if (!d.success) {
+                        buttons.forEach(b => b.disabled = false);
+                        showStallNote(btn, d.message || 'Could not save.');
+                        return;
+                    }
+
+                    // Confirmed — the consignment now belongs to a different stage.
+                    startStall(btn, d.NextStage, bl);
                 })
                 .catch(() => {
-                    btn.disabled = false;
-                    btn.textContent = 'Start';
-                    cell.textContent = 'Could not reach the server.';
+                    buttons.forEach(b => b.disabled = false);
+                    showStallNote(btn, 'Could not reach the server.');
                 });
         };
 
-        function renderOutcome(d) {
-            if (d.outcome === 'blocked') {
-                const links = (d.failures || [])
-                    .filter(f => f.url)
-                    .map(f => `<a href="${f.url}" style="color:#185FA5;">${f.label || 'Open'}</a>`)
-                    .join(' · ');
-                return `${escapeHtml(d.message)} ${links}`;
-            }
-
-            if (d.outcome === 'done') {
-                return escapeHtml(d.reply || 'Done.');
-            }
-
-            return escapeHtml(d.message || 'Nothing happened.');
+        function showStallNote(btn, text) {
+            const reply = btn.closest('tr').nextElementSibling;
+            reply.style.display = '';
+            reply.querySelector('td').textContent = text;
         }
 
         function escapeHtml(s) {

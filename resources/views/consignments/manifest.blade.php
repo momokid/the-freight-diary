@@ -689,6 +689,14 @@
                 valueKey: 'ConsigneeID',
                 onSelect: (id, label) => applyGridConsignee(id, label),
             });
+
+            // Arrived here from the stall list — load the BL that was passed.
+            const requestedBl = new URLSearchParams(window.location.search).get('bl');
+
+            if (requestedBl && !pendingBL) {
+                document.getElementById('search-bl').value = requestedBl.toUpperCase();
+                loadConsignment(requestedBl.toUpperCase());
+            }
         });
 
         function loadConsignment(bl) {

@@ -56,7 +56,7 @@ class StallController extends Controller
         $data = $request->validate([
             'ConsignmentID' => ['required', 'integer'],
             'BL'            => ['required', 'string', 'max:100'],
-            'Stage'         => ['required', 'in:disbursement,gateout,return'],
+            'Stage'         => ['required', 'in:type,manifest,disbursement,gateout,return'],
         ]);
 
         $user = Auth::user();

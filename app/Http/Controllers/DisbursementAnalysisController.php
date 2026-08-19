@@ -137,7 +137,7 @@ class DisbursementAnalysisController extends Controller
         if (! $consignment) {
             return response()->json([
                 'success' => false,
-                'message' => "BL# {$bl} not found or not eligible for disbursement. Consignment must be in-harbor and owned by PSIL.",
+                'message' => "BL# {$bl} not found or not eligible for disbursement. Consignment must be in-harbor.",
             ], 404);
         }
 

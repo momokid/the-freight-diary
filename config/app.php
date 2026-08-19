@@ -13,8 +13,9 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'The Freight Diary'),
 
+    'version' => env('APP_VERSION', '2.0'),
     /*
     |--------------------------------------------------------------------------
     | Application Environment

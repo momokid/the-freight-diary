@@ -54,8 +54,10 @@
                                 </svg>
                                 Upload BL Document
                             </button>
-                            <div id="ocr-status" style="font-size: 0.75rem; color: var(--text-muted); display: none;">
-                                <span id="ocr-status-text">Extracting data...</span>
+                            <div id="ocr-status" class="ocr-working"
+                                style="font-size: 0.75rem; color: var(--text-muted); display: none;">
+                                <img src="/favicon.svg" alt="" class="ocr-working__mark" id="ocr-mark">
+                                <span id="ocr-status-text" class="ocr-working__text">Reading document</span>
                             </div>
                         </div>
                     </div>
@@ -1109,7 +1111,8 @@
             const btn = document.getElementById('ocr-btn');
 
             statusEl.style.display = 'flex';
-            statusTextEl.textContent = 'Extracting fields with AI...';
+            statusEl.classList.add('ocr-working--busy');
+            statusTextEl.textContent = 'Reading document';
             btn.disabled = true;
 
             const formData = new FormData();
@@ -1184,6 +1187,7 @@
                     }, 4000);
                 })
                 .finally(() => {
+                    statusEl.classList.remove('ocr-working--busy');
                     btn.disabled = false;
                     input.value = '';
                 });

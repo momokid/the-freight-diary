@@ -8,12 +8,16 @@ use Illuminate\Support\Facades\Auth;
 
 class StallService
 {
+    public const STAGE_TYPE         = 'type';
+    public const STAGE_MANIFEST     = 'manifest';
     public const STAGE_DISBURSEMENT = 'disbursement';
     public const STAGE_GATEOUT      = 'gateout';
     public const STAGE_RETURN       = 'return';
 
     private const DEFAULTS = [
         'stall_monitor_enabled'      => 1,
+        'stall_days_to_type'         => 0,
+        'stall_days_to_manifest'     => 1,
         'stall_days_to_disbursement' => 4,
         'stall_days_to_gateout'      => 1,
         'stall_days_to_return'       => 3,
@@ -62,9 +66,11 @@ class StallService
     public function stalled(int $branchId): array
     {
         $empty = [
+            self::STAGE_TYPE         => [],
             self::STAGE_RETURN       => [],
             self::STAGE_GATEOUT      => [],
             self::STAGE_DISBURSEMENT => [],
+            self::STAGE_MANIFEST     => [],
         ];
 
         if (! $this->enabled()) {
@@ -98,6 +104,12 @@ class StallService
             ->where('Status', '<>', 9)
             ->groupBy('BL');
 
+        // Breakdown rows are the only proof a manifest has been done.
+        $breakdown = DB::table('manifestation_breakdown')
+            ->selectRaw('ConsignmentID, MainBL, COUNT(*) AS BreakdownCount')
+            ->where('Status', 1)
+            ->groupBy('ConsignmentID', 'MainBL');
+
         $rows = DB::table('container_main as cm')
             ->leftJoin('consignee_main as co', 'cm.ConsigneeID', '=', 'co.ConsigneeID')
             ->leftJoinSub($containers, 'cd', function ($j) {
@@ -105,6 +117,10 @@ class StallService
                     ->on('cd.BL', '=', 'cm.BL');
             })
             ->leftJoinSub($disbursements, 'da', 'da.BL', '=', 'cm.BL')
+            ->leftJoinSub($breakdown, 'mb', function ($j) {
+                $j->on('mb.ConsignmentID', '=', 'cm.ConsignmentID')
+                    ->on('mb.MainBL', '=', 'cm.BL');
+            })
             ->where('cm.BranchID', $branchId)
             ->where('cm.Status', '<>', 9)
             ->whereNotNull('cm.ETA')
@@ -116,6 +132,7 @@ class StallService
                 'cm.BL',
                 'cm.ETA',
                 'cm.VesselName',
+                'cm.IsLCL',
                 'co.FullName as ConsigneeName',
                 DB::raw('COALESCE(cd.ContainerCount, 0) AS ContainerCount'),
                 DB::raw('COALESCE(cd.GatedOutCount, 0)  AS GatedOutCount'),
@@ -123,6 +140,8 @@ class StallService
                 'cd.LastGateOut',
                 DB::raw('COALESCE(da.DisbCount, 0) AS DisbCount'),
                 'da.LastDisb',
+                'cm.IsLCL',
+                DB::raw('COALESCE(mb.BreakdownCount, 0) AS BreakdownCount'),
             ])
             ->get();
 
@@ -156,6 +175,17 @@ class StallService
      */
     private function classify(object $r, Carbon $today, array $s): ?array
     {
+        // Nothing downstream can be assessed until someone says what this is.
+        // Only worth asking while it still blocks work — once money has moved,
+        // whoever disbursed it plainly knew.
+        if ($r->IsLCL === null && $r->DisbCount == 0) {
+            $since = Carbon::parse($r->ETA)->startOfDay();
+            if ($since->diffInDays($today, false) >= $s['stall_days_to_type']) {
+                return [self::STAGE_TYPE, $since];
+            }
+            return null;
+        }
+
         // 1. Everything gated out, something still not returned
         if (
             $r->ContainerCount > 0
@@ -179,7 +209,16 @@ class StallService
             return null;
         }
 
-        // 3. Arrived, no disbursement at all
+        // 3. LCL arrived with nothing broken down — the gate before disbursement
+        if ($r->IsLCL !== null && (int) $r->IsLCL === 1 && $r->BreakdownCount == 0) {
+            $since = Carbon::parse($r->ETA)->startOfDay();
+            if ($since->diffInDays($today, false) >= $s['stall_days_to_manifest']) {
+                return [self::STAGE_MANIFEST, $since];
+            }
+            return null;
+        }
+
+        // 4. Arrived, no disbursement at all
         if ($r->DisbCount === 0) {
             $since = Carbon::parse($r->ETA)->startOfDay();
             if ($since->diffInDays($today, false) > $s['stall_days_to_disbursement']) {
@@ -217,18 +256,8 @@ class StallService
                 || Auth::user()?->Nature === 'Admin-0'
             ),
             'GoneQuiet'     => $quiet,
-            'Phrase'        => $this->phrase($stage, $r->BL),
+            'Type'          => $r->IsLCL === null ? null : ((int) $r->IsLCL === 1 ? 'LCL' : 'FCL'),
         ];
-    }
-
-    /** What gets handed to the runner when the action button is pressed. */
-    private function phrase(string $stage, string $bl): string
-    {
-        return match ($stage) {
-            self::STAGE_RETURN       => "container return {$bl}",
-            self::STAGE_GATEOUT      => "gate out {$bl}",
-            self::STAGE_DISBURSEMENT => "disbursement for {$bl}",
-        };
     }
 
     // ── Claims ──────────────────────────────────────────────────────────────

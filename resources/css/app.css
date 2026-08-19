@@ -514,3 +514,32 @@ select.form-input {
 #nprogress .peg {
     box-shadow: 0 0 10px #16a34a, 0 0 5px #16a34a;
 }
+
+/* OCR extraction indicator — logo breathes, dots cycle */
+
+.ocr-working {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ocr-working__mark {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.ocr-working--busy .ocr-working__mark {
+    animation: ocr-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes ocr-breathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.18); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ocr-working--busy .ocr-working__mark {
+        animation: none;
+    }
+}

@@ -68,6 +68,8 @@ Route::post('/webhook/whatsapp', [WhatsAppController::class, 'receive'])->name('
 // Authenticated Routes — accessible only when logged in
 Route::middleware('auth')->group(function () {
 
+    Route::post('/consignment-type', [\App\Http\Controllers\ConsignmentTypeController::class, 'confirm'])->name('consignment-type.confirm');
+
     Route::post('/match-alias', [\App\Http\Controllers\MatchAliasController::class, 'store'])->name('match-alias.store');
 
     Route::get('/command-center/resolve', [CommandCenterController::class, 'resolve'])

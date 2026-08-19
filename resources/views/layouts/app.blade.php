@@ -32,7 +32,7 @@
             <img src="/favicon.svg" alt="Logo" style="width: 32px; height: 32px; flex-shrink: 0;">
             <div class="logo-text">
                 <div style="font-size: 0.875rem; font-weight: 600; color: var(--sidebar-text);">Freight Diary</div>
-                <div style="font-size: 0.75rem; color: var(--sidebar-muted);">v2.0 Prime Rebuild</div>
+                <div style="font-size: 0.75rem; color: var(--sidebar-muted);">v{{ config('app.version') }}</div>
             </div>
         </div>
 

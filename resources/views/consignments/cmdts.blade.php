@@ -50,8 +50,10 @@
                         </svg>
                         Upload BL Document
                     </button>
-                    <div id="ocr-status-cmdts" style="font-size: 0.75rem; color: var(--text-muted); display: none;">
-                        <span id="ocr-status-text-cmdts">Extracting data...</span>
+                    <div id="ocr-status-cmdts" class="ocr-working"
+                        style="font-size: 0.75rem; color: var(--text-muted); display: none;">
+                        <img src="/favicon.svg" alt="" class="ocr-working__mark" id="ocr-mark-cmdts">
+                        <span id="ocr-status-text-cmdts" class="ocr-working__text">Reading document</span>
                     </div>
                 </div>
             </div>
@@ -602,7 +604,8 @@
             const btn = document.getElementById('ocr-btn-cmdts');
 
             statusEl.style.display = 'flex';
-            statusTextEl.textContent = 'Extracting fields with AI...';
+            statusEl.classList.add('ocr-working--busy');
+            statusTextEl.textContent = 'Reading document';
             btn.disabled = true;
 
             const formData = new FormData();
@@ -659,6 +662,7 @@
                     }, 4000);
                 })
                 .finally(() => {
+                    statusEl.classList.remove('ocr-working--busy');
                     btn.disabled = false;
                     input.value = '';
                 });
@@ -899,19 +903,19 @@
             </thead>
             <tbody>
                 ${containers.map(c => `
-                                                    <tr>
-                                                        <td class="td-mono">${c.ContainerNo}</td>
-                                                        <td class="td-muted">${c.Size}ft</td>
-                                                        <td class="td-muted">${c.SealNo || '—'}</td>
-                                                        <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
-                                                        <td style="text-align: center;">
-                                                            <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
-                                                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                                </svg>
-                                                            </button>
-                                                        </td>
-                                                    </tr>`).join('')}
+                                                                    <tr>
+                                                                        <td class="td-mono">${c.ContainerNo}</td>
+                                                                        <td class="td-muted">${c.Size}ft</td>
+                                                                        <td class="td-muted">${c.SealNo || '—'}</td>
+                                                                        <td style="font-size: 0.8rem; color: var(--text-primary);">${c.ItemDetails}</td>
+                                                                        <td style="text-align: center;">
+                                                                            <button onclick="removeContainer('${c.ContainerNo}')" class="btn-icon btn-icon-danger" title="Remove">
+                                                                                <svg style="width: 14px; height: 14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                                                </svg>
+                                                                            </button>
+                                                                        </td>
+                                                                    </tr>`).join('')}
             </tbody>
         </table>`;
         }
