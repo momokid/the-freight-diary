@@ -130,6 +130,11 @@ class DisbursementAnalysisController extends Controller
             ], 409);
         }
 
+        // ── 2. Cross-user lock ───────────────────────────────────────────────
+        if ($lock = $this->lockedByOther($bl, $user->ID)) {
+            return $this->lockedResponse($lock);
+        }
+
         $consignment = DB::table('inharbor_pending')
             ->where('BL', $bl)
             ->first();
@@ -237,7 +242,12 @@ class DisbursementAnalysisController extends Controller
             ], 409);
         }
 
-        // ── 2. Block check for this HBL ──────────────────────────────────────
+        // ── 2. Cross-user lock ───────────────────────────────────────────────
+        if ($lock = $this->lockedByOther($bl, $user->ID)) {
+            return $this->lockedResponse($lock);
+        }
+
+        // ── 3. Block check for this HBL ──────────────────────────────────────
         $existing = DisbursementAnalysis::where('BL', $bl)->where('HBL', $hbl)->first();
 
         if ($existing) {
@@ -299,15 +309,26 @@ class DisbursementAnalysisController extends Controller
 
 
     /**
-     * Clear all temp rows for the current user.
+     * Clear a temp session. Own session by default; Admin-0 may release a
+     * lock left behind by someone else.
      */
-    public function clearTemp()
+    public function clearTemp(Request $request)
     {
+        $user   = Auth::user();
+        $target = trim((string) $request->input('Username', '')) ?: $user->ID;
+
+        if ($target !== $user->ID && $user->Nature !== 'Admin-0') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only an administrator can clear another user\'s session.',
+            ], 403);
+        }
+
         DB::table('disbursement_temp_analysis')
-            ->where('Username', Auth::user()->ID)
+            ->where('Username', $target)
             ->delete();
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'ClearedFor' => $target]);
     }
 
     /**
@@ -682,10 +703,26 @@ class DisbursementAnalysisController extends Controller
     // PRIVATE HELPERS
     // ──────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Seed temp table with all disbursement_accounts for a BL/HBL session.
-     * Skips accounts already in temp to avoid duplicates.
-     */
+    /** A temp session on this BL held by someone else, if one exists. */
+    private function lockedByOther(string $bl, string $username): ?object
+    {
+        return DB::table('disbursement_temp_analysis')
+            ->where('BL', $bl)
+            ->where('Username', '<>', $username)
+            ->first(['Username', 'BL', 'Time']);
+    }
+
+    private function lockedResponse(object $lock)
+    {
+        return response()->json([
+            'success'  => false,
+            'code'     => 'LOCKED_BY_OTHER',
+            'lockedBy' => $lock->Username,
+            'canClear' => Auth::user()->Nature === 'Admin-0',
+            'message'  => "{$lock->Username} is working on BL# {$lock->BL} and has not saved it yet.",
+        ], 409);
+    }
+
     private function initTempAccounts(
         string $username,
         string $bl,

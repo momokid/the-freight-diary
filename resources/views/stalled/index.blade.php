@@ -106,7 +106,8 @@
                                         FCL
                                     </button>
                                 @else
-                                    <button onclick="startStall(this, '{{ $stage }}', '{{ $item['BL'] }}')"
+                                    <button
+                                        onclick="startStall(this, '{{ $stage }}', '{{ $item['BL'] }}', '{{ $item['Type'] ?? '' }}')"
                                         style="margin-left: 6px; padding: 5px 11px; border-radius: 6px; border: none; background: #185FA5; color: #fff; font-size: 0.75rem; cursor: pointer;">
                                         Start
                                     </button>
@@ -262,7 +263,7 @@
         // ── Actions ─────────────────────────────────────────────────────────
 
         // Each stage finishes on its own screen — take the user there.
-        window.startStall = function(btn, stage, bl) {
+        window.startStall = function(btn, stage, bl, type) {
             const base = STAGE_URLS[stage];
 
             if (!base) {
@@ -270,7 +271,10 @@
                 return;
             }
 
-            window.location.href = `${base}?bl=${encodeURIComponent(bl)}`;
+            let url = `${base}?bl=${encodeURIComponent(bl)}`;
+            if (type) url += `&type=${encodeURIComponent(type)}`;
+
+            window.location.href = url;
         };
 
         window.confirmType = function(btn, consignmentId, bl, type) {
@@ -299,7 +303,7 @@
                     }
 
                     // Confirmed — the consignment now belongs to a different stage.
-                    startStall(btn, d.NextStage, bl);
+                    startStall(btn, d.NextStage, bl, d.Type);
                 })
                 .catch(() => {
                     buttons.forEach(b => b.disabled = false);

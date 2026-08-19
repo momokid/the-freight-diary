@@ -48,6 +48,22 @@
                     <p id="bl-error" class="form-error"></p>
                 </div>
 
+                {{-- Locked By Another User --}}
+                <div id="locked-banner"
+                    style="display: none; margin-top: 1rem; padding: 0.75rem;
+                border-radius: 8px; background: rgba(220,38,38,0.08);
+                border: 1px solid rgba(220,38,38,0.3);">
+                    <p style="font-size: 0.8rem; color: #b91c1c; font-weight: 600; margin-bottom: 0.5rem;">
+                        🔒 <span id="locked-message"></span>
+                    </p>
+                    <button id="locked-release" onclick="releaseLock()"
+                        style="display: none; width: 100%; font-size: 0.75rem; padding: 5px 0;
+                               border-radius: 5px; background: #dc2626; color: white;
+                               border: none; cursor: pointer;">
+                        Release Their Session
+                    </button>
+                </div>
+
                 {{-- Temp Session Banner --}}
                 <div id="temp-banner"
                     style="display: none; margin-top: 1rem; padding: 0.75rem;
@@ -371,8 +387,26 @@
                 );
             @endif
 
+            window.releaseLock = releaseLock;
+
             // Budgeted expenses → recalculate variance
             document.getElementById('budgeted-expenses').addEventListener('input', updateVariance);
+
+            // Arriving from the stall monitor: ?bl=X&type=FCL
+            const params = new URLSearchParams(window.location.search);
+            const urlBL = (params.get('bl') || '').toUpperCase();
+            const urlType = (params.get('type') || '').toUpperCase();
+
+            if (urlBL) {
+                document.getElementById('bl-input').value = urlBL;
+                document.getElementById('bl-value').value = urlBL;
+
+                // Already restored on this BL — leave it alone. No type means
+                // we cannot call loadBL, so the box is prefilled and nothing else.
+                if (urlBL !== state.bl && (urlType === 'FCL' || urlType === 'LCL')) {
+                    triggerLoadBL(urlBL, urlType);
+                }
+            }
 
             // SearchDropdown init
             setTimeout(initSearch, 0);
@@ -456,6 +490,12 @@
                             showReopenBanner(data.BL);
                             return;
                         }
+                        if (data.code === 'LOCKED_BY_OTHER') {
+                            state.pendingBL = bl;
+                            state.pendingHBL = '';
+                            showLockedBanner(data);
+                            return;
+                        }
                         showError('bl-error', data.message);
                         return;
                     }
@@ -512,6 +552,12 @@
                             state.reopenHBL = data.HBL;
                             state.reopenType = 'LCL';
                             showReopenBanner(data.HBL);
+                            return;
+                        }
+                        if (data.code === 'LOCKED_BY_OTHER') {
+                            state.pendingBL = state.bl;
+                            state.pendingHBL = hbl;
+                            showLockedBanner(data);
                             return;
                         }
                         alert(data.message);
@@ -1093,6 +1139,45 @@
         function hideBanners() {
             document.getElementById('temp-banner').style.display = 'none';
             document.getElementById('reopen-banner').style.display = 'none';
+            document.getElementById('locked-banner').style.display = 'none';
+        }
+
+        function showLockedBanner(data) {
+            state.lockedBy = data.lockedBy;
+            document.getElementById('locked-message').textContent = data.message;
+            document.getElementById('locked-release').style.display = data.canClear ? 'block' : 'none';
+            document.getElementById('locked-banner').style.display = 'block';
+            document.getElementById('temp-banner').style.display = 'none';
+            document.getElementById('reopen-banner').style.display = 'none';
+        }
+
+        function releaseLock() {
+            if (!confirm(`Clear ${state.lockedBy}'s unsaved session? Their entered amounts will be lost.`)) return;
+
+            fetch(ROUTES.clearTemp, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': CSRF
+                    },
+                    body: JSON.stringify({
+                        Username: state.lockedBy
+                    }),
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.success) {
+                        showError('bl-error', d.message ?? 'Could not release the session.');
+                        return;
+                    }
+                    hideBanners();
+                    if (state.pendingHBL) {
+                        loadHBL(state.pendingHBL);
+                    } else {
+                        triggerLoadBL(state.pendingBL, state.type);
+                    }
+                })
+                .catch(() => showError('bl-error', 'Connection error. Please try again.'));
         }
 
         // ── Errors ────────────────────────────────────────────────────────────────────
